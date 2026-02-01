@@ -108,29 +108,30 @@ sequenceDiagram
     Frontend->>SuiContract: Kiểm tra PlayerProfile.faucet_last_claim
     SuiContract->>Frontend: Trả về faucet_last_claim timestamp
 
-    Frontend->>Frontend: Tính cooldown
-    Note over Frontend: time_passed = now - faucet_last_claim<br/>Cần >= 2 giờ (7200 seconds)
+    Frontend->>Frontend: Tính số chun được nhận
+    Note over Frontend: time_passed_hours = (now - faucet_last_claim) / 3600<br/>num_chuns = min(floor(time_passed_hours / 2), 10)<br/>Ví dụ: 7h → 3 chun, 13h → 6 chun, 20h+ → 10 chun
 
-    alt Chưa đủ cooldown
+    alt Chưa đủ 2 giờ (num_chuns = 0)
         Frontend->>User: "Chờ X phút Y giây nữa mới xin được"
-    else Đã đủ cooldown (hoặc lần đầu = 0)
+    else Đã đủ thời gian (num_chuns >= 1)
+        Frontend->>User: Hiển thị "Bạn được nhận X chun"
         User->>Frontend: Confirm "Xin chun"
         Frontend->>SuiContract: claim_faucet() [SPONSORED]
 
-        SuiContract->>SuiContract: Random số lượng chun (1-10)
-        Note over SuiContract: random_count = 4 (ví dụ)
+        SuiContract->>SuiContract: Tính số chun dựa trên thời gian
+        Note over SuiContract: time_passed = (now - faucet_last_claim) / 3600s<br/>num_chuns = min(time_passed / 2, 10)<br/>Ví dụ: 13h → 6 chun
 
-        loop 4 lần (mỗi chun random riêng)
+        loop 6 lần (mỗi chun random tier riêng)
             SuiContract->>SuiContract: Random tier (33.33% mỗi tier)
-            Note over SuiContract: Chun 1 → tier 1<br/>Chun 2 → tier 1<br/>Chun 3 → tier 2<br/>Chun 4 → tier 3
+            Note over SuiContract: Chun 1 → tier 1<br/>Chun 2 → tier 1<br/>Chun 3 → tier 1<br/>Chun 4 → tier 2<br/>Chun 5 → tier 2<br/>Chun 6 → tier 3
         end
 
         SuiContract->>SuiContract: Cộng vào PlayerProfile
-        Note over SuiContract: tier1 += 2<br/>tier2 += 1<br/>tier3 += 1
+        Note over SuiContract: tier1 += 3<br/>tier2 += 2<br/>tier3 += 1
 
         SuiContract->>SuiContract: Cập nhật faucet_last_claim = now
         SuiContract->>Frontend: Trả về kết quả (tier1_count, tier2_count, tier3_count)
-        Frontend->>User: "Nhận được: 2×🥉, 1×🥈, 1×🥇"
+        Frontend->>User: "Nhận được: 3×🥉, 2×🥈, 1×🥇"
     end
 ```
 
@@ -258,7 +259,7 @@ graph TD
     K --> L[record_session - SPONSORED<br/>Lưu delta + streak]
     L --> E
 
-    G --> M[claim_faucet - SPONSORED<br/>Random 1-10 chun, mỗi chun random tier]
+    G --> M[claim_faucet - SPONSORED<br/>Số chun = min(thời_gian_qua / 2h, 10)<br/>Mỗi chun random tier]
     M --> E
 
     H --> N[User chọn số chun mỗi tier]
@@ -396,8 +397,10 @@ public entry fun claim_achievement(
 
 ### claim_faucet() validations:
 
-- **Cooldown**: `now - faucet_last_claim >= 2 giờ (7200000 ms)`
-- **Random fair**: Sử dụng `tx_context::epoch()` + `object::id()` để seed
+- **Số chun tính theo thời gian**: `num_chuns = min((now - faucet_last_claim) / 2h, 10)`
+  - Ví dụ: 7h → 3 chun, 12h → 6 chun, 20h+ → 10 chun (tối đa)
+- **Minimum time**: `now - faucet_last_claim >= 2 giờ (7200000 ms)` (ít nhất 1 chun)
+- **Random fair**: Mỗi chun random tier riêng (33.33% mỗi tier) dùng `tx_context::epoch()` + `object::id()`
 
 ### craft_roll() validations:
 
