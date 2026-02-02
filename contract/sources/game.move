@@ -4,7 +4,7 @@ module suichin::game {
     use sui::clock::{Self, Clock};
     use sui::event;
     use suichin::player::{Self, PlayerProfile};
-    use suichin::chun_roll::{Self, ChunRoll};
+    use suichin::chun_roll;
 
     // ===== Constants =====
 
@@ -64,7 +64,7 @@ module suichin::game {
 
     /// Record kết quả session sau khi chơi off-chain
     /// Delta có thể âm (thua nhiều) hoặc dương (thắng nhiều)
-    public entry fun record_session(
+    public fun record_session(
         profile: &mut PlayerProfile,
         clock: &Clock,
         delta_tier1: u64, // Absolute value
@@ -75,7 +75,7 @@ module suichin::game {
         is_tier3_positive: bool,
         new_max_streak: u64,
         new_current_streak: u64,
-        ctx: &mut TxContext
+        _ctx: &mut TxContext
     ) {
         let current_time = clock::timestamp_ms(clock);
         let last_time = player::last_session_time(profile);
@@ -142,7 +142,7 @@ module suichin::game {
     /// Xin chun miễn phí (Faucet)
     /// Số chun nhận được = min(thời_gian_qua / 2h, 10)
     /// Mỗi chun random tier (33.33% mỗi tier)
-    public entry fun claim_faucet(
+    public fun claim_faucet(
         profile: &mut PlayerProfile,
         clock: &Clock,
         ctx: &mut TxContext
@@ -156,17 +156,17 @@ module suichin::game {
 
         // Calculate số chun được nhận
         // num_chuns = min(floor(time_passed / 2h), 10)
-        let num_chuns = time_passed / FAUCET_INTERVAL_MS;
+        let mut num_chuns = time_passed / FAUCET_INTERVAL_MS;
         if (num_chuns > MAX_FAUCET_CHUNS) {
             num_chuns = MAX_FAUCET_CHUNS;
         };
 
         // Random tier cho mỗi chun và cộng vào profile
-        let tier1_count = 0u64;
-        let tier2_count = 0u64;
-        let tier3_count = 0u64;
+        let mut tier1_count = 0u64;
+        let mut tier2_count = 0u64;
+        let mut tier3_count = 0u64;
 
-        let i = 0u64;
+        let mut i = 0u64;
         while (i < num_chuns) {
             // Simple random: epoch + i + object ID
             let random_seed = tx_context::epoch(ctx) + i;
@@ -210,7 +210,7 @@ module suichin::game {
     /// Mint Cuộn Chun NFT
     /// User chọn số lượng chun từng tier để dùng
     /// Tier NFT được random dựa trên tổng điểm
-    public entry fun craft_roll(
+    public fun craft_roll(
         profile: &mut PlayerProfile,
         clock: &Clock,
         use_tier1: u64,
@@ -268,9 +268,9 @@ module suichin::game {
     /// 10-19: 75% tier1, 20% tier2, 5% tier3
     /// 20-29: 60% tier1, 30% tier2, 10% tier3
     /// 30+:   50% tier1, 35% tier2, 15% tier3
-    fun random_nft_tier(points: u64, ctx: &mut TxContext): u8 {
+    fun random_nft_tier(points: u64, _ctx: &TxContext): u8 {
         // Simple random seed
-        let random_seed = tx_context::epoch(ctx) + points;
+        let random_seed = tx_context::epoch(_ctx) + points;
         let roll = random_seed % 100; // 0-99
 
         if (points < 20) {

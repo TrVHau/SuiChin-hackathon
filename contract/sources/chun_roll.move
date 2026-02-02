@@ -114,7 +114,7 @@ module suichin::chun_roll {
     }
 
     /// Burn ChunRoll NFT
-    public entry fun burn(nft: ChunRoll) {
+    public fun burn(nft: ChunRoll) {
         let ChunRoll { id, tier, name: _, description: _, image_url: _ } = nft;
         let nft_id = object::uid_to_inner(&id);
 

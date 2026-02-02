@@ -2,7 +2,6 @@
 /// Description: Soulbound Achievement NFT - Danh hiệu không thể transfer
 module suichin::achievement {
     use std::string::{Self, String};
-    use std::vector;
     use sui::url::{Self, Url};
     use sui::display;
     use sui::package;
@@ -101,7 +100,7 @@ module suichin::achievement {
     // ===== Public Entry Functions =====
 
     /// Claim achievement NFT khi đạt milestone
-    public entry fun claim_achievement(
+    public fun claim_achievement(
         profile: &mut PlayerProfile,
         milestone: u64,
         ctx: &mut TxContext
@@ -234,7 +233,7 @@ module suichin::achievement {
 
     /// Get all valid milestones
     public fun get_all_milestones(): vector<u64> {
-        let milestones = vector::empty<u64>();
+        let mut milestones = vector::empty<u64>();
         vector::push_back(&mut milestones, MILESTONE_BEGINNER);
         vector::push_back(&mut milestones, MILESTONE_SKILLED);
         vector::push_back(&mut milestones, MILESTONE_EXPERT);

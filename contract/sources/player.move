@@ -1,13 +1,8 @@
 /// Module: player
 /// Description: Quản lý PlayerProfile - thông tin người chơi
 module suichin::player {
-    use std::vector;
     use sui::clock::{Self, Clock};
     use sui::event;
-
-    // ===== Errors =====
-    const E_PROFILE_ALREADY_EXISTS: u64 = 1;
-    const E_NOT_PROFILE_OWNER: u64 = 2;
 
     // ===== Structs =====
 
@@ -64,7 +59,7 @@ module suichin::player {
 
     /// Tạo profile mới cho người chơi
     /// Chỉ được gọi 1 lần cho mỗi address
-    public entry fun create_profile(
+    public fun create_profile(
         clock: &Clock,
         ctx: &mut TxContext
     ) {
