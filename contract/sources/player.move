@@ -59,6 +59,7 @@ module suichin::player {
 
     /// Tạo profile mới cho người chơi
     /// Chỉ được gọi 1 lần cho mỗi address
+    #[allow(lint(self_transfer))]
     public fun create_profile(
         clock: &Clock,
         ctx: &mut TxContext

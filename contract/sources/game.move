@@ -25,7 +25,6 @@ module suichin::game {
     const E_DELTA_TOO_LARGE: u64 = 100;
     const E_COOLDOWN_NOT_READY: u64 = 101;
     const E_INSUFFICIENT_CHUN: u64 = 102;
-    const E_INVALID_DELTA: u64 = 103;
     const E_INVALID_STREAK: u64 = 104;
     const E_INSUFFICIENT_POINTS: u64 = 105;
     const E_FAUCET_NOT_READY: u64 = 106;
@@ -210,6 +209,7 @@ module suichin::game {
     /// Mint Cuộn Chun NFT
     /// User chọn số lượng chun từng tier để dùng
     /// Tier NFT được random dựa trên tổng điểm
+    #[allow(lint(self_transfer))]
     public fun craft_roll(
         profile: &mut PlayerProfile,
         clock: &Clock,
