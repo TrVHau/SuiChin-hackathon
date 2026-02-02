@@ -242,11 +242,38 @@ module suichin::achievement {
         milestones
     }
 
+    // ===== View Functions =====
+
+    public fun get_milestone(nft: &Achievement): u64 {
+        nft.milestone
+    }
+
+    public fun get_title(nft: &Achievement): String {
+        nft.title
+    }
+
+    public fun get_description(nft: &Achievement): String {
+        nft.description
+    }
+
+    public fun get_owner(nft: &Achievement): address {
+        nft.owner
+    }
+
+    public fun get_claimed_at(nft: &Achievement): u64 {
+        nft.claimed_at
+    }
+
     // ===== Test-only Functions =====
 
     #[test_only]
     public fun init_for_testing(ctx: &mut TxContext) {
         let otw = ACHIEVEMENT {};
         init(otw, ctx);
+    }
+
+    #[test_only]
+    public fun test_init(ctx: &mut TxContext) {
+        init_for_testing(ctx);
     }
 }

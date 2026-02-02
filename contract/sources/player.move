@@ -146,6 +146,28 @@ module suichin::player {
         profile.last_session_time
     }
 
+    /// Lấy total sessions
+    public fun total_sessions(profile: &PlayerProfile): u64 {
+        profile.total_sessions
+    }
+
+    /// Aliases for testing
+    public fun get_max_streak(profile: &PlayerProfile): u64 {
+        profile.max_streak
+    }
+
+    public fun get_current_streak(profile: &PlayerProfile): u64 {
+        profile.current_streak
+    }
+
+    public fun get_last_session_time(profile: &PlayerProfile): u64 {
+        profile.last_session_time
+    }
+
+    public fun get_total_sessions(profile: &PlayerProfile): u64 {
+        profile.total_sessions
+    }
+
     // ===== Package-only Functions (Friend) =====
 
     /// Cập nhật số chun (dùng bởi game module)
@@ -198,6 +220,14 @@ module suichin::player {
     ) {
         profile.last_session_time = timestamp;
         profile.total_sessions = profile.total_sessions + 1;
+    }
+
+    /// Alias for update_session_time
+    public(package) fun update_session_tracking(
+        profile: &mut PlayerProfile,
+        timestamp: u64,
+    ) {
+        update_session_time(profile, timestamp);
     }
 
     /// Thêm achievement

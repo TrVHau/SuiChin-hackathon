@@ -144,6 +144,23 @@ module suichin::chun_roll {
         nft.image_url
     }
 
+    /// Getter aliases for testing
+    public fun get_tier(nft: &ChunRoll): u8 {
+        nft.tier
+    }
+
+    public fun get_name(nft: &ChunRoll): String {
+        nft.name
+    }
+
+    public fun get_description(nft: &ChunRoll): String {
+        nft.description
+    }
+
+    public fun get_image_url(nft: &ChunRoll): Url {
+        nft.image_url
+    }
+
     // ===== Helper Functions =====
 
     /// Get tier name
@@ -191,6 +208,11 @@ module suichin::chun_roll {
     public fun init_for_testing(ctx: &mut TxContext) {
         let otw = CHUN_ROLL {};
         init(otw, ctx);
+    }
+
+    #[test_only]
+    public fun test_init(ctx: &mut TxContext) {
+        init_for_testing(ctx);
     }
 
     #[test_only]

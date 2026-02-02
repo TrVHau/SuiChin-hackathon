@@ -2,7 +2,7 @@
 compiled_package_info:
   package_name: suichin
   build_flags:
-    test_mode: false
+    test_mode: true
     generate_docs: false
     save_disassembly: false
     install_dir: ~
@@ -20,7 +20,7 @@ compiled_package_info:
     modes: []
     force_lock_file: false
     root_as_zero: false
-    environment: ~
+    environment: testnet
     set_unpublished_deps_to_zero: false
 dependencies:
   - MoveStdlib
