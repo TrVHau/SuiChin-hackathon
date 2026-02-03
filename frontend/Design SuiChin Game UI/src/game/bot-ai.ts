@@ -166,16 +166,9 @@ export function getDifficultyLabel(difficulty: BotDifficulty): string {
 
 /**
  * Determine bot difficulty based on tier
+ * Updated: All tiers now use medium difficulty for balanced gameplay
  */
 export function getBotDifficultyForTier(tier: number): BotDifficulty {
-  switch (tier) {
-    case 1:
-      return "easy";
-    case 2:
-      return "medium";
-    case 3:
-      return "hard";
-    default:
-      return "medium";
-  }
+  // All tiers now have the same medium difficulty
+  return "medium";
 }
