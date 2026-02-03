@@ -4,3 +4,40 @@
 
 contract/build/
 
+# UI Build outputs
+ui/Design SuiChin Game UI/dist/
+ui/Design SuiChin Game UI/build/
+
+# Dependencies
+ui/Design SuiChin Game UI/node_modules/
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Editor directories and files
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.swp
+*~
+
+# Package manager lock files (tùy chọn, có thể bỏ comment nếu muốn ignore)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
