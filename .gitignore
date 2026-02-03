@@ -2,7 +2,10 @@
 
 .vscode
 
-contract/build/
+// move build outputs to gitignore
+contract/build/suichin/sources/
+contract/build/suichin/bytecode_modules/
+contract/build/suichin/debug_info/
 
 # UI Build outputs
 ui/Design SuiChin Game UI/dist/

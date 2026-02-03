@@ -1,0 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Fredoka:wght@400;500;600;700&family=Baloo+2:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Nunito', 'Baloo 2', ui-rounded, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: #fffacc;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-family: 'Fredoka', 'Baloo 2', 'Nunito', ui-rounded, sans-serif;
+    font-weight: 700;
+}
+
+.emoji-bounce {
+    display: inline-block;
+    animation: bounce-gentle 2s infinite;
+}
+
+.bg-sunny-gradient {
+    background: linear-gradient(135deg, #fffacc 0%, #fff4a3 50%, #ffe066 100%);
+}
+
+.bg-playful-gradient {
+    background: linear-gradient(135deg, #4dabf7 0%, #9775fa 50%, #ff6b9d 100%);
+}
