@@ -1,5 +1,5 @@
-import { Wallet, CheckCircle } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Wallet, CheckCircle } from "lucide-react";
+import { motion } from "framer-motion";
 
 interface LoginScreenProps {
   onLogin: () => void;
@@ -8,13 +8,13 @@ interface LoginScreenProps {
 export default function LoginScreen({ onLogin }: LoginScreenProps) {
   return (
     <div className="min-h-screen w-full flex items-center justify-center px-4 bg-sunny-gradient">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="max-w-md w-full flex flex-col items-center gap-8"
       >
         {/* Playful Logo */}
-        <motion.div 
+        <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           transition={{ type: "spring", stiffness: 260, damping: 20 }}
@@ -22,8 +22,8 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
         >
           <div className="bg-gradient-to-br from-sunny-300 to-playful-orange rounded-full shadow-2xl size-48 flex items-center justify-center relative overflow-hidden border-8 border-white">
             <div className="absolute inset-0 bg-white/20 backdrop-blur-sm"></div>
-            
-            <motion.img 
+
+            <motion.img
               src="/logo.png"
               alt="SuiChin Logo"
               animate={{ rotate: [0, 5, -5, 0] }}
@@ -31,7 +31,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
               className="absolute inset-0 w-full h-full object-cover drop-shadow-2xl"
             />
           </div>
-          
+
           {/* Floating decorations */}
           <motion.div
             animate={{ y: [0, -10, 0] }}
@@ -50,7 +50,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
         </motion.div>
 
         {/* Title */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
@@ -60,13 +60,13 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
             SuiChin
           </h1>
           <p className="font-bold text-2xl text-gray-700">
-            Búng chun, kiếm NFT! 
+            Búng chun, kiếm NFT!
             <span className="inline-block emoji-bounce ml-2">🎮</span>
           </p>
         </motion.div>
 
         {/* Login Button */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
@@ -84,25 +84,25 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
             </span>
           </motion.button>
 
-          <div className="bg-white border-4 border-playful-green rounded-3xl p-4 flex items-center justify-center gap-3 shadow-lg">
+          {/* <div className="bg-white border-4 border-playful-green rounded-3xl p-4 flex items-center justify-center gap-3 shadow-lg">
             <CheckCircle className="size-7 text-playful-green" />
             <p className="font-bold text-base text-gray-900">
               Miễn phí gas 100%!
             </p>
-          </div>
+          </div> */}
         </motion.div>
 
         {/* Features */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.4 }}
           className="grid grid-cols-3 gap-4 w-full mt-4"
         >
           {[
-            { emoji: '🎮', text: 'Game đơn giản' },
-            { emoji: '🔥', text: 'Streak thưởng' },
-            { emoji: '🎨', text: 'NFT độc đáo' },
+            { emoji: "🎮", text: "Game đơn giản" },
+            { emoji: "🔥", text: "Streak thưởng" },
+            { emoji: "🎨", text: "NFT độc đáo" },
           ].map((item, i) => (
             <motion.div
               key={i}

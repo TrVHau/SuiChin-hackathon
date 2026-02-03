@@ -11,10 +11,6 @@ contract/build/suichin/debug_info/
 ui/Design SuiChin Game UI/dist/
 ui/Design SuiChin Game UI/build/
 
-# Dependencies
-ui/Design SuiChin Game UI/node_modules/
-node_modules/
-
 # Logs
 *.log
 npm-debug.log*

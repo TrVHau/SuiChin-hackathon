@@ -128,13 +128,13 @@ export default function AchievementScreen({
                 >
                   <div className="flex items-start gap-4">
                     <div className="text-6xl">
-                      {achievement.image && (
+                      {
                         <img
                           src={achievement.image}
                           alt={achievement.title}
                           className="w-12 h-12 "
                         />
-                      )}
+                      }
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
