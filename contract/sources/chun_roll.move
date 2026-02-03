@@ -190,13 +190,13 @@ module suichin::chun_roll {
     fun get_tier_image_url(tier: u8): Url {
         let url_bytes = if (tier == 1) {
             // Tier 1 - Bronze
-            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/public/nft/tier1.png"
+            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/nft/tier1.png"
         } else if (tier == 2) {
             // Tier 2 - Silver
-            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/public/nft/tier2.png"
+            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/nft/tier2.png"
         } else {
             // Tier 3 - Gold
-            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/public/nft/tier3.png"
+            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/nft/tier3.png"
         };
 
         url::new_unsafe_from_bytes(url_bytes)

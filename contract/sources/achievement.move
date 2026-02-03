@@ -220,15 +220,15 @@ module suichin::achievement {
     /// TODO: Replace với URL thật sau khi upload images
     fun get_milestone_image_url(milestone: u64): Url {
         let url_bytes = if (milestone == MILESTONE_BEGINNER) {
-            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/public/achievements/achievement1.png"
+            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement1.png"
         } else if (milestone == MILESTONE_SKILLED) {
-            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/public/achievements/achievement2.png"
+            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement2.png"
         } else if (milestone == MILESTONE_EXPERT) {
-            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/public/achievements/achievement3.png"
+            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement3.png"
         } else if (milestone == MILESTONE_MASTER) {
-            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/public/achievements/achievement4.png"
+            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement4.png"
         } else {
-            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/public/achievements/achievement5.png"
+            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement5.png"
         };
 
         url::new_unsafe_from_bytes(url_bytes)
