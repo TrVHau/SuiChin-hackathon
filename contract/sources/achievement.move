@@ -105,6 +105,9 @@ module suichin::achievement {
         milestone: u64,
         ctx: &mut TxContext
     ) {
+        // CRITICAL: Owner validation
+        assert!(player::owner(profile) == tx_context::sender(ctx), E_ALREADY_CLAIMED);
+        
         // Validate milestone
         assert!(is_valid_milestone(milestone), E_INVALID_MILESTONE);
 

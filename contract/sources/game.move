@@ -3,6 +3,7 @@
 module suichin::game {
     use sui::clock::{Self, Clock};
     use sui::event;
+    use sui::bcs;
     use suichin::player::{Self, PlayerProfile};
     use suichin::chun_roll;
 
@@ -76,6 +77,9 @@ module suichin::game {
         new_current_streak: u64,
         _ctx: &mut TxContext
     ) {
+        // CRITICAL: Owner validation
+        assert!(player::owner(profile) == tx_context::sender(_ctx), E_COOLDOWN_NOT_READY);
+        
         let current_time = clock::timestamp_ms(clock);
         let last_time = player::last_session_time(profile);
 
@@ -146,6 +150,9 @@ module suichin::game {
         clock: &Clock,
         ctx: &mut TxContext
     ) {
+        // CRITICAL: Owner validation
+        assert!(player::owner(profile) == tx_context::sender(ctx), E_COOLDOWN_NOT_READY);
+        
         let current_time = clock::timestamp_ms(clock);
         let last_claim = player::faucet_last_claim(profile);
 
@@ -159,6 +166,9 @@ module suichin::game {
         if (num_chuns > MAX_FAUCET_CHUNS) {
             num_chuns = MAX_FAUCET_CHUNS;
         };
+        
+        // CRITICAL: Assert num_chuns > 0
+        assert!(num_chuns > 0, E_FAUCET_NOT_READY);
 
         // Random tier cho mỗi chun và cộng vào profile
         let mut tier1_count = 0u64;
@@ -167,8 +177,10 @@ module suichin::game {
 
         let mut i = 0u64;
         while (i < num_chuns) {
-            // Simple random: epoch + i + object ID
-            let random_seed = tx_context::epoch(ctx) + i;
+            // Improved random: epoch + i + sender address
+            let sender_bytes = bcs::to_bytes(&tx_context::sender(ctx));
+            let sender_u64 = vector::length(&sender_bytes) as u64;
+            let random_seed = tx_context::epoch(ctx) + i + sender_u64;
             let tier = (random_seed % 3) + 1; // 1, 2, or 3
 
             if (tier == 1) {
@@ -218,6 +230,9 @@ module suichin::game {
         use_tier3: u64,
         ctx: &mut TxContext
     ) {
+        // CRITICAL: Owner validation
+        assert!(player::owner(profile) == tx_context::sender(ctx), E_INSUFFICIENT_CHUN);
+        
         // Calculate total points
         let total_points = use_tier1 * 1 + use_tier2 * 2 + use_tier3 * 3;
         
@@ -269,8 +284,10 @@ module suichin::game {
     /// 20-29: 60% tier1, 30% tier2, 10% tier3
     /// 30+:   50% tier1, 35% tier2, 15% tier3
     fun random_nft_tier(points: u64, _ctx: &TxContext): u8 {
-        // Simple random seed
-        let random_seed = tx_context::epoch(_ctx) + points;
+        // Improved random seed with sender address
+        let sender_bytes = bcs::to_bytes(&tx_context::sender(_ctx));
+        let sender_u64 = vector::length(&sender_bytes) as u64;
+        let random_seed = tx_context::epoch(_ctx) + points + sender_u64;
         let roll = random_seed % 100; // 0-99
 
         if (points < 20) {

@@ -7,7 +7,8 @@ module suichin::player {
     // ===== Structs =====
 
     /// PlayerProfile - Object lưu trữ trạng thái người chơi
-    public struct PlayerProfile has key, store {
+    /// NOTE: Removed 'store' ability to prevent trading/transferring profiles
+    public struct PlayerProfile has key {
         id: UID,
         owner: address,
         
