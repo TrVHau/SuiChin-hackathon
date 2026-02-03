@@ -1,6 +1,6 @@
-import { ArrowLeft, Trophy, Lock } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { toast } from 'sonner';
+import { ArrowLeft, Trophy, Lock } from "lucide-react";
+import { motion } from "framer-motion";
+import { toast } from "sonner";
 
 interface AchievementScreenProps {
   onBack: () => void;
@@ -10,11 +10,46 @@ interface AchievementScreenProps {
 }
 
 const ACHIEVEMENTS = [
-  { milestone: 1, title: 'Khởi Đầu', description: 'Đạt streak 1', emoji: '🌱' },
-  { milestone: 5, title: 'Nhiệt Huyết', description: 'Đạt streak 5', emoji: '🔥' },
-  { milestone: 18, title: 'Cao Thủ', description: 'Đạt streak 18', emoji: '⚡' },
-  { milestone: 36, title: 'Huyền Thoại', description: 'Đạt streak 36', emoji: '👑' },
-  { milestone: 67, title: 'Bất Khả Chiến Bại', description: 'Đạt streak 67', emoji: '💎' },
+  {
+    milestone: 1,
+    title: "Khởi Đầu",
+    description: "Đạt streak 1",
+    emoji: "🌱",
+    image:
+      "https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/public/achievements/achievement1.png",
+  },
+  {
+    milestone: 5,
+    title: "Nhiệt Huyết",
+    description: "Đạt streak 5",
+    emoji: "🔥",
+    image:
+      "https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/public/achievements/achievement2.png",
+  },
+  {
+    milestone: 18,
+    title: "Cao Thủ",
+    description: "Đạt streak 18",
+    emoji: "⚡",
+    image:
+      "https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/public/achievements/achievement3.png",
+  },
+  {
+    milestone: 36,
+    title: "Huyền Thoại",
+    description: "Đạt streak 36",
+    emoji: "👑",
+    image:
+      "https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/public/achievements/achievement4.png",
+  },
+  {
+    milestone: 67,
+    title: "Bất Khả Chiến Bại",
+    description: "Đạt streak 67",
+    emoji: "💎",
+    image:
+      "https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/public/achievements/achievement5.png",
+  },
 ];
 
 export default function AchievementScreen({
@@ -24,10 +59,10 @@ export default function AchievementScreen({
   onClaim,
 }: AchievementScreenProps) {
   const handleClaim = async (milestone: number) => {
-    toast.loading('Đang claim achievement...', { id: 'achievement' });
+    toast.loading("Đang claim achievement...", { id: "achievement" });
     await new Promise((resolve) => setTimeout(resolve, 1000));
     onClaim(milestone);
-    toast.success('Claim thành công!', { id: 'achievement' });
+    toast.success("Claim thành công!", { id: "achievement" });
   };
 
   return (
@@ -45,9 +80,13 @@ export default function AchievementScreen({
           <div>
             <div className="flex items-center gap-3">
               <span className="text-5xl">🏆</span>
-              <h1 className="font-display font-black text-4xl text-gray-900">Thành Tích</h1>
+              <h1 className="font-display font-black text-4xl text-gray-900">
+                Thành Tích
+              </h1>
             </div>
-            <p className="text-gray-600 mt-2 font-semibold text-lg">Max Streak: {maxStreak}</p>
+            <p className="text-gray-600 mt-2 font-semibold text-lg">
+              Max Streak: {maxStreak}
+            </p>
           </div>
         </div>
 
@@ -55,15 +94,21 @@ export default function AchievementScreen({
           <div className="flex items-center gap-4 mb-6">
             <Trophy className="size-10 text-sunny-600" />
             <div>
-              <h2 className="font-display font-black text-3xl text-gray-900">Soulbound NFT Achievements</h2>
-              <p className="text-gray-600 font-semibold">Danh hiệu không thể chuyển nhượng</p>
+              <h2 className="font-display font-black text-3xl text-gray-900">
+                Soulbound NFT Achievements
+              </h2>
+              <p className="text-gray-600 font-semibold">
+                Danh hiệu không thể chuyển nhượng
+              </p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {ACHIEVEMENTS.map((achievement, index) => {
               const isUnlocked = maxStreak >= achievement.milestone;
-              const isClaimed = claimedAchievements.includes(achievement.milestone);
+              const isClaimed = claimedAchievements.includes(
+                achievement.milestone,
+              );
               const canClaim = isUnlocked && !isClaimed;
 
               return (
@@ -75,14 +120,22 @@ export default function AchievementScreen({
                   whileHover={canClaim ? { scale: 1.02, rotate: 1 } : {}}
                   className={`rounded-3xl p-6 border-4 transition-all ${
                     isClaimed
-                      ? 'bg-playful-green/20 border-playful-green shadow-xl'
+                      ? "bg-playful-green/20 border-playful-green shadow-xl"
                       : isUnlocked
-                      ? 'bg-sunny-200 border-sunny-400 shadow-xl'
-                      : 'bg-gray-100 border-gray-300 opacity-60'
+                        ? "bg-sunny-200 border-sunny-400 shadow-xl"
+                        : "bg-gray-100 border-gray-300 opacity-60"
                   }`}
                 >
                   <div className="flex items-start gap-4">
-                    <div className="text-6xl">{achievement.emoji}</div>
+                    <div className="text-6xl">
+                      {achievement.image && (
+                        <img
+                          src={achievement.image}
+                          alt={achievement.title}
+                          className="w-12 h-12 "
+                        />
+                      )}
+                    </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <h3 className="font-display font-black text-2xl text-gray-900">
@@ -97,7 +150,9 @@ export default function AchievementScreen({
                           <Lock className="size-5 text-gray-400" />
                         )}
                       </div>
-                      <p className="text-gray-700 mb-4 font-semibold">{achievement.description}</p>
+                      <p className="text-gray-700 mb-4 font-semibold">
+                        {achievement.description}
+                      </p>
                       <div className="flex items-center justify-between">
                         <div className="text-sm">
                           <span className="font-display font-black text-gray-800 text-lg">
@@ -141,7 +196,9 @@ export default function AchievementScreen({
         </div>
 
         <div className="bg-playful-blue/20 rounded-3xl p-6 border-4 border-playful-blue">
-          <h3 className="font-display font-black text-xl text-gray-900 mb-3">💡 Lưu ý</h3>
+          <h3 className="font-display font-black text-xl text-gray-900 mb-3">
+            💡 Lưu ý
+          </h3>
           <ul className="text-gray-800 space-y-2 font-semibold">
             <li>• Achievement là Soulbound NFT, không thể transfer</li>
             <li>• Đạt streak milestone để unlock achievement</li>

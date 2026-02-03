@@ -14,7 +14,7 @@ SuiChin là game búng chun Web3 trên Sui Blockchain. Người chơi đấu v�
 - Không cần tạo tài khoản phức tạp
 - Tự động tạo profile khi đăng nhập lần đầu
 
-### 2. Sponsored Transactions (Miễn phí gas)
+### 2. Sponsored Transactions (Miễn phí gas) // triển khai sau này hiện vẫn phải tự kí tx
 
 - Mọi transaction đều được sponsor
 - Người chơi không cần SUI để chơi
