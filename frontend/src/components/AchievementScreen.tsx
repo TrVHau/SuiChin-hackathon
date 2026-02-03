@@ -14,41 +14,36 @@ const ACHIEVEMENTS = [
     milestone: 1,
     title: "Khởi Đầu",
     description: "Đạt streak 1",
-    emoji: "🌱",
     image:
-      "https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/public/achievements/achievement1.png",
+      "public/achievements/achievement1.png",
   },
   {
     milestone: 5,
     title: "Nhiệt Huyết",
     description: "Đạt streak 5",
-    emoji: "🔥",
     image:
-      "https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/public/achievements/achievement2.png",
+      "public/achievements/achievement2.png",
   },
   {
     milestone: 18,
     title: "Cao Thủ",
     description: "Đạt streak 18",
-    emoji: "⚡",
     image:
-      "https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/public/achievements/achievement3.png",
+      "public/achievements/achievement3.png",
   },
   {
     milestone: 36,
     title: "Huyền Thoại",
     description: "Đạt streak 36",
-    emoji: "👑",
     image:
-      "https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/public/achievements/achievement4.png",
+      "public/achievements/achievement4.png",
   },
   {
     milestone: 67,
     title: "Bất Khả Chiến Bại",
     description: "Đạt streak 67",
-    emoji: "💎",
     image:
-      "https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/public/achievements/achievement5.png",
+      "public/achievements/achievement5.png",
   },
 ];
 
