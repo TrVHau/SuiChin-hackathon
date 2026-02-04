@@ -23,6 +23,7 @@ module suichin::game {
 
     // ===== Errors =====
 
+    const E_NOT_OWNER: u64 = 99;
     const E_DELTA_TOO_LARGE: u64 = 100;
     const E_COOLDOWN_NOT_READY: u64 = 101;
     const E_INSUFFICIENT_CHUN: u64 = 102;
@@ -78,7 +79,7 @@ module suichin::game {
         _ctx: &mut TxContext
     ) {
         // CRITICAL: Owner validation
-        assert!(player::owner(profile) == tx_context::sender(_ctx), E_COOLDOWN_NOT_READY);
+        assert!(player::owner(profile) == tx_context::sender(_ctx), E_NOT_OWNER);
         
         let current_time = clock::timestamp_ms(clock);
         let last_time = player::last_session_time(profile);
@@ -151,7 +152,7 @@ module suichin::game {
         ctx: &mut TxContext
     ) {
         // CRITICAL: Owner validation
-        assert!(player::owner(profile) == tx_context::sender(ctx), E_COOLDOWN_NOT_READY);
+        assert!(player::owner(profile) == tx_context::sender(ctx), E_NOT_OWNER);
         
         let current_time = clock::timestamp_ms(clock);
         let last_claim = player::faucet_last_claim(profile);
@@ -177,9 +178,8 @@ module suichin::game {
 
         let mut i = 0u64;
         while (i < num_chuns) {
-            // Improved random: epoch + i + sender address
-            let sender_bytes = bcs::to_bytes(&tx_context::sender(ctx));
-            let sender_u64 = vector::length(&sender_bytes) as u64;
+            // Random: epoch + i + sender address value (first 8 bytes)
+            let sender_u64 = pseudo_u64_from_address(tx_context::sender(ctx));
             let random_seed = tx_context::epoch(ctx) + i + sender_u64;
             let tier = (random_seed % 3) + 1; // 1, 2, or 3
 
@@ -231,7 +231,7 @@ module suichin::game {
         ctx: &mut TxContext
     ) {
         // CRITICAL: Owner validation
-        assert!(player::owner(profile) == tx_context::sender(ctx), E_INSUFFICIENT_CHUN);
+        assert!(player::owner(profile) == tx_context::sender(ctx), E_NOT_OWNER);
         
         // Calculate total points
         let total_points = use_tier1 * 1 + use_tier2 * 2 + use_tier3 * 3;
@@ -279,14 +279,27 @@ module suichin::game {
 
     // ===== Helper Functions =====
 
+    /// Convert address thành u64 để làm random seed
+    /// Lấy 8 bytes đầu tiên của address và ghép thành u64
+    fun pseudo_u64_from_address(addr: address): u64 {
+        let b = bcs::to_bytes(&addr);
+        let mut x = 0u64;
+        let mut i = 0u64;
+        while (i < 8 && i < vector::length(&b)) {
+            let byte = *vector::borrow(&b, i) as u64;
+            x = x | (byte << ((i * 8) as u8));
+            i = i + 1;
+        };
+        x
+    }
+
     /// Random tier cho NFT dựa trên số điểm
     /// 10-19: 75% tier1, 20% tier2, 5% tier3
     /// 20-29: 60% tier1, 30% tier2, 10% tier3
     /// 30+:   50% tier1, 35% tier2, 15% tier3
     fun random_nft_tier(points: u64, _ctx: &TxContext): u8 {
-        // Improved random seed with sender address
-        let sender_bytes = bcs::to_bytes(&tx_context::sender(_ctx));
-        let sender_u64 = vector::length(&sender_bytes) as u64;
+        // Random seed with sender address value (first 8 bytes)
+        let sender_u64 = pseudo_u64_from_address(tx_context::sender(_ctx));
         let random_seed = tx_context::epoch(_ctx) + points + sender_u64;
         let roll = random_seed % 100; // 0-99
 

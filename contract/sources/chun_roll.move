@@ -2,7 +2,6 @@
 /// Description: ChunRoll NFT - Cuộn chun có thể transfer
 module suichin::chun_roll {
     use std::string::{Self, String};
-    use sui::url::{Self, Url};
     use sui::display;
     use sui::package;
     use sui::event;
@@ -21,7 +20,7 @@ module suichin::chun_roll {
         tier: u8,                // 1, 2, hoặc 3
         name: String,            // "Cuộn Chun Đồng", "Cuộn Chun Bạc", "Cuộn Chun Vàng"
         description: String,     // Mô tả
-        image_url: Url,          // URL ảnh NFT
+        image_url: String,       // URL ảnh NFT (String để tương thích wallet)
     }
 
     // ===== Events =====
@@ -40,6 +39,7 @@ module suichin::chun_roll {
     // ===== Init Function =====
 
     /// Initialize Display Protocol
+    #[allow(lint(share_owned))]
     fun init(otw: CHUN_ROLL, ctx: &mut TxContext) {
         // Claim Publisher
         let publisher = package::claim(otw, ctx);
@@ -70,7 +70,7 @@ module suichin::chun_roll {
         );
         display.add(
             string::utf8(b"project_url"),
-            string::utf8(b"https://suichin.game")
+            string::utf8(b"https://github.com/TrVHau/SuiChin-hackathon")
         );
         display.add(
             string::utf8(b"creator"),
@@ -80,9 +80,9 @@ module suichin::chun_roll {
         // Update version
         display.update_version();
 
-        // Transfer to sender
+        // Share display object (best practice for indexer)
+        transfer::public_share_object(display);
         transfer::public_transfer(publisher, ctx.sender());
-        transfer::public_transfer(display, ctx.sender());
     }
 
     // ===== Public Functions =====
@@ -140,7 +140,7 @@ module suichin::chun_roll {
         nft.description
     }
 
-    public fun image_url(nft: &ChunRoll): Url {
+    public fun image_url(nft: &ChunRoll): String {
         nft.image_url
     }
 
@@ -157,7 +157,7 @@ module suichin::chun_roll {
         nft.description
     }
 
-    public fun get_image_url(nft: &ChunRoll): Url {
+    public fun get_image_url(nft: &ChunRoll): String {
         nft.image_url
     }
 
@@ -187,19 +187,17 @@ module suichin::chun_roll {
 
     /// Get tier image URL
     /// TODO: Replace với URL thật sau khi upload images
-    fun get_tier_image_url(tier: u8): Url {
-        let url_bytes = if (tier == 1) {
+    fun get_tier_image_url(tier: u8): String {
+        if (tier == 1) {
             // Tier 1 - Bronze
-            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/nft/tier1.png"
+            string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/nft/tier1.png")
         } else if (tier == 2) {
             // Tier 2 - Silver
-            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/nft/tier2.png"
+            string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/nft/tier2.png")
         } else {
             // Tier 3 - Gold
-            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/nft/tier3.png"
-        };
-
-        url::new_unsafe_from_bytes(url_bytes)
+            string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/nft/tier3.png")
+        }
     }
 
     // ===== Test-only Functions =====

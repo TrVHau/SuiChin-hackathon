@@ -2,7 +2,6 @@
 /// Description: Soulbound Achievement NFT - Danh hiệu không thể transfer
 module suichin::achievement {
     use std::string::{Self, String};
-    use sui::url::{Self, Url};
     use sui::display;
     use sui::package;
     use sui::event;
@@ -19,6 +18,7 @@ module suichin::achievement {
 
     // ===== Errors =====
 
+    const E_NOT_OWNER: u64 = 299;
     const E_INVALID_MILESTONE: u64 = 300;
     const E_INSUFFICIENT_STREAK: u64 = 301;
     const E_ALREADY_CLAIMED: u64 = 302;
@@ -28,13 +28,14 @@ module suichin::achievement {
     /// One-Time-Witness cho Display Protocol
     public struct ACHIEVEMENT has drop {}
 
-    /// Achievement NFT - Soulbound (không có 'store')
-    public struct Achievement has key {
+    /// Achievement NFT - Soulbound
+    /// NOTE: 'store' cho phép wallet hiển thị, nhưng vẫn soulbound vì KHÔNG CÓ hàm transfer
+    public struct Achievement has key, store {
         id: UID,
         milestone: u64,          // 1, 5, 18, 36, 67
         title: String,           // Tên danh hiệu
         description: String,     // Mô tả achievement
-        image_url: Url,          // URL ảnh achievement
+        image_url: String,       // URL ảnh achievement (String để tương thích wallet)
         owner: address,          // Address của owner (để tracking)
         claimed_at: u64,         // Timestamp claim
     }
@@ -52,6 +53,7 @@ module suichin::achievement {
     // ===== Init Function =====
 
     /// Initialize Display Protocol
+    #[allow(lint(share_owned))]
     fun init(otw: ACHIEVEMENT, ctx: &mut TxContext) {
         // Claim Publisher
         let publisher = package::claim(otw, ctx);
@@ -86,15 +88,15 @@ module suichin::achievement {
         );
         display.add(
             string::utf8(b"project_url"),
-            string::utf8(b"https://suichin.game")
+            string::utf8(b"https://github.com/TrVHau/SuiChin-hackathon")
         );
 
         // Update version
         display.update_version();
 
-        // Transfer to sender
+        // Share display object (best practice for indexer)
+        transfer::public_share_object(display);
         transfer::public_transfer(publisher, ctx.sender());
-        transfer::public_transfer(display, ctx.sender());
     }
 
     // ===== Public Entry Functions =====
@@ -106,7 +108,7 @@ module suichin::achievement {
         ctx: &mut TxContext
     ) {
         // CRITICAL: Owner validation
-        assert!(player::owner(profile) == tx_context::sender(ctx), E_ALREADY_CLAIMED);
+        assert!(player::owner(profile) == tx_context::sender(ctx), E_NOT_OWNER);
         
         // Validate milestone
         assert!(is_valid_milestone(milestone), E_INVALID_MILESTONE);
@@ -150,7 +152,7 @@ module suichin::achievement {
         });
 
         // Transfer to owner (soulbound - cannot transfer after)
-        transfer::transfer(achievement, owner);
+        transfer::public_transfer(achievement, owner);
     }
 
     // ===== View Functions =====
@@ -218,20 +220,18 @@ module suichin::achievement {
 
     /// Get milestone image URL
     /// TODO: Replace với URL thật sau khi upload images
-    fun get_milestone_image_url(milestone: u64): Url {
-        let url_bytes = if (milestone == MILESTONE_BEGINNER) {
-            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement1.png"
+    fun get_milestone_image_url(milestone: u64): String {
+        if (milestone == MILESTONE_BEGINNER) {
+            string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement1.png")
         } else if (milestone == MILESTONE_SKILLED) {
-            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement2.png"
+            string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement2.png")
         } else if (milestone == MILESTONE_EXPERT) {
-            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement3.png"
+            string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement3.png")
         } else if (milestone == MILESTONE_MASTER) {
-            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement4.png"
+            string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement4.png")
         } else {
-            b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement5.png"
-        };
-
-        url::new_unsafe_from_bytes(url_bytes)
+            string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement5.png")
+        }
     }
 
     /// Get all valid milestones
