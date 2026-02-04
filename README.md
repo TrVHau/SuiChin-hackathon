@@ -1,123 +1,210 @@
-# SuiChin — Game Búng Chun trên Sui
+# 🎮 SuiChin - Game Búng Chun trên Sui Blockchain
 
-SuiChin là một dự án Hackathon: trò chơi Web3 đơn giản chạy trên Sui Blockchain. Người chơi búng chun đấu với bot, tích chuỗi thắng (streak), thu thập "chun" theo 3 tier, mint Cuộn Chun NFT và nhận Achievement (Soulbound NFT) khi đạt milestone.
+<div align="center">
 
-## Mục lục
+**Trò chơi búng chun Web3 kết hợp gameplay vật lý và NFT**
 
-- [Tổng quan](#tổng-quan)
-- [Tính năng chính](#tính-năng-chính)
-- [Yêu cầu & Chuẩn bị](#yêu-cầu--chuẩn-bị)
-- [Chạy nhanh (Quick Start)](#chạy-nhanh-quick-start)
-- [Kiến trúc & Thư mục](#kiến-trúc--thư-mục)
-- [Smart Contracts (Move)](#smart-contracts-move)
-- [Kiểm thử](#kiểm-thử)
-- [Triển khai & Gợi ý](#triển-khai--gợi-ý)
-- [Đóng góp](#đóng-góp)
-- [Liên hệ & License](#liên-hệ--license)
+[![Sui Move](https://img.shields.io/badge/Sui-Move-blue)](https://sui.io)
+[![React](https://img.shields.io/badge/React-18.3-61dafb)](https://reactjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.4-3178c6)](https://www.typescriptlang.org)
+
+</div>
 
 ---
 
-## Tổng quan
+## 📖 Giới thiệu
 
-- Gameplay: phần xử lý vật lý (physics) diễn ra off-chain trên canvas; kết quả session được lưu on-chain bằng các Move calls.
-- Assets trên chain:
-  - `ChunRoll` — transferable NFT (tier 1/2/3)
-  - `Achievement` — soulbound NFT (milestone theo streak)
+**SuiChin** là game búng chun on-chain nơi người chơi:
 
-## Tính năng chính
+- 🎯 Đấu với bot AI qua gameplay vật lý 2D
+- 💰 Thu thập chun 3 tier (Đồng 🥉, Bạc 🥈, Vàng 🥇)
+- 🎨 Mint NFT "Cuộn Chun" (transferable)
+- 🏆 Nhận Achievement NFT (soulbound) khi đạt milestone streak
 
-- Đăng nhập nhanh (zkLogin / ví Sui)
-- Gameplay: búng chun vs bot (HTML5 Canvas)
-- Hệ thống chun theo 3 tier (stake & reward)
-- Faucet: xin chun miễn phí (cooldown, giới hạn)
-- Mint Cuộn Chun NFT theo điểm
-- Claim Achievement (Soulbound NFT) khi đạt milestone
+**Tech Stack**: Sui Move • React 18 • TypeScript • Vite • Tailwind CSS • Framer Motion
 
-## Yêu cầu & Chuẩn bị
+---
 
-- Node.js 18+ và `npm` hoặc `pnpm`
-- (Để build/test/deploy contracts) Sui CLI cài đặt và cấu hình RPC/wallet
+## ✨ Tính năng
 
-## Chạy nhanh (Quick Start)
+### Core Gameplay
 
-1. Chạy frontend (dev):
+- **Physics-based**: Kéo thả búng chun với lực và góc tùy chỉnh
+- **Bot AI**: 3 độ khó (Easy/Medium/Hard)
+- **Betting System**: Stake chun trước mỗi trận
+  - Thắng: +1 chun + streak +1
+  - Thua: -1 chun + streak reset
+- **Off-chain gameplay, on-chain results**
+
+### Hệ thống Chun
+
+| Tier    | Giá trị | Độ hiếm    |
+| ------- | ------- | ---------- |
+| 🥉 Đồng | 1 điểm  | Phổ biến   |
+| 🥈 Bạc  | 2 điểm  | Trung bình |
+| 🥇 Vàng | 3 điểm  | Hiếm       |
+
+### NFT System
+
+- **ChunRoll NFT** (Transferable): Craft bằng điểm, random tier
+- **Achievement NFT** (Soulbound): 5 milestones (1, 5, 18, 36, 67 streak)
+
+### Faucet
+
+- Claim chun miễn phí mỗi 2 giờ
+- Random tier, max 10 chun
+
+---
+
+## 🚀 Quick Start
+
+### Yêu cầu
+
+- Node.js >= 18
+- npm hoặc pnpm
+
+### Cài đặt
 
 ```bash
-cd frontend
+# Clone repo
+git clone https://github.com/your-username/SuiChin-hackathon.git
+cd SuiChin-hackathon/frontend
+
+# Install dependencies
 npm install
+
+# Setup environment
+cp .env.example .env
+# Edit .env với Package ID
+
+# Run dev server
 npm run dev
 ```
 
-Mở browser tại địa chỉ mà Vite báo (mặc định `http://localhost:5173`).
+Mở browser: `http://localhost:5173`
 
-2. Build & test contracts (tùy chọn):
+### Build Production
+
+```bash
+npm run build
+# Output: dist/
+```
+
+---
+
+## 📁 Structure
+
+```
+SuiChin-hackathon/
+├── contract/           # Sui Move Smart Contracts
+│   ├── sources/
+│   │   ├── player.move        # PlayerProfile
+│   │   ├── game.move          # Game logic
+│   │   ├── chun_roll.move     # ChunRoll NFT
+│   │   └── achievement.move   # Achievement SBT
+│   └── tests/
+│
+├── frontend/           # React App
+│   ├── src/
+│   │   ├── components/        # UI components
+│   │   ├── hooks/            # useSuiProfile, etc.
+│   │   ├── game/             # Game engine
+│   │   └── lib/              # Sui transactions
+│   └── public/
+│
+└── docs/               # Documentation
+```
+
+---
+
+## 🔧 Smart Contracts
+
+**Package ID (Testnet)**:
+
+```
+0x6f821d9c081a903fa0932b2872ed095ada4a13c1b53edf5d7855fed58d58317a
+```
+
+### Modules
+
+**player.move** - PlayerProfile object
+
+```move
+- create_profile(clock)
+- Lưu trữ: chun balance, streak, faucet cooldown, achievements
+```
+
+**game.move** - Game logic
+
+```move
+- record_session(...)     # Lưu kết quả session
+- claim_faucet(...)       # Claim chun miễn phí
+- craft_roll(...)         # Mint ChunRoll NFT
+```
+
+**chun_roll.move** - ChunRoll NFT (transferable)
+
+**achievement.move** - Achievement NFT (soulbound)
+
+### Build & Test
 
 ```bash
 cd contract
 sui move build
 sui move test
-# publish (testnet/mainnet):
 sui client publish --gas-budget 100000000
 ```
 
-> Lưu ý: các lệnh `sui` yêu cầu Sui CLI và thông tin ví/RPC đã cấu hình.
+---
 
-## Kiến trúc & Thư mục
+## 🎮 How to Play
 
-- `contract/` — Move package, source, tests, `DEPLOYMENT.md`
-- `frontend/` — React + TypeScript + Vite app (UI, game engine, hooks)
-- `docs/` — mô tả, sequence diagrams
-
-Vài file quan trọng:
-
-- `contract/Move.toml` — package config
-- `contract/sources/*.move` — module Move
-- `frontend/src/App.tsx` — entry React
-- `frontend/package.json` — scripts & deps
-
-## Smart Contracts (Move)
-
-Modules chính (tóm tắt):
-
-- `player.move` — `PlayerProfile` (tier counts, streak, faucet cooldown, achievements)
-- `game.move` — `record_session`, `claim_faucet`, `craft_roll`
-- `chun_roll.move` — `ChunRoll` NFT (transferable)
-- `achievement.move` — `Achievement` soulbound NFT
-
-Entry functions ví dụ:
-
-- `create_profile()` — tạo PlayerProfile
-- `record_session(...)` — cập nhật delta sau session
-- `claim_faucet()` — claim chun theo cooldown
-- `craft_roll(use_t1,use_t2,use_t3)` — mint ChunRoll
-- `claim_achievement(milestone)` — mint Achievement
-
-Xem thêm: [contract/README.md](contract/README.md) và [docs/sequence.md](docs/sequence.md).
-
-## Kiểm thử
-
-- Contracts: `cd contract && sui move test`
-- Frontend: dev server + kiểm tra manual. Có thể thêm unit/integration tests cho components khi cần.
-
-## Triển khai & Gợi ý
-
-1. Chuẩn bị ví và RPC cho Sui (testnet/mainnet).
-2. Build và test Move package.
-3. Publish Move package và cập nhật `Move.toml`/addresses nếu cần.
-4. Build frontend (`npm run build`) và deploy lên Vercel/Netlify/GitHub Pages.
-
-## Đóng góp
-
-1. Fork repo → tạo branch `feature/...` hoặc `fix/...`.
-2. Kiểm tra và chạy test liên quan.
-3. Mở Pull Request mô tả rõ ràng thay đổi.
-
-## Liên hệ & License
-
-Nếu cần hỗ trợ, mở issue trong repo.
-
-License: MIT
+1. **Connect Wallet** → Sui Wallet, Suiet, hoặc Ethos
+2. **Create Profile** → Tự động tạo khi login lần đầu
+3. **Claim Faucet** → Nhận chun miễn phí
+4. **Play Game**:
+   - Chọn tier chun để stake
+   - Búng chun đánh bot
+   - Thắng = +chun +streak, Thua = -chun reset streak
+5. **Mint NFT** → Dùng điểm craft ChunRoll
+6. **Claim Achievement** → Nhận SBT khi đạt milestone
 
 ---
 
-Ghi chú: nếu bạn muốn tôi soạn README tiếng Anh, chèn badges, logo/ảnh minh họa, hoặc viết hướng dẫn deploy chi tiết (kèm biến môi trường và ví dụ RPC), tôi sẽ cập nhật ngay theo yêu cầu.
+## 🛡️ Anti-cheat
+
+- ✅ Session cooldown: 3 giây
+- ✅ Max delta: 50 điểm/session
+- ✅ Streak validation
+- ✅ Owner verification
+
+---
+
+## 📚 Documentation
+
+- [Báo cáo dự án](BAO_CAO.md) - Chi tiết kỹ thuật
+- [Feature descriptions](docs/description.md)
+- [Sequence diagrams](docs/sequence.md)
+- [Sui Docs](https://docs.sui.io)
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! Fork → Create branch → Commit → Push → Pull Request
+
+---
+
+## 📄 License
+
+MIT License
+
+---
+
+<div align="center">
+
+**Phát triển cho Sui Hackathon 2025**
+
+Made with ❤️ on Sui Blockchain
+
+</div>
