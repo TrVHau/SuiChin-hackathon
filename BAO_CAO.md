@@ -700,7 +700,17 @@ Dự án SuiChin là một hành trình học hỏi quý giá về:
 
 **📝 BÁO CÁO DỰ ÁN SUICHIN**
 
-_Phát triển bởi [Your Name/Team]_
+\_Phát triển bởi:
+
+Trần Văn Hậu
+
+Dương Chí Dũng
+
+Phan Minh Hiếu
+
+Nguyễn Thành Trung
+
+Nguyễn Minh Toàn
 
 _Sui Hackathon 2025_
 
