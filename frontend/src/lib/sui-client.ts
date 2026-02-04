@@ -3,46 +3,12 @@
  * Helper functions để tương tác với Sui blockchain
  */
 
-import { SuiClient } from "@mysten/sui/client";
 import { Transaction } from "@mysten/sui/transactions";
 import {
-  NETWORK,
-  RPC_ENDPOINTS,
   PACKAGE_ID,
   MODULES,
   CLOCK_ID,
 } from "@/config/sui.config";
-
-// Tạo Sui client instance
-export const suiClient = new SuiClient({ url: RPC_ENDPOINTS[NETWORK] });
-
-/**
- * Lấy PlayerProfile từ address
- */
-export async function getPlayerProfile(address: string) {
-  try {
-    const objects = await suiClient.getOwnedObjects({
-      owner: address,
-      filter: {
-        StructType: `${PACKAGE_ID}::${MODULES.PLAYER}::PlayerProfile`,
-      },
-      options: {
-        showContent: true,
-        showType: true,
-      },
-    });
-
-    if (objects.data.length === 0) {
-      return null; // Chưa có profile
-    }
-
-    const profileObject = objects.data[0];
-    return profileObject;
-  } catch (error) {
-    console.error("Error fetching player profile:", error);
-    return null;
-  }
-}
 
 /**
  * Tạo transaction: create_profile

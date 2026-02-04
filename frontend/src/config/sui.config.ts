@@ -1,11 +1,11 @@
 /**
  * Sui Network Configuration
- * Cập nhật PACKAGE_ID sau khi deploy contract
+ * Package ID được load từ .env
  */
 
-export const NETWORK = "testnet"; // 'testnet' | 'mainnet' | 'devnet' | 'localnet'
+export const NETWORK = (import.meta.env.VITE_SUI_NETWORK || "testnet") as "testnet" | "mainnet" | "devnet" | "localnet";
 
-export const PACKAGE_ID = "0x0"; // ⚠️ CẬP NHẬT SAU KHI DEPLOY CONTRACT
+export const PACKAGE_ID = import.meta.env.VITE_SUI_PACKAGE_ID || "0x0";
 
 // Object IDs (sẽ lấy từ transaction khi publish)
 export const CLOCK_ID = "0x6"; // Sui system clock object

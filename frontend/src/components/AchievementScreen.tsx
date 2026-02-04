@@ -14,36 +14,31 @@ const ACHIEVEMENTS = [
     milestone: 1,
     title: "Khởi Đầu",
     description: "Đạt streak 1",
-    image:
-      "public/achievements/achievement1.png",
+    image: "/achievements/achievement1.png",
   },
   {
     milestone: 5,
     title: "Nhiệt Huyết",
     description: "Đạt streak 5",
-    image:
-      "public/achievements/achievement2.png",
+    image: "/achievements/achievement2.png",
   },
   {
     milestone: 18,
     title: "Cao Thủ",
     description: "Đạt streak 18",
-    image:
-      "public/achievements/achievement3.png",
+    image: "/achievements/achievement3.png",
   },
   {
     milestone: 36,
     title: "Huyền Thoại",
     description: "Đạt streak 36",
-    image:
-      "public/achievements/achievement4.png",
+    image: "/achievements/achievement4.png",
   },
   {
     milestone: 67,
     title: "Bất Khả Chiến Bại",
     description: "Đạt streak 67",
-    image:
-      "public/achievements/achievement5.png",
+    image: "/achievements/achievement5.png",
   },
 ];
 

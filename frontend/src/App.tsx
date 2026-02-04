@@ -7,98 +7,86 @@ import FaucetScreen from '@/components/FaucetScreen';
 import MintScreen from '@/components/MintScreen';
 import AchievementScreen from '@/components/AchievementScreen';
 import GameSession, { SessionData } from '@/components/GameSession';
-import { useProfile } from '@/hooks/useProfile';
+import { useSuiProfile } from '@/hooks/useSuiProfile';
 
 type Screen = 'login' | 'dashboard' | 'faucet' | 'mint' | 'achievements' | 'session';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('login');
-  const { profile, createProfile, updateProfile, clearProfile } = useProfile();
+  const {
+    account,
+    profile,
+    hasProfile,
+    createProfile,
+    recordSession,
+    claimFaucet,
+    craftRoll,
+    claimAchievement,
+  } = useSuiProfile();
+
+  // Debug logging
+  console.log('🔍 App render:', { currentScreen, account: account?.address, profile, hasProfile });
 
   const handleLogin = async () => {
-    toast.loading('Đang kết nối zkLogin...', { id: 'login' });
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    if (profile) {
-      toast.success('Chào mừng trở lại!', { id: 'login' });
-    } else {
-      const address = '0x' + Math.random().toString(16).slice(2, 42);
-      createProfile(address);
-      toast.success('Profile mới đã được tạo! Hãy xin chun để bắt đầu!', { id: 'login' });
+    if (!account) {
+      toast.error('Vui lòng kết nối ví trước');
+      return;
     }
 
-    setCurrentScreen('dashboard');
+    // Wait a bit for profile to load
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    if (hasProfile && profile) {
+      toast.success('Chào mừng trở lại!');
+      setCurrentScreen('dashboard');
+    } else {
+      toast.loading('Chưa có profile. Đang tạo mới...', { id: 'createProfile' });
+      createProfile();
+      
+      // Wait for profile creation and then navigate
+      setTimeout(() => {
+        toast.success('Tạo profile thành công!', { id: 'createProfile' });
+        setCurrentScreen('dashboard');
+      }, 4000);
+    }
   };
 
   const handleLogout = () => {
-    clearProfile();
     setCurrentScreen('login');
     toast.success('Đã đăng xuất');
   };
 
-  const handleClaimFaucet = (tier1: number, tier2: number, tier3: number) => {
-    if (!profile) return;
-
-    updateProfile({
-      tier1: profile.tier1 + tier1,
-      tier2: profile.tier2 + tier2,
-      tier3: profile.tier3 + tier3,
-      faucetLastClaim: Date.now(),
-    });
+  const handleClaimFaucet = () => {
+    claimFaucet();
   };
 
-  const handleMint = (useTier1: number, useTier2: number, useTier3: number, resultTier: number) => {
-    if (!profile) return;
-
-    const newRoll = {
-      id: `roll_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      tier: resultTier,
-      image_url: `/nft/tier${resultTier}.png`,
-    };
-
-    updateProfile({
-      tier1: profile.tier1 - useTier1,
-      tier2: profile.tier2 - useTier2,
-      tier3: profile.tier3 - useTier3,
-      chun_rolls: [...profile.chun_rolls, JSON.stringify(newRoll)],
-    });
+  const handleMint = (useTier1: number, useTier2: number, useTier3: number) => {
+    craftRoll(useTier1, useTier2, useTier3);
   };
 
   const handleClaimAchievement = (milestone: number) => {
-    if (!profile) return;
-
-    updateProfile({
-      claimedAchievements: [...profile.claimedAchievements, milestone],
-    });
+    claimAchievement(milestone);
   };
 
   const handleSaveSession = (sessionData: SessionData) => {
     if (!profile) return;
 
-    const newTier1 = sessionData.isTier1Positive
-      ? profile.tier1 + sessionData.deltaTier1
-      : Math.max(0, profile.tier1 - sessionData.deltaTier1);
-
-    const newTier2 = sessionData.isTier2Positive
-      ? profile.tier2 + sessionData.deltaTier2
-      : Math.max(0, profile.tier2 - sessionData.deltaTier2);
-
-    const newTier3 = sessionData.isTier3Positive
-      ? profile.tier3 + sessionData.deltaTier3
-      : Math.max(0, profile.tier3 - sessionData.deltaTier3);
-
-    updateProfile({
-      tier1: newTier1,
-      tier2: newTier2,
-      tier3: newTier3,
-      maxStreak: sessionData.newMaxStreak,
-      currentStreak: sessionData.newCurrentStreak,
-    });
+    recordSession(
+      sessionData.deltaTier1,
+      sessionData.deltaTier2,
+      sessionData.deltaTier3,
+      sessionData.isTier1Positive,
+      sessionData.isTier2Positive,
+      sessionData.isTier3Positive,
+      sessionData.newMaxStreak,
+      sessionData.newCurrentStreak
+    );
 
     setCurrentScreen('dashboard');
   };
 
-  if (!profile && currentScreen !== 'login') {
+  // Auto redirect nếu không có account
+  if (!account && currentScreen !== 'login') {
     setCurrentScreen('login');
   }
 
@@ -126,7 +114,14 @@ export default function App() {
             exit={{ opacity: 0 }}
           >
             <Dashboard
-              playerData={profile}
+              playerData={{
+                tier1: profile.tier1,
+                tier2: profile.tier2,
+                tier3: profile.tier3,
+                maxStreak: profile.maxStreak,
+                currentStreak: profile.currentStreak,
+                address: account?.address || '',
+              }}
               onStartGame={() => setCurrentScreen('session')}
               onOpenFaucet={() => setCurrentScreen('faucet')}
               onOpenMint={() => setCurrentScreen('mint')}
@@ -160,7 +155,11 @@ export default function App() {
           >
             <MintScreen
               onBack={() => setCurrentScreen('dashboard')}
-              playerData={profile}
+              playerData={{
+                tier1: profile.tier1,
+                tier2: profile.tier2,
+                tier3: profile.tier3,
+              }}
               onMint={handleMint}
             />
           </motion.div>
@@ -176,7 +175,7 @@ export default function App() {
             <AchievementScreen
               onBack={() => setCurrentScreen('dashboard')}
               maxStreak={profile.maxStreak}
-              claimedAchievements={profile.claimedAchievements}
+              claimedAchievements={profile.achievements}
               onClaim={handleClaimAchievement}
             />
           </motion.div>
@@ -191,7 +190,13 @@ export default function App() {
           >
             <GameSession
               onBack={() => setCurrentScreen('dashboard')}
-              initialData={profile}
+              initialData={{
+                tier1: profile.tier1,
+                tier2: profile.tier2,
+                tier3: profile.tier3,
+                maxStreak: profile.maxStreak,
+                currentStreak: profile.currentStreak,
+              }}
               onSaveSession={handleSaveSession}
             />
           </motion.div>

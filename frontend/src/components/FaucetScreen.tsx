@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 interface FaucetScreenProps {
   onBack: () => void;
   lastClaimTime: number;
-  onClaim: (tier1: number, tier2: number, tier3: number) => void;
+  onClaim: () => void; // Changed: no longer passes tier counts
 }
 
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
@@ -47,22 +47,14 @@ export default function FaucetScreen({ onBack, lastClaimTime, onClaim }: FaucetS
     if (claimableCount === 0) return;
 
     setClaiming(true);
-    toast.loading('Đang xin chun...', { id: 'faucet' });
+    toast.loading('Đang xin chun từ blockchain...', { id: 'faucet' });
 
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    const results = { tier1: 0, tier2: 0, tier3: 0 };
-    for (let i = 0; i < claimableCount; i++) {
-      const rand = Math.floor(Math.random() * 3);
-      if (rand === 0) results.tier1++;
-      else if (rand === 1) results.tier2++;
-      else results.tier3++;
-    }
-
-    onClaim(results.tier1, results.tier2, results.tier3);
-    setClaimResult(results);
+    // Gọi blockchain - không cần tính random nữa vì contract sẽ làm
+    onClaim();
+    
     setClaiming(false);
-    toast.success(`Nhận thành công ${claimableCount} chun!`, { id: 'faucet' });
+    
+    // Note: toast success sẽ được hiện từ useSuiProfile hook
   };
 
   const handleClose = () => {

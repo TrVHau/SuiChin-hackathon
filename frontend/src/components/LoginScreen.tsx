@@ -1,11 +1,14 @@
 import { Wallet, CheckCircle } from "lucide-react";
 import { motion } from "framer-motion";
+import { ConnectButton, useCurrentAccount } from "@mysten/dapp-kit";
 
 interface LoginScreenProps {
   onLogin: () => void;
 }
 
 export default function LoginScreen({ onLogin }: LoginScreenProps) {
+  const account = useCurrentAccount();
+
   return (
     <div className="min-h-screen w-full flex items-center justify-center px-4 bg-sunny-gradient">
       <motion.div
@@ -24,7 +27,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
             <div className="absolute inset-0 bg-white/20 backdrop-blur-sm"></div>
 
             <motion.img
-              src="/logo.png"
+              src="/public/logo.png"
               alt="SuiChin Logo"
               animate={{ rotate: [0, 5, -5, 0] }}
               transition={{ duration: 2, repeat: Infinity }}
@@ -72,24 +75,32 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
           transition={{ delay: 0.3 }}
           className="w-full flex flex-col gap-5"
         >
-          <motion.button
-            onClick={onLogin}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="bg-gradient-to-r from-playful-blue to-playful-purple h-20 rounded-full shadow-2xl w-full flex items-center justify-center gap-3 border-4 border-white"
-          >
-            <Wallet className="size-8 text-white drop-shadow" />
-            <span className="font-display font-bold text-2xl text-white drop-shadow">
-              Đăng nhập với zkLogin
-            </span>
-          </motion.button>
+          {!account ? (
+            /* Nếu chưa connect wallet - hiện ConnectButton */
+            <div className="w-full">
+              <ConnectButton className="!w-full !h-20 !rounded-full !shadow-2xl !border-4 !border-white !bg-gradient-to-r !from-playful-blue !to-playful-purple" />
+            </div>
+          ) : (
+            /* Nếu đã connect - hiện nút Login */
+            <motion.button
+              onClick={onLogin}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="bg-gradient-to-r from-playful-green to-sunny-500 h-20 rounded-full shadow-2xl w-full flex items-center justify-center gap-3 border-4 border-white"
+            >
+              <CheckCircle className="size-8 text-white drop-shadow" />
+              <span className="font-display font-bold text-2xl text-white drop-shadow">
+                Đăng nhập ngay!
+              </span>
+            </motion.button>
+          )}
 
-          {/* <div className="bg-white border-4 border-playful-green rounded-3xl p-4 flex items-center justify-center gap-3 shadow-lg">
+          <div className="bg-white border-4 border-playful-green rounded-3xl p-4 flex items-center justify-center gap-3 shadow-lg">
             <CheckCircle className="size-7 text-playful-green" />
             <p className="font-bold text-base text-gray-900">
-              Miễn phí gas 100%!
+              {account ? `Đã kết nối: ${account.address.slice(0, 6)}...${account.address.slice(-4)}` : "Kết nối ví để bắt đầu!"}
             </p>
-          </div> */}
+          </div>
         </motion.div>
 
         {/* Features */}

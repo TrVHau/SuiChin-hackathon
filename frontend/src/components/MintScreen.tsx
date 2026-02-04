@@ -10,7 +10,7 @@ interface MintScreenProps {
     tier2: number;
     tier3: number;
   };
-  onMint: (useTier1: number, useTier2: number, useTier3: number, resultTier: number) => void;
+  onMint: (useTier1: number, useTier2: number, useTier3: number) => void; // Removed resultTier param
 }
 
 export default function MintScreen({ onBack, playerData, onMint }: MintScreenProps) {
@@ -41,25 +41,23 @@ export default function MintScreen({ onBack, playerData, onMint }: MintScreenPro
     if (!canMint) return;
 
     setMinting(true);
-    toast.loading('Đang mint NFT...', { id: 'mint' });
+    toast.loading('Đang mint NFT từ blockchain...', { id: 'mint' });
 
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    const rand = Math.random() * 100;
-    let resultTier = 1;
-
-    if (rand < prob.tier3) {
-      resultTier = 3;
-    } else if (rand < prob.tier3 + prob.tier2) {
-      resultTier = 2;
-    } else {
-      resultTier = 1;
-    }
-
-    onMint(useTier1, useTier2, useTier3, resultTier);
-    setMintResult({ tier: resultTier, emoji: getTierEmoji(resultTier) });
+    // Gọi blockchain - contract sẽ random tier
+    onMint(useTier1, useTier2, useTier3);
+    
     setMinting(false);
-    toast.success(`Mint thành công Cuộn Chun Tier ${resultTier}!`, { id: 'mint' });
+    
+    // Note: toast success và result sẽ được hiện từ useSuiProfile hook
+    // Tạm thời set mock result để UI không bị break
+    setTimeout(() => {
+      const rand = Math.random() * 100;
+      let resultTier = 1;
+      if (rand < prob.tier3) resultTier = 3;
+      else if (rand < prob.tier3 + prob.tier2) resultTier = 2;
+      
+      setMintResult({ tier: resultTier, emoji: getTierEmoji(resultTier) });
+    }, 1000);
   };
 
   const handleClose = () => {
