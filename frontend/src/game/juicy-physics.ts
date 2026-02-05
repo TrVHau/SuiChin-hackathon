@@ -1,14 +1,5 @@
-// ============================================================================
-// JUICY PHYSICS ENGINE for "Búng Chun" (Elastic Flick Game)
-// ============================================================================
-// Philosophy: Game feel over realism. Predictable, satisfying, skill-based.
-// NOT a physics simulator - this is a game!
 
 import type { Vector2D } from "./types";
-
-// ============================================================================
-// VECTOR UTILITIES
-// ============================================================================
 
 export const vec2 = {
   add: (a: Vector2D, b: Vector2D): Vector2D => ({
@@ -56,54 +47,31 @@ export const vec2 = {
   perpendicular: (v: Vector2D): Vector2D => ({ x: -v.y, y: v.x }),
 };
 
-// ============================================================================
-// TUNING CONSTANTS - Easy to tweak for game balance
-// ============================================================================
-
 export const PHYSICS_CONFIG = {
-  // ─────────────────────────────────────────────────────────────────────────
-  // WORLD - 2D flat plane, no gravity
-  // ─────────────────────────────────────────────────────────────────────────
-  GRAVITY: 0, // No gravity - pure 2D sliding
-  FRICTION: 0.96, // Constant friction each frame (velocity *= FRICTION)
-  VELOCITY_SNAP_THRESHOLD: 0.1, // Snap velocity to zero when below this
+  GRAVITY: 0,
+  FRICTION: 0.96,
+  VELOCITY_SNAP_THRESHOLD: 0.1,
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // WALLS - All sides behave the same
-  // ─────────────────────────────────────────────────────────────────────────
-  WALL_BOUNCE: 0.7, // Energy retained on any wall hit
+  WALL_BOUNCE: 0.7,
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // FLICK INPUT - Drag to aim, release to shoot
-  // ─────────────────────────────────────────────────────────────────────────
-  MAX_PULL_DISTANCE: 120, // Maximum drag distance in pixels
-  MIN_PULL_TO_LAUNCH: 12, // Minimum drag to register as shot
+  MAX_PULL_DISTANCE: 120,
+  MIN_PULL_TO_LAUNCH: 12,
 
-  // Power curve with easing: power = BASE + (pull/max)^CURVE * MULTIPLIER
-  // Using sqrt curve (0.5) gives fast start, diminishing returns for extreme shots
-  PULL_POWER_BASE: 3, // Minimum power from any valid pull
-  PULL_POWER_MULTIPLIER: 12, // Maximum additional power
-  PULL_POWER_CURVE: 0.5, // sqrt curve - avoids extreme shots
+  PULL_POWER_BASE: 3,
+  PULL_POWER_MULTIPLIER: 12,
+  PULL_POWER_CURVE: 0.5,
 
-  // Launch delay for "snap" feeling
-  LAUNCH_DELAY_FRAMES: 1, // Frames to wait before applying velocity
-
+  LAUNCH_DELAY_FRAMES: 1,
   // ─────────────────────────────────────────────────────────────────────────
   // CIRCLE-TO-CIRCLE COLLISION - Exaggerated push, favors attacker
   // ─────────────────────────────────────────────────────────────────────────
-  RESTITUTION: 0.85, // Energy retained on collision
-  COLLISION_BIAS: 1.4, // Exaggerated knockback for satisfying impacts
-  ATTACKER_PUSH_BONUS: 0.25, // Extra push for the attacker
-  MIN_SEPARATION_VELOCITY: 0.8, // Strong push apart to prevent sticking
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // WIN DETECTION - Evaluated only after motion settles
-  // ─────────────────────────────────────────────────────────────────────────
-  // Circle with smaller Y (visually above) wins when overlapping
-  WIN_Y_MARGIN: 5, // Minimum Y difference to determine winner
-  WIN_OVERLAP_REQUIRED: 0.1, // Circles must touch/overlap to win (positive = overlapping)
-  ATTACKER_ADVANTAGE: true, // Attacker wins ties when ambiguous
-
+  RESTITUTION: 0.85,
+  COLLISION_BIAS: 1.4,
+  ATTACKER_PUSH_BONUS: 0.25,
+  MIN_SEPARATION_VELOCITY: 0.8,
+  WIN_Y_MARGIN: 5,
+  WIN_OVERLAP_REQUIRED: 0.1,
+  ATTACKER_ADVANTAGE: true,
   // ─────────────────────────────────────────────────────────────────────────
   // SETTLING & TURN SWITCH - Physics runs until both chuns settle
   // ─────────────────────────────────────────────────────────────────────────
@@ -122,9 +90,6 @@ export const PHYSICS_CONFIG = {
   TRAIL_MIN_SPEED: 3, // Minimum speed to show trail
 };
 
-// ============================================================================
-// CHUN ENTITY
-// ============================================================================
 
 export interface Chun {
   position: Vector2D;
@@ -184,10 +149,6 @@ export interface GameEvent {
 // ELASTIC FLICK CALCULATION
 // ============================================================================
 
-/**
- * Calculate launch velocity from drag gesture.
- * Uses nonlinear curve: small pulls are precise, large pulls have diminishing returns.
- */
 export function calculateLaunchVelocity(
   chunPosition: Vector2D,
   dragEnd: Vector2D,
@@ -201,28 +162,22 @@ export function calculateLaunchVelocity(
     PHYSICS_CONFIG.MAX_PULL_DISTANCE,
   );
 
-  // Check minimum pull
   if (clampedDistance < PHYSICS_CONFIG.MIN_PULL_TO_LAUNCH) {
     return { velocity: vec2.zero(), power: 0 };
   }
 
-  // Nonlinear power curve
   const normalizedPull = clampedDistance / PHYSICS_CONFIG.MAX_PULL_DISTANCE;
   const curvedPull = Math.pow(normalizedPull, PHYSICS_CONFIG.PULL_POWER_CURVE);
   const power =
     PHYSICS_CONFIG.PULL_POWER_BASE +
     curvedPull * PHYSICS_CONFIG.PULL_POWER_MULTIPLIER;
 
-  // Direction is OPPOSITE of pull (slingshot mechanic)
   const direction = vec2.normalize(pullVector);
   const velocity = vec2.scale(direction, -power);
 
   return { velocity, power: normalizedPull };
 }
 
-/**
- * Get visual pull info for rendering aim line
- */
 export function getPullInfo(
   chunPosition: Vector2D,
   currentDragPos: Vector2D,
@@ -267,15 +222,10 @@ export interface WorldBounds {
   height: number;
 }
 
-/**
- * Update a single chun's physics for one frame.
- * No gravity - just impulse + friction sliding on a flat 2D plane.
- * Returns events that occurred.
- */
 export function updateChunPhysics(
   chun: Chun,
   bounds: WorldBounds,
-  _applyGravity: boolean = false, // Ignored - no gravity in this system
+  _applyGravity: boolean = false,
 ): GameEvent[] {
   const events: GameEvent[] = [];
   const speed = vec2.length(chun.velocity);
@@ -287,7 +237,6 @@ export function updateChunPhysics(
       chun.trailPositions.pop();
     }
   } else if (chun.trailPositions.length > 0) {
-    // Fade out trail when slow
     chun.trailPositions.pop();
   }
 
@@ -397,10 +346,6 @@ export interface CollisionResult {
   impactPosition: Vector2D;
 }
 
-/**
- * Check and resolve collision between two chuns.
- * Returns stomp result if applicable.
- */
 export function resolveChunCollision(
   a: Chun,
   b: Chun,
@@ -494,11 +439,6 @@ export function resolveChunCollision(
   };
 }
 
-/**
- * Check for win condition after motion has settled.
- * Win detection: Circle with smaller Y (visually above) wins when overlapping.
- * If circles are NOT overlapping, returns "none" so game continues (switch turn).
- */
 export function checkSettledWin(
   a: Chun,
   b: Chun,

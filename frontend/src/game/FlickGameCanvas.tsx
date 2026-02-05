@@ -1,6 +1,3 @@
-// ============================================================================
-// FLICK GAME CANVAS - High-skill 2D turn-based "búng chun" game
-// ============================================================================
 
 import {
   useRef,
@@ -29,9 +26,6 @@ import {
 } from "./flick-physics";
 import type { Vector2D } from "./types";
 
-// ============================================================================
-// Types
-// ============================================================================
 
 export type RoundResult = "win" | "lose" | "draw";
 export type Turn = "player" | "bot";
@@ -57,9 +51,6 @@ export interface FlickGameCanvasHandle {
   getPhase: () => GamePhase;
 }
 
-// ============================================================================
-// Colors
-// ============================================================================
 
 const COLORS = {
   BACKGROUND: "#1a1f2e",
@@ -85,9 +76,6 @@ function getTierColor(tier: number): string {
   }
 }
 
-// ============================================================================
-// Helpers
-// ============================================================================
 
 function getCanvasPosition(
   canvas: HTMLCanvasElement,
@@ -107,9 +95,6 @@ function isInsideChun(pos: Vector2D, chun: Chun): boolean {
   return vec2.distance(pos, chun.position) <= chun.radius * 1.3;
 }
 
-// ============================================================================
-// Component
-// ============================================================================
 
 const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
   function FlickGameCanvas(
@@ -120,10 +105,8 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const animationRef = useRef<number>(0);
 
-    // Canvas size
     const [canvasSize, setCanvasSize] = useState({ width: 800, height: 500 });
 
-    // Game state refs
     const phaseRef = useRef<GamePhase>("idle");
     const currentTurnRef = useRef<Turn>("player");
     const lastAttackerRef = useRef<"player" | "bot" | null>(null);
@@ -133,28 +116,20 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
     const wasOvershootRef = useRef(false);
     const roundResultRef = useRef<RoundResult | null>(null);
 
-    // Chuns
     const playerRef = useRef<Chun>(
       createChun(200, 400, getTierColor(tier), "YOU"),
     );
     const botRef = useRef<Chun>(createChun(600, 100, COLORS.BOT, "BOT"));
 
-    // Drag state
     const dragRef = useRef({
       isDragging: false,
       startPos: { x: 0, y: 0 },
       currentPos: { x: 0, y: 0 },
     });
 
-    // Camera shake
     const shakeRef = useRef({ x: 0, y: 0, intensity: 0 });
 
-    // Bot timer
     const botTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Resize
-    // ──────────────────────────────────────────────────────────────────────
 
     useEffect(() => {
       const container = containerRef.current;
@@ -175,14 +150,10 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
       return () => resizeObserver.disconnect();
     }, []);
 
-    // Update tier color
     useEffect(() => {
       playerRef.current.color = getTierColor(tier);
     }, [tier]);
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Reset & Start
-    // ──────────────────────────────────────────────────────────────────────
 
     const resetGame = useCallback(() => {
       if (botTimerRef.current) {
@@ -199,7 +170,6 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
       wasOvershootRef.current = false;
       roundResultRef.current = null;
 
-      // Reset chuns
       playerRef.current = createChun(
         canvasSize.width * 0.25,
         canvasSize.height * 0.65,
@@ -217,17 +187,11 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
       shakeRef.current = { x: 0, y: 0, intensity: 0 };
     }, [canvasSize, tier]);
 
-    // Auto-start only on initial mount
     useEffect(() => {
       if (phaseRef.current === "idle") {
         resetGame();
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // Only run once on mount
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Win Handler
-    // ──────────────────────────────────────────────────────────────────────
+    }, []);
 
     const handleWin = useCallback(
       (winResult: WinResult) => {
@@ -237,7 +201,6 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
 
         roundResultRef.current = result;
 
-        // Game feel: hit-stop and shake
         if (winResult !== "none") {
           hitStopCountRef.current = FLICK_CONFIG.HIT_STOP_FRAMES;
           shakeRef.current.intensity = FLICK_CONFIG.CAMERA_SHAKE_INTENSITY;
@@ -250,9 +213,6 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
       [onRoundEnd],
     );
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Switch Turn
-    // ──────────────────────────────────────────────────────────────────────
 
     const switchTurn = useCallback(() => {
       if (currentTurnRef.current === "player") {
@@ -262,7 +222,6 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
         botTimerRef.current = setTimeout(() => {
           if (phaseRef.current !== "bot-thinking") return;
 
-          // Bot calculates and executes flick
           const flickInput = calculateBotFlick(
             botRef.current,
             playerRef.current,
@@ -285,9 +244,6 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
       }
     }, [tier]);
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Game Loop
-    // ──────────────────────────────────────────────────────────────────────
 
     const gameLoop = useCallback(() => {
       const canvas = canvasRef.current;
@@ -298,7 +254,6 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
       const phase = phaseRef.current;
       const bounds = canvasSize;
 
-      // === Hit-stop (freeze frames) ===
       if (phase === "hit-stop") {
         hitStopCountRef.current--;
         if (hitStopCountRef.current <= 0) {
@@ -310,7 +265,6 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
         return;
       }
 
-      // === Physics simulation ===
       if (
         phase === "player-simulating" ||
         phase === "bot-simulating" ||
@@ -318,7 +272,6 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
       ) {
         simulationFrameRef.current++;
 
-        // Force settle after max frames
         if (simulationFrameRef.current > FLICK_CONFIG.MAX_SIMULATION_FRAMES) {
           const win = checkSettledWin(
             playerRef.current,
@@ -331,19 +284,15 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
           return;
         }
 
-        // Update physics
         updateChunPhysics(playerRef.current, bounds, wasOvershootRef.current);
         updateChunPhysics(botRef.current, bounds, false);
 
-        // Collision
         resolveChunCollision(playerRef.current, botRef.current);
 
-        // Check settled
         if (areBothSettled(playerRef.current, botRef.current)) {
           settleCountRef.current++;
 
           if (settleCountRef.current >= FLICK_CONFIG.SETTLE_FRAMES_REQUIRED) {
-            // Check win
             const win = checkSettledWin(
               playerRef.current,
               botRef.current,
@@ -353,7 +302,6 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
             if (win !== "none") {
               handleWin(win);
             } else {
-              // No winner, switch turn
               switchTurn();
             }
           } else {
@@ -364,21 +312,16 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
         }
       }
 
-      // Render
       render(ctx);
       animationRef.current = requestAnimationFrame(gameLoop);
     }, [canvasSize, handleWin, switchTurn, onRoundEnd]);
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Rendering
-    // ──────────────────────────────────────────────────────────────────────
 
     const render = useCallback(
       (ctx: CanvasRenderingContext2D) => {
         const { width, height } = canvasSize;
         const shake = shakeRef.current;
 
-        // Update shake
         if (shake.intensity > 0) {
           shake.x = (Math.random() - 0.5) * shake.intensity;
           shake.y = (Math.random() - 0.5) * shake.intensity;
@@ -391,13 +334,11 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
           ctx.translate(shake.x, shake.y);
         }
 
-        // Background
         ctx.fillStyle = COLORS.BACKGROUND;
         ctx.fillRect(0, 0, width, height);
 
-        // Grid
         ctx.strokeStyle = COLORS.GRID;
-        ctx.lineWidth = 0.5;
+        ctx.lineWidth = 0.5; 
         for (let x = 0; x <= width; x += 40) {
           ctx.beginPath();
           ctx.moveTo(x, 0);
@@ -411,11 +352,9 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
           ctx.stroke();
         }
 
-        // Draw trails
         drawTrail(ctx, playerRef.current);
         drawTrail(ctx, botRef.current);
 
-        // Draw chuns
         const highlightPlayer =
           phaseRef.current === "idle" || phaseRef.current === "player-aiming";
         const highlightBot =
@@ -425,17 +364,14 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
         drawChun(ctx, botRef.current, highlightBot);
         drawChun(ctx, playerRef.current, highlightPlayer);
 
-        // Draw aim line
         if (dragRef.current.isDragging) {
           drawAimLine(ctx);
         }
 
         ctx.restore();
 
-        // Phase indicator (no shake)
         drawPhaseIndicator(ctx, width);
 
-        // Debug info
         if (debug) {
           drawDebug(ctx, width, height);
         }
@@ -469,13 +405,11 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
     ) => {
       ctx.save();
 
-      // Shadow
       ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
       ctx.shadowBlur = 10;
       ctx.shadowOffsetX = 3;
       ctx.shadowOffsetY = 3;
 
-      // Main circle - hollow ring (dây chun)
       ctx.beginPath();
       ctx.arc(chun.position.x, chun.position.y, chun.radius, 0, Math.PI * 2);
       ctx.strokeStyle = chun.color;
@@ -484,19 +418,16 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
 
       ctx.shadowColor = "transparent";
 
-      // Highlight ring
       if (highlight) {
         ctx.strokeStyle = "#fdc700";
         ctx.lineWidth = 4;
         ctx.stroke();
       }
 
-      // Border
       ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Label
       ctx.fillStyle = "white";
       ctx.font = "bold 13px 'Inter', Arial, sans-serif";
       ctx.textAlign = "center";
@@ -519,7 +450,6 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
 
       if (power < 0.05) return;
 
-      // Direction (opposite of pull)
       const direction =
         pullLength > 0
           ? vec2.normalize(vec2.scale(pullVector, -1))
@@ -531,7 +461,6 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
 
       ctx.save();
 
-      // Aim line
       ctx.strokeStyle = COLORS.AIM_LINE;
       ctx.lineWidth = 3;
       ctx.setLineDash([10, 8]);
@@ -540,7 +469,6 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
       ctx.lineTo(projectedEnd.x, projectedEnd.y);
       ctx.stroke();
 
-      // Arrow head
       ctx.setLineDash([]);
       const arrowSize = 12;
       const angle = Math.atan2(
@@ -560,7 +488,6 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
       );
       ctx.stroke();
 
-      // Power bar
       const barWidth = 70;
       const barHeight = 10;
       const barX = player.position.x - barWidth / 2;
@@ -574,13 +501,11 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
       ctx.fill();
       ctx.stroke();
 
-      // Power fill
       ctx.fillStyle = getPowerColor(power);
       ctx.beginPath();
       ctx.roundRect(barX, barY, barWidth * power, barHeight, 3);
       ctx.fill();
 
-      // Zone indicator
       const zone = getPowerZone(power);
       ctx.fillStyle = "white";
       ctx.font = "bold 11px Arial";
@@ -688,7 +613,6 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
       ctx.restore();
     };
 
-    // Start game loop
     useEffect(() => {
       animationRef.current = requestAnimationFrame(gameLoop);
       return () => {
@@ -696,16 +620,11 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
       };
     }, [gameLoop]);
 
-    // Cleanup
     useEffect(() => {
       return () => {
         if (botTimerRef.current) clearTimeout(botTimerRef.current);
       };
     }, []);
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Input Handlers
-    // ──────────────────────────────────────────────────────────────────────
 
     const handlePointerDown = useCallback(
       (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -749,7 +668,6 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
         const drag = dragRef.current;
         const player = playerRef.current;
 
-        // Calculate flick
         const flickInput = dragToFlick(
           player.position,
           drag.startPos,
@@ -782,10 +700,6 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
       }
     }, []);
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Imperative Handle
-    // ──────────────────────────────────────────────────────────────────────
-
     useImperativeHandle(
       ref,
       () => ({
@@ -794,10 +708,6 @@ const FlickGameCanvas = forwardRef<FlickGameCanvasHandle, FlickGameCanvasProps>(
       }),
       [resetGame],
     );
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Render
-    // ──────────────────────────────────────────────────────────────────────
 
     return (
       <div

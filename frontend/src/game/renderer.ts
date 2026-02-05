@@ -1,4 +1,3 @@
-// Canvas renderer for SuiChin game
 
 import type { Chun, GameBoard, TurnPhase, Vector2D, GameState } from "./types";
 import { vec2 } from "./physics";
@@ -31,9 +30,6 @@ const TIER_COLORS: Record<number, string> = {
   3: "#fdc700", // Gold
 };
 
-/**
- * Get color for a tier
- */
 export function getTierColor(tier: number): string {
   return TIER_COLORS[tier] || TIER_COLORS[1];
 }

@@ -1,5 +1,3 @@
-// Game module exports
-
 export * from "./types";
 export * from "./physics";
 export * from "./collision";
@@ -7,7 +5,6 @@ export * from "./bot-ai";
 export * from "./renderer";
 export * from "./engine";
 
-// Juicy Physics (NEW) - exported as namespace to avoid conflicts
 export {
   PHYSICS_CONFIG as JUICY_CONFIG,
   createChun as createJuicyChun,
@@ -33,7 +30,6 @@ export {
   type BotConfig,
 } from "./juicy-physics";
 
-// Components
 export { default as SuiChinGameCanvas } from "./SuiChinGameCanvas";
 export { default as GameCanvas } from "./GameCanvas";
 export type {
@@ -45,21 +41,18 @@ export type {
   GamePhase,
 } from "./GameCanvas";
 
-// Juicy Game Canvas (NEW)
 export { default as JuicyGameCanvas } from "./JuicyGameCanvas";
 export type {
   JuicyGameCanvasProps,
   JuicyGameCanvasHandle,
 } from "./JuicyGameCanvas";
 
-// Flick Game Canvas (HIGH-SKILL VERSION)
 export { default as FlickGameCanvas } from "./FlickGameCanvas";
 export type {
   FlickGameCanvasProps,
   FlickGameCanvasHandle,
 } from "./FlickGameCanvas";
 
-// Flick Physics Engine - explicit exports to avoid conflicts
 export {
   FLICK_CONFIG,
   vec2 as flickVec2,

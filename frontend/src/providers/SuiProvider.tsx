@@ -23,7 +23,7 @@ const networks = {
 };
 
 export function SuiProvider({ children }: { children: React.ReactNode }) {
-  console.log('🔍 SuiProvider rendering with NETWORK:', NETWORK);
+  console.log(' SuiProvider rendering with NETWORK:', NETWORK);
   
   return (
     <QueryClientProvider client={queryClient}>

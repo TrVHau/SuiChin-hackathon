@@ -275,35 +275,20 @@ export function updateChunPhysics(
     chun.position.x = r;
     chun.velocity.x = Math.abs(chun.velocity.x) * cfg.WALL_BOUNCE;
   }
-  // Right wall
   if (chun.position.x + r > bounds.width) {
-    chun.position.x = bounds.width - r;
+    chun.position.x = bounds.width - r,
     chun.velocity.x = -Math.abs(chun.velocity.x) * cfg.WALL_BOUNCE;
   }
-  // Top wall
   if (chun.position.y - r < 0) {
     chun.position.y = r;
     chun.velocity.y = Math.abs(chun.velocity.y) * cfg.WALL_BOUNCE;
   }
-  // Bottom wall
   if (chun.position.y + r > bounds.height) {
     chun.position.y = bounds.height - r;
     chun.velocity.y = -Math.abs(chun.velocity.y) * cfg.WALL_BOUNCE;
   }
-}
+} 
 
-// ============================================================================
-// Collision Resolution
-// ============================================================================
-
-/**
- * Resolve collision between two chuns
- *
- * Logic búng chun thật:
- * - Khi attacker bắn trúng defender → attacker chậm lại/dừng
- * - Defender bị đẩy nhẹ
- * - Cho phép overlap (đè lên nhau) - đây là cách thắng!
- */
 export function resolveChunCollision(
   a: Chun,
   b: Chun,
@@ -313,52 +298,41 @@ export function resolveChunCollision(
   const dist = vec2.distance(a.position, b.position);
   const minDist = a.radius + b.radius;
 
-  // Cho phép overlap - chỉ xử lý khi overlap quá sâu
   const allowedOverlap = minDist * cfg.COLLISION_MIN_OVERLAP;
   const effectiveMinDist = minDist - allowedOverlap;
 
   if (dist >= effectiveMinDist) return false;
 
-  // Collision detected - nhưng cho phép một phần overlap
   const normal = vec2.normalize(vec2.sub(b.position, a.position));
   const overlap = effectiveMinDist - dist;
 
-  // Chỉ separate phần overlap quá sâu (giữ lại khoảng cho phép)
   if (overlap > 0) {
     const separation = overlap / 2;
     a.position = vec2.sub(a.position, vec2.scale(normal, separation));
     b.position = vec2.add(b.position, vec2.scale(normal, separation));
   }
 
-  // === Velocity handling ===
   const aSpeed = vec2.length(a.velocity);
   const bSpeed = vec2.length(b.velocity);
 
-  // Xác định ai là attacker (đang di chuyển nhanh hơn)
   const aIsMoving = aSpeed > 0.5;
   const bIsMoving = bSpeed > 0.5;
 
   if (aIsMoving && !bIsMoving) {
-    // A đang bắn vào B đứng yên
-    // A chậm lại mạnh (như bị "dính")
     a.velocity = vec2.scale(a.velocity, cfg.COLLISION_ATTACKER_SLOWDOWN);
 
-    // B bị đẩy nhẹ
     const pushStrength = aSpeed * cfg.COLLISION_DEFENDER_PUSH;
     b.velocity = vec2.add(b.velocity, vec2.scale(normal, pushStrength));
   } else if (bIsMoving && !aIsMoving) {
-    // B đang bắn vào A đứng yên
     b.velocity = vec2.scale(b.velocity, cfg.COLLISION_ATTACKER_SLOWDOWN);
 
     const pushStrength = bSpeed * cfg.COLLISION_DEFENDER_PUSH;
     a.velocity = vec2.sub(a.velocity, vec2.scale(normal, pushStrength));
   } else if (aIsMoving && bIsMoving) {
-    // Cả hai đang di chuyển - xử lý như va chạm thường
     const relativeVel = vec2.sub(a.velocity, b.velocity);
     const relativeSpeed = vec2.dot(relativeVel, normal);
 
     if (relativeSpeed > 0) {
-      // Exchange với energy loss
       const impulse = relativeSpeed * 0.4;
       const impulseVec = vec2.scale(normal, impulse);
       a.velocity = vec2.sub(a.velocity, impulseVec);
@@ -369,9 +343,6 @@ export function resolveChunCollision(
   return true;
 }
 
-// ============================================================================
-// Settled Detection
-// ============================================================================
 
 /**
  * Check if a chun is settled (not moving)
@@ -380,29 +351,12 @@ export function isChunSettled(chun: Chun): boolean {
   return vec2.length(chun.velocity) < FLICK_CONFIG.VELOCITY_EPSILON;
 }
 
-/**
- * Check if both chuns are settled
- */
 export function areBothSettled(a: Chun, b: Chun): boolean {
   return isChunSettled(a) && isChunSettled(b);
 }
 
-// ============================================================================
-// Win Detection (CRITICAL)
-// ============================================================================
 
-/**
- * Check for win after both chuns have settled
- * Win is decided ONLY by final visual overlap
- *
- * Rules:
- * 1. If circles do NOT overlap → no winner
- * 2. If circles overlap → attacker wins (they successfully "đè lên")
- *
- * @param player - Player's chun
- * @param bot - Bot's chun
- * @param lastAttacker - Who flicked last
- */
+
 export function checkSettledWin(
   player: Chun,
   bot: Chun,
@@ -412,23 +366,18 @@ export function checkSettledWin(
   const dist = vec2.distance(player.position, bot.position);
   const sumRadii = player.radius + bot.radius;
 
-  // Check overlap
   const isOverlapping = dist < sumRadii * cfg.WIN_OVERLAP_TOLERANCE;
 
   if (!isOverlapping) {
-    // No overlap → no winner, switch turn
     return "none";
   }
 
-  // Circles ARE overlapping!
-  // The ATTACKER (who flicked last) wins
   if (lastAttacker === "player") {
     return "player_wins";
   } else if (lastAttacker === "bot") {
     return "bot_wins";
   }
 
-  // Fallback: check who is visually "on top" (smaller Y)
   const yDiff = bot.position.y - player.position.y;
   if (yDiff > cfg.WIN_Y_MARGIN) {
     return "player_wins";
@@ -436,22 +385,10 @@ export function checkSettledWin(
     return "bot_wins";
   }
 
-  // Truly ambiguous → favor attacker
   return lastAttacker === "player" ? "player_wins" : "bot_wins";
 }
 
-// ============================================================================
-// Bot AI (Fair but Strong)
-// ============================================================================
 
-/**
- * Calculate bot's flick
- * Bot follows same rules as player, no cheating
- *
- * Tier 1 (DỄ): Bắn lung tung, hay sai
- * Tier 2 (BÌNH THƯỜNG): Cân bằng, đôi khi sai
- * Tier 3 (KHÓ): Thông minh, bắn chính xác
- */
 export function calculateBotFlick(
   bot: Chun,
   player: Chun,
@@ -460,9 +397,7 @@ export function calculateBotFlick(
   const cfg = FLICK_CONFIG;
   const difficulty = cfg.BOT_DIFFICULTY[tier] || cfg.BOT_DIFFICULTY[2];
 
-  // === Random shot chance (chỉ bot dễ mới bắn random) ===
   if (Math.random() < difficulty.randomShotChance) {
-    // Bắn random hoàn toàn (bot ngu)
     const randomAngle = Math.random() * Math.PI * 2;
     const randomPower = 0.3 + Math.random() * 0.5;
     return {
@@ -472,23 +407,18 @@ export function calculateBotFlick(
     };
   }
 
-  // === Aim calculation ===
   let direction: Vector2D;
 
   if (Math.random() < difficulty.optimalAimChance) {
-    // Bắn chính xác vào player
     const toPlayer = vec2.normalize(vec2.sub(player.position, bot.position));
     const aimError = (Math.random() - 0.5) * difficulty.aimError;
     direction = vec2.rotate(toPlayer, aimError);
   } else {
-    // Bắn sai hướng (aim không tốt)
     const toPlayer = vec2.normalize(vec2.sub(player.position, bot.position));
-    // Sai hướng nhiều hơn
     const bigError = (Math.random() - 0.5) * difficulty.aimError * 2;
     direction = vec2.rotate(toPlayer, bigError);
   }
 
-  // === Power calculation ===
   const dist = vec2.distance(bot.position, player.position);
   const maxDist = 500;
   const basePower = Math.min(dist / maxDist, 0.9);
@@ -496,22 +426,17 @@ export function calculateBotFlick(
   let targetPower: number;
 
   if (Math.random() < difficulty.overshootChance) {
-    // Overshoot (bắn quá mạnh - bad)
     targetPower = cfg.OVERSHOOT_PENALTY_START + Math.random() * 0.25;
   } else {
-    // Aim for optimal zone
-    // Bot khó biết optimal zone tốt hơn
     const optimalVariance = tier === 3 ? 0.1 : tier === 2 ? 0.2 : 0.4;
     targetPower =
       cfg.OPTIMAL_PULL_RATIO *
       (1 - optimalVariance + Math.random() * optimalVariance * 2);
   }
 
-  // Add power variance based on difficulty
   const powerError = (Math.random() - 0.5) * difficulty.powerError;
   const power = Math.max(0.2, Math.min(1, targetPower + powerError));
 
-  // Bot doesn't have off-center issues (consistent)
   const contactOffset = { x: 0, y: 0 };
 
   return {
@@ -521,9 +446,6 @@ export function calculateBotFlick(
   };
 }
 
-/**
- * Get bot think time based on tier
- */
 export function getBotThinkTime(tier: number = 2): number {
   const cfg = FLICK_CONFIG;
   const difficulty = cfg.BOT_DIFFICULTY[tier] || cfg.BOT_DIFFICULTY[2];
@@ -533,27 +455,17 @@ export function getBotThinkTime(tier: number = 2): number {
   );
 }
 
-// ============================================================================
-// Rendering Helpers
-// ============================================================================
-
-/**
- * Get power indicator color
- */
 export function getPowerColor(power: number): string {
   const cfg = FLICK_CONFIG;
 
   if (power < cfg.OPTIMAL_PULL_RATIO) {
-    // Green to yellow (building up)
     const t = power / cfg.OPTIMAL_PULL_RATIO;
     const r = Math.floor(t * 255);
     const g = 255;
     return `rgb(${r}, ${g}, 0)`;
   } else if (power < cfg.OVERSHOOT_PENALTY_START) {
-    // Yellow (optimal zone)
     return "#facc15";
   } else {
-    // Red (overshoot zone)
     const t =
       (power - cfg.OVERSHOOT_PENALTY_START) / (1 - cfg.OVERSHOOT_PENALTY_START);
     const g = Math.floor((1 - t) * 180);

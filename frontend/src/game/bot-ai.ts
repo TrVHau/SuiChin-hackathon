@@ -43,7 +43,6 @@ function easyBotStrategy(
     y: toPlayer.x * Math.sin(randomAngle) + toPlayer.y * Math.cos(randomAngle),
   };
 
-  // Random power (30-60% of max)
   const power = (0.3 + Math.random() * 0.3) * config.maxFlickPower;
 
   return {
@@ -52,31 +51,25 @@ function easyBotStrategy(
   };
 }
 
-/**
- * Medium bot - aims towards player with moderate accuracy
- */
+
 function mediumBotStrategy(
   botChun: Chun,
   playerChun: Chun,
   config: GameConfig,
 ): BotDecision {
-  // Direction towards player with some error
   const toPlayer = vec2.normalize(
     vec2.sub(playerChun.position, botChun.position),
   );
 
-  // Add small error angle (-30 to +30 degrees)
   const errorAngle = (Math.random() - 0.5) * (Math.PI / 3);
   const aimDirection: Vector2D = {
     x: toPlayer.x * Math.cos(errorAngle) - toPlayer.y * Math.sin(errorAngle),
     y: toPlayer.x * Math.sin(errorAngle) + toPlayer.y * Math.cos(errorAngle),
   };
 
-  // Calculate distance-based power
   const distance = vec2.distance(botChun.position, playerChun.position);
   const normalizedDistance = distance / config.boardWidth;
 
-  // Power based on distance (40-80% of max)
   const basePower = 0.4 + normalizedDistance * 0.4;
   const power =
     (basePower + (Math.random() - 0.5) * 0.1) * config.maxFlickPower;
@@ -87,22 +80,16 @@ function mediumBotStrategy(
   };
 }
 
-/**
- * Hard bot - precise aiming with optimal power
- */
 function hardBotStrategy(
   botChun: Chun,
   playerChun: Chun,
   config: GameConfig,
 ): BotDecision {
-  // Predict where to aim considering physics
   const toPlayer = vec2.sub(playerChun.position, botChun.position);
   const distance = vec2.length(toPlayer);
 
-  // Account for friction by overshooting slightly
   const frictionCompensation = 1.15;
 
-  // Small random error (-10 to +10 degrees) to not be perfect
   const errorAngle = (Math.random() - 0.5) * (Math.PI / 9);
   const direction = vec2.normalize(toPlayer);
 
@@ -111,7 +98,6 @@ function hardBotStrategy(
     y: direction.x * Math.sin(errorAngle) + direction.y * Math.cos(errorAngle),
   };
 
-  // Optimal power calculation
   const optimalPower = Math.min(
     (distance / config.boardWidth) *
       config.maxFlickPower *
@@ -119,7 +105,6 @@ function hardBotStrategy(
     config.maxFlickPower * 0.9,
   );
 
-  // Try to land on top of player (aim slightly above)
   const aboveOffset: Vector2D = { x: 0, y: -20 };
   const adjustedTarget = vec2.add(playerChun.position, aboveOffset);
   const adjustedDirection = vec2.normalize(
@@ -138,9 +123,6 @@ function hardBotStrategy(
   };
 }
 
-/**
- * Get bot difficulty label
- */
 export function getDifficultyLabel(difficulty: BotDifficulty): string {
   switch (difficulty) {
     case "easy":
@@ -154,11 +136,6 @@ export function getDifficultyLabel(difficulty: BotDifficulty): string {
   }
 }
 
-/**
- * Determine bot difficulty based on tier
- * Updated: All tiers now use medium difficulty for balanced gameplay
- */
 export function getBotDifficultyForTier(tier: number): BotDifficulty {
-  // All tiers now have the same medium difficulty
   return "medium";
 }
