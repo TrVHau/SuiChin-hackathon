@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 interface FaucetScreenProps {
   onBack: () => void;
   lastClaimTime: number;
-  onClaim: () => void; // Changed: no longer passes tier counts
+  onClaim: () => void; 
 }
 
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
@@ -49,12 +49,10 @@ export default function FaucetScreen({ onBack, lastClaimTime, onClaim }: FaucetS
     setClaiming(true);
     toast.loading('Đang xin chun từ blockchain...', { id: 'faucet' });
 
-    // Gọi blockchain - không cần tính random nữa vì contract sẽ làm
     onClaim();
     
     setClaiming(false);
     
-    // Note: toast success sẽ được hiện từ useSuiProfile hook
   };
 
   const handleClose = () => {

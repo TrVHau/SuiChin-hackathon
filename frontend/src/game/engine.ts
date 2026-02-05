@@ -1,4 +1,3 @@
-// Game engine - main game loop and state management
 
 import type {
   GameState,
@@ -38,9 +37,7 @@ export interface GameEvent {
 
 export type GameEventListener = (event: GameEvent) => void;
 
-/**
- * Create initial game state
- */
+
 export function createInitialGameState(
   selectedTier: number,
   config: GameConfig = DEFAULT_GAME_CONFIG,
@@ -89,9 +86,6 @@ export function createInitialGameState(
   };
 }
 
-/**
- * Game Engine class
- */
 export class GameEngine {
   private state: GameState;
   private config: GameConfig;
@@ -110,45 +104,27 @@ export class GameEngine {
     this.listeners = new Set();
   }
 
-  /**
-   * Get current game state
-   */
   getState(): GameState {
     return this.state;
   }
 
-  /**
-   * Get game config
-   */
   getConfig(): GameConfig {
     return this.config;
   }
 
-  /**
-   * Subscribe to game events
-   */
   subscribe(listener: GameEventListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
-  /**
-   * Emit game event to all listeners
-   */
   private emit(event: GameEvent): void {
     this.listeners.forEach((listener) => listener(event));
   }
 
-  /**
-   * Update state and notify listeners
-   */
   private setState(updates: Partial<GameState>): void {
     this.state = { ...this.state, ...updates };
   }
 
-  /**
-   * Handle player flick input
-   */
   playerFlick(input: FlickInput): void {
     if (this.state.turnPhase !== "player-aim" || this.state.isGameOver) {
       return;
@@ -173,9 +149,6 @@ export class GameEngine {
     this.emit({ type: "flick", data: { player: true, velocity } });
   }
 
-  /**
-   * Execute bot's turn
-   */
   private executeBotTurn(): void {
     if (this.state.isGameOver) return;
 
@@ -206,13 +179,9 @@ export class GameEngine {
     }, decision.thinkTime);
   }
 
-  /**
-   * Check if round should end
-   */
   private checkRoundEnd(): void {
     const { playerChun, botChun, turnCount, maxTurns } = this.state;
 
-    // Check collision and determine winner
     if (checkChunCollision(playerChun, botChun)) {
       const winner = determineWinner(playerChun, botChun);
       const result: MatchResult =
@@ -229,9 +198,7 @@ export class GameEngine {
       return;
     }
 
-    // Check max turns
     if (turnCount >= maxTurns) {
-      // Determine winner by position
       const winner = determineWinner(playerChun, botChun);
       const result: MatchResult =
         winner === "player" ? "win" : winner === "bot" ? "lose" : "draw";
@@ -247,7 +214,6 @@ export class GameEngine {
       return;
     }
 
-    // Switch turns
     if (this.state.currentTurn === "player") {
       this.setState({
         currentTurn: "bot",
@@ -263,24 +229,18 @@ export class GameEngine {
     }
   }
 
-  /**
-   * Main game loop update
-   */
   update(deltaTime: number = 1): void {
     if (this.state.isGameOver) return;
 
     const { turnPhase, playerChun, botChun, board } = this.state;
 
-    // Only update physics during flick phases
     if (turnPhase !== "player-flick" && turnPhase !== "bot-flick") {
       return;
     }
 
-    // Update player chun physics
     let updatedPlayerChun = updateChunPhysics(playerChun, board, deltaTime);
     let updatedBotChun = updateChunPhysics(botChun, board, deltaTime);
 
-    // Check for chun-chun collision
     if (checkChunCollision(updatedPlayerChun, updatedBotChun)) {
       [updatedPlayerChun, updatedBotChun] = resolveChunCollision(
         updatedPlayerChun,
@@ -294,7 +254,6 @@ export class GameEngine {
       botChun: updatedBotChun,
     });
 
-    // Check if both chuns have stopped
     if (
       areAllChunsStationary(
         [updatedPlayerChun, updatedBotChun],
@@ -307,14 +266,10 @@ export class GameEngine {
         data: { player: this.state.currentTurn === "player" },
       });
 
-      // Small delay before checking round end
       setTimeout(() => this.checkRoundEnd(), 300);
     }
   }
 
-  /**
-   * Start the game loop
-   */
   start(): void {
     this.emit({ type: "turn-start", data: { player: true } });
 
@@ -336,9 +291,6 @@ export class GameEngine {
     this.animationFrameId = requestAnimationFrame(loop);
   }
 
-  /**
-   * Stop the game loop
-   */
   stop(): void {
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
@@ -351,27 +303,19 @@ export class GameEngine {
     }
   }
 
-  /**
-   * Reset game to initial state
-   */
   reset(): void {
     this.stop();
     this.state = createInitialGameState(this.state.selectedTier, this.config);
     this.lastTimestamp = 0;
   }
 
-  /**
-   * Destroy engine and clean up
-   */
   destroy(): void {
     this.stop();
     this.listeners.clear();
   }
 }
 
-/**
- * Create a new game engine instance
- */
+
 export function createGameEngine(
   selectedTier: number,
   config?: Partial<GameConfig>,

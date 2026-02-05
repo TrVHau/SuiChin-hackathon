@@ -96,9 +96,7 @@ export default function AchievementScreen({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {ACHIEVEMENTS.map((achievement, index) => {
               const isUnlocked = maxStreak >= achievement.milestone;
-              const isClaimed = claimedAchievements.includes(
-                achievement.milestone,
-              );
+              const isClaimed = claimedAchievements.includes(achievement.milestone);
               const canClaim = isUnlocked && !isClaimed;
 
               return (

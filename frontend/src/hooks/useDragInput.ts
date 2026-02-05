@@ -52,7 +52,6 @@ export function useDragInput(options: UseDragInputOptions): UseDragInputReturn {
     (pos: Vector2D) => {
       if (!enabled) return;
 
-      // Check if click is on the chun
       const distance = vec2.distance(pos, chunPosition);
       
       if (distance <= chunRadius * 1.5) {
@@ -81,7 +80,6 @@ export function useDragInput(options: UseDragInputOptions): UseDragInputReturn {
 
       const distance = vec2.distance(pos, dragStart);
 
-      // Only trigger flick if drag distance is significant
       if (distance > 10) {
         onFlick({
           startPosition: dragStart,
@@ -95,7 +93,6 @@ export function useDragInput(options: UseDragInputOptions): UseDragInputReturn {
     [isDragging, dragStart, onFlick],
   );
 
-  // Mouse handlers
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       const canvas = canvasRef.current;
@@ -129,7 +126,6 @@ export function useDragInput(options: UseDragInputOptions): UseDragInputReturn {
     [canvasRef, endDrag],
   );
 
-  // Touch handlers
   const handleTouchStart = useCallback(
     (e: React.TouchEvent<HTMLCanvasElement>) => {
       e.preventDefault();
@@ -162,7 +158,6 @@ export function useDragInput(options: UseDragInputOptions): UseDragInputReturn {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      // Use last known position
       endDrag(dragCurrent);
     },
     [canvasRef, endDrag, dragCurrent],

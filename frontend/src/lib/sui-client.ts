@@ -1,18 +1,6 @@
-/**
- * Sui Client Utilities
- * Helper functions để tương tác với Sui blockchain
- */
-
 import { Transaction } from "@mysten/sui/transactions";
-import {
-  PACKAGE_ID,
-  MODULES,
-  CLOCK_ID,
-} from "@/config/sui.config";
+import { PACKAGE_ID, MODULES, CLOCK_ID } from "@/config/sui.config";
 
-/**
- * Tạo transaction: create_profile
- */
 export function buildCreateProfileTx(): Transaction {
   const tx = new Transaction();
 
@@ -24,9 +12,6 @@ export function buildCreateProfileTx(): Transaction {
   return tx;
 }
 
-/**
- * Tạo transaction: record_session
- */
 export function buildRecordSessionTx(
   profileId: string,
   deltaTier1: number,
@@ -59,9 +44,6 @@ export function buildRecordSessionTx(
   return tx;
 }
 
-/**
- * Tạo transaction: claim_faucet
- */
 export function buildClaimFaucetTx(profileId: string): Transaction {
   const tx = new Transaction();
 
@@ -73,9 +55,6 @@ export function buildClaimFaucetTx(profileId: string): Transaction {
   return tx;
 }
 
-/**
- * Tạo transaction: craft_roll (mint ChunRoll NFT)
- */
 export function buildCraftRollTx(
   profileId: string,
   useTier1: number,
@@ -98,9 +77,6 @@ export function buildCraftRollTx(
   return tx;
 }
 
-/**
- * Tạo transaction: claim_achievement
- */
 export function buildClaimAchievementTx(
   profileId: string,
   milestone: number,

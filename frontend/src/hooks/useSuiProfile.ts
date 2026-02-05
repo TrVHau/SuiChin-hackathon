@@ -1,13 +1,8 @@
-/**
- * Hook tương tác với Sui blockchain
- * Thay thế mock data bằng real blockchain calls
- */
-
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
-    buildCreateProfileTx,
+  buildCreateProfileTx,
   buildRecordSessionTx,
   buildClaimFaucetTx,
   buildCraftRollTx,
@@ -15,7 +10,7 @@ import {
 } from "@/lib/sui-client";
 import { PACKAGE_ID, MODULES } from "@/config/sui.config";
 
-interface PlayerProfileData {
+export interface PlayerProfileData {
   objectId: string;
   address: string;
   tier1: number;
@@ -36,9 +31,6 @@ export function useSuiProfile() {
   const [loading, setLoading] = useState(false);
   const [hasProfile, setHasProfile] = useState(false);
 
-  console.log('🔍 useSuiProfile hook:', { account: account?.address, profile, hasProfile, loading });
-
-  // Load profile từ blockchain
   const loadProfile = async () => {
     if (!account?.address) return;
 
@@ -64,16 +56,19 @@ export function useSuiProfile() {
       const profileObj = objects.data[0];
       setHasProfile(true);
 
-      console.log('📦 Profile object loaded:', {
-        objectId: profileObj.data?.objectId,
-        version: profileObj.data?.version,
-        digest: profileObj.data?.digest,
-      });
-
-      // Parse profile data từ blockchain
       const content = profileObj.data?.content;
       if (content && 'fields' in content && profileObj.data) {
         const fields = content.fields as any;
+        
+        let achievementsArray: number[] = [];
+        if (fields.achievements) {
+          if (Array.isArray(fields.achievements)) {
+            achievementsArray = fields.achievements.map((a: any) => Number(a));
+          } else if (typeof fields.achievements === 'object' && 'contents' in fields.achievements) {
+            achievementsArray = (fields.achievements.contents || []).map((a: any) => Number(a));
+          }
+        }
+        
         const profileData = {
           objectId: profileObj.data.objectId,
           address: account.address,
@@ -83,9 +78,8 @@ export function useSuiProfile() {
           maxStreak: Number(fields.max_streak || 0),
           currentStreak: Number(fields.current_streak || 0),
           faucetLastClaim: Number(fields.faucet_last_claim || 0),
-          achievements: fields.achievements || [],
+          achievements: achievementsArray,
         };
-        console.log('✅ Profile data parsed:', profileData);
         setProfile(profileData);
       }
     } catch (error) {
@@ -96,7 +90,6 @@ export function useSuiProfile() {
     }
   };
 
-  // Create profile mới
   const createProfile = () => {
     if (!account?.address) {
       toast.error("Vui lòng kết nối ví");
@@ -110,10 +103,9 @@ export function useSuiProfile() {
         transaction: tx,
       },
       {
-        onSuccess: (result) => {
-          console.log("Profile created:", result);
+        onSuccess: () => {
           toast.success("Tạo profile thành công!");
-          setTimeout(() => loadProfile(), 2000); // Reload sau 2s
+          setTimeout(() => loadProfile(), 2000);
         },
         onError: (error) => {
           console.error("Create profile error:", error);
@@ -123,7 +115,6 @@ export function useSuiProfile() {
     );
   };
 
-  // Record session
   const recordSession = (
     deltaTier1: number,
     deltaTier2: number,
@@ -166,14 +157,12 @@ export function useSuiProfile() {
     );
   };
 
-  // Claim faucet
   const claimFaucet = () => {
     if (!profile) {
       toast.error("Không tìm thấy profile");
       return;
     }
 
-    console.log('🎲 Claiming faucet with profile ID:', profile.objectId);
     const tx = buildClaimFaucetTx(profile.objectId);
 
     signAndExecute(
@@ -184,24 +173,18 @@ export function useSuiProfile() {
           setTimeout(() => loadProfile(), 2000);
         },
         onError: (error) => {
-          console.error("❌ Claim faucet error:", error);
-          console.error("❌ Profile objectId was:", profile.objectId);
-          toast.error("Xin chun thất bại - kiểm tra console để debug");
+          console.error("Claim faucet error:", error);
+          toast.error("Xin chun thất bại");
         },
       }
     );
   };
 
-  // Craft roll
   const craftRoll = (useTier1: number, useTier2: number, useTier3: number) => {
     if (!profile) {
       toast.error("Không tìm thấy profile");
       return;
     }
-
-    console.log('🎨 Crafting roll with profile ID:', profile.objectId);
-    console.log('🎨 Using chuns:', { useTier1, useTier2, useTier3 });
-    console.log('🎨 Current balance:', { tier1: profile.tier1, tier2: profile.tier2, tier3: profile.tier3 });
 
     const tx = buildCraftRollTx(profile.objectId, useTier1, useTier2, useTier3);
 
@@ -213,15 +196,13 @@ export function useSuiProfile() {
           setTimeout(() => loadProfile(), 2000);
         },
         onError: (error) => {
-          console.error("❌ Craft roll error:", error);
-          console.error("❌ Profile objectId was:", profile.objectId);
-          toast.error("Mint NFT thất bại - kiểm tra console để debug");
+          console.error("Craft roll error:", error);
+          toast.error("Mint NFT thất bại");
         },
       }
     );
   };
 
-  // Claim achievement
   const claimAchievement = (milestone: number) => {
     if (!profile) {
       toast.error("Không tìm thấy profile");
@@ -245,7 +226,6 @@ export function useSuiProfile() {
     );
   };
 
-  // Auto-load profile khi account thay đổi
   useEffect(() => {
     if (account?.address) {
       loadProfile();

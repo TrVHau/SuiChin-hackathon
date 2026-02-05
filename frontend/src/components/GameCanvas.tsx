@@ -1,4 +1,3 @@
-// GameCanvas - Direct physics game with drag/flick controls - VÒNG TRÒN VERSION
 
 import {
   useRef,
@@ -16,9 +15,6 @@ import {
   type Circle,
 } from "@/game/collision";
 
-// ============================================================================
-// Types
-// ============================================================================
 
 export type RoundResult = "win" | "lose" | "draw";
 export type Turn = "player" | "bot";
@@ -53,16 +49,13 @@ interface DragState {
   currentPos: Vector2D;
 }
 
-// ============================================================================
-// Constants
-// ============================================================================
 
 const PHYSICS = {
   GRAVITY: 0,
   FRICTION: 0.96,
   WALL_BOUNCE: 0.7,
   FLOOR_BOUNCE: 0.7,
-  CHUN_RADIUS: 28, // Tăng từ 20 lên 28 để vòng to hơn
+  CHUN_RADIUS: 28, 
   MAX_PULL_LENGTH: 150,
   PULL_POWER_SCALE: 0.25,
   VELOCITY_THRESHOLD: 0.15,
@@ -89,9 +82,6 @@ const COLORS = {
   POWER_BAR_BG: "rgba(0, 0, 0, 0.5)",
 };
 
-// ============================================================================
-// Helper functions
-// ============================================================================
 
 function getTierColor(tier: number): string {
   switch (tier) {
@@ -124,9 +114,6 @@ function isInsideChun(pos: Vector2D, chun: ChunState): boolean {
   return vec2.distance(pos, chun.position) <= chun.radius * 1.5;
 }
 
-/**
- * Draw a chun as VÒNG TRÒN (ring/donut)
- */
 function drawChun(
   ctx: CanvasRenderingContext2D,
   chun: ChunState,
@@ -134,27 +121,23 @@ function drawChun(
 ): void {
   ctx.save();
 
-  // Shadow
   ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
   ctx.shadowBlur = 10;
   ctx.shadowOffsetX = 3;
   ctx.shadowOffsetY = 3;
 
-  // Outer circle
   ctx.beginPath();
   ctx.arc(chun.position.x, chun.position.y, chun.radius, 0, Math.PI * 2);
   ctx.fillStyle = chun.color;
   ctx.fill();
 
-  // Inner hole - creates THIN RING like image (vòng mỏng như ảnh)
-  const holeRadius = chun.radius * 0.85; // 85% - chỉ còn viền mỏng
+  const holeRadius = chun.radius * 0.85; 
   ctx.globalCompositeOperation = "destination-out";
   ctx.beginPath();
   ctx.arc(chun.position.x, chun.position.y, holeRadius, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalCompositeOperation = "source-over";
 
-  // 3D gradient on ring
   ctx.shadowColor = "transparent";
   const gradient = ctx.createRadialGradient(
     chun.position.x - chun.radius * 0.3,
@@ -173,7 +156,6 @@ function drawChun(
   ctx.fillStyle = gradient;
   ctx.fill("evenodd");
 
-  // Highlight ring
   if (isHighlighted) {
     ctx.strokeStyle = "#fdc700";
     ctx.lineWidth = 4;
@@ -188,21 +170,18 @@ function drawChun(
     ctx.stroke();
   }
 
-  // Outer border
   ctx.beginPath();
   ctx.arc(chun.position.x, chun.position.y, chun.radius, 0, Math.PI * 2);
   ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
   ctx.lineWidth = 3;
   ctx.stroke();
 
-  // Inner border
   ctx.beginPath();
   ctx.arc(chun.position.x, chun.position.y, holeRadius, 0, Math.PI * 2);
   ctx.strokeStyle = "rgba(0, 0, 0, 0.3)";
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // Label
   ctx.fillStyle = "white";
   ctx.font = "bold 14px Arial, sans-serif";
   ctx.textAlign = "center";
@@ -215,9 +194,7 @@ function drawChun(
   ctx.restore();
 }
 
-// ============================================================================
-// Component
-// ============================================================================
+
 
 export default function GameCanvas({
   tier = 1,
@@ -261,7 +238,6 @@ export default function GameCanvas({
     currentPos: { x: 0, y: 0 },
   });
 
-  // Reset positions on mount
   useEffect(() => {
     playerRef.current.position = {
       x: canvasSize.width * 0.25,
@@ -273,33 +249,26 @@ export default function GameCanvas({
     };
   }, [canvasSize]);
 
-  // Update player color when tier changes
   useEffect(() => {
     playerRef.current.color = getTierColor(tier);
   }, [tier]);
 
-  // ============================================================================
-  // Physics
-  // ============================================================================
 
   const updatePhysics = useCallback(() => {
     const player = playerRef.current;
     const bot = botRef.current;
     const { width, height } = canvasSize;
 
-    // 1. Apply velocity cho CẢ 2 chun
     player.position.x += player.velocity.x;
     player.position.y += player.velocity.y;
     bot.position.x += bot.velocity.x;
     bot.position.y += bot.velocity.y;
 
-    // 2. Apply friction
     player.velocity.x *= PHYSICS.FRICTION;
     player.velocity.y *= PHYSICS.FRICTION;
     bot.velocity.x *= PHYSICS.FRICTION;
     bot.velocity.y *= PHYSICS.FRICTION;
 
-    // 3. Wall collisions cho cả 2
     [player, bot].forEach((chun) => {
       if (chun.position.x - chun.radius < 0) {
         chun.position.x = chun.radius;
@@ -318,7 +287,6 @@ export default function GameCanvas({
       }
     });
 
-    // 4. Chun-chun collision - PHẢI VA CHẠM (bounce) như va tường!
     const dist = vec2.distance(player.position, bot.position);
     if (dist < player.radius + bot.radius) {
       const pCircle: Circle = {
@@ -334,7 +302,6 @@ export default function GameCanvas({
 
       const collision = resolveCollision(pCircle, bCircle);
 
-      // Apply collision bounce - 2 chun VA CHẠM và BOUNCE!
       if (collision.collided) {
         player.position = collision.player.position;
         player.velocity = collision.player.velocity;
@@ -367,7 +334,7 @@ export default function GameCanvas({
         } else if (result === "lose" && onLose) {
           onLose();
         } else if (result === "draw" && onLose) {
-          onLose(); // Treat draw as lose
+          onLose(); 
         }
       }, 2000);
     },
@@ -417,16 +384,11 @@ export default function GameCanvas({
     }
   }, [triggerBotTurn]);
 
-  // ============================================================================
-  // Rendering
-  // ============================================================================
-
   const drawBackground = useCallback(
     (ctx: CanvasRenderingContext2D) => {
       ctx.fillStyle = COLORS.BACKGROUND;
       ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
 
-      // Grid
       ctx.strokeStyle = COLORS.GRID;
       ctx.lineWidth = 1;
       const gridSize = 40;
@@ -494,7 +456,6 @@ export default function GameCanvas({
     );
     ctx.stroke();
 
-    // Power bar
     const barWidth = 60;
     const barHeight = 8;
     const barX = player.position.x - barWidth / 2;
@@ -535,9 +496,6 @@ export default function GameCanvas({
     [drawBackground, drawAimLine],
   );
 
-  // ============================================================================
-  // Game loop
-  // ============================================================================
 
   const gameLoop = useCallback(() => {
     const canvas = canvasRef.current;
@@ -555,7 +513,6 @@ export default function GameCanvas({
     ) {
       updatePhysics();
 
-      // KHÔNG check win trong collision nữa, chỉ check sau settled
       if (checkSettled()) {
         settleCountRef.current++;
         if (settleCountRef.current >= PHYSICS.SETTLE_FRAMES) {
@@ -607,10 +564,6 @@ export default function GameCanvas({
       }
     };
   }, [gameLoop]);
-
-  // ============================================================================
-  // Input handlers
-  // ============================================================================
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -682,10 +635,6 @@ export default function GameCanvas({
       phaseRef.current = "idle";
     }
   }, []);
-
-  // ============================================================================
-  // UI
-  // ============================================================================
 
   const tierColors = {
     1: { emoji: "🥉", name: "Bronze" },

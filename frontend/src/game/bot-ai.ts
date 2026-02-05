@@ -1,4 +1,3 @@
-// Bot AI for SuiChin game
 
 import type { Chun, GameConfig, Vector2D } from "./types";
 import { vec2, calculateFlickVelocity } from "./physics";
@@ -7,12 +6,9 @@ export type BotDifficulty = "easy" | "medium" | "hard";
 
 interface BotDecision {
   targetVelocity: Vector2D;
-  thinkTime: number; // milliseconds
+  thinkTime: number; 
 }
 
-/**
- * Calculate bot's next move based on difficulty
- */
 export function calculateBotMove(
   botChun: Chun,
   playerChun: Chun,
@@ -32,21 +28,16 @@ export function calculateBotMove(
   }
 }
 
-/**
- * Easy bot - random moves with some direction towards player
- */
 function easyBotStrategy(
   botChun: Chun,
   playerChun: Chun,
   config: GameConfig,
 ): BotDecision {
-  // Random direction with slight bias towards player
   const toPlayer = vec2.normalize(
     vec2.sub(playerChun.position, botChun.position),
   );
 
-  // Add randomness
-  const randomAngle = (Math.random() - 0.5) * Math.PI; // -90 to +90 degrees
+  const randomAngle = (Math.random() - 0.5) * Math.PI; 
   const randomDirection: Vector2D = {
     x: toPlayer.x * Math.cos(randomAngle) - toPlayer.y * Math.sin(randomAngle),
     y: toPlayer.x * Math.sin(randomAngle) + toPlayer.y * Math.cos(randomAngle),
@@ -135,7 +126,6 @@ function hardBotStrategy(
     vec2.sub(adjustedTarget, botChun.position),
   );
 
-  // Blend between direct aim and adjusted aim
   const blendFactor = 0.7;
   const finalDirection: Vector2D = {
     x: aimDirection.x * (1 - blendFactor) + adjustedDirection.x * blendFactor,

@@ -10,7 +10,7 @@ interface MintScreenProps {
     tier2: number;
     tier3: number;
   };
-  onMint: (useTier1: number, useTier2: number, useTier3: number) => void; // Removed resultTier param
+  onMint: (useTier1: number, useTier2: number, useTier3: number) => void; 
 }
 
 export default function MintScreen({ onBack, playerData, onMint }: MintScreenProps) {
@@ -43,13 +43,10 @@ export default function MintScreen({ onBack, playerData, onMint }: MintScreenPro
     setMinting(true);
     toast.loading('Đang mint NFT từ blockchain...', { id: 'mint' });
 
-    // Gọi blockchain - contract sẽ random tier
     onMint(useTier1, useTier2, useTier3);
     
     setMinting(false);
     
-    // Note: toast success và result sẽ được hiện từ useSuiProfile hook
-    // Tạm thời set mock result để UI không bị break
     setTimeout(() => {
       const rand = Math.random() * 100;
       let resultTier = 1;

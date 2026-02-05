@@ -1,4 +1,3 @@
-// Hook for managing the game engine
 
 import { useRef, useEffect, useCallback, useState } from "react";
 import {
@@ -54,12 +53,10 @@ export function useGameEngine(
     };
   }, [selectedTier, config]);
 
-  // Subscribe to events
   useEffect(() => {
     if (!engineRef.current) return;
 
     const handleEvent = (event: GameEvent) => {
-      // Update state on every event
       if (engineRef.current) {
         setGameState({ ...engineRef.current.getState() });
       }
@@ -92,7 +89,6 @@ export function useGameEngine(
     return unsubscribe;
   }, [onGameOver, onTurnStart, onCollision]);
 
-  // Sync state with engine on each frame
   useEffect(() => {
     if (!isRunning || !engineRef.current) return;
 

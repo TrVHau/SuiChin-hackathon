@@ -76,12 +76,10 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
           className="w-full flex flex-col gap-5"
         >
           {!account ? (
-            /* Nếu chưa connect wallet - hiện ConnectButton */
             <div className="w-full">
               <ConnectButton className="!w-full !h-20 !rounded-full !shadow-2xl !border-4 !border-white !bg-gradient-to-r !from-playful-blue !to-playful-purple" />
             </div>
           ) : (
-            /* Nếu đã connect - hiện nút Login */
             <motion.button
               onClick={onLogin}
               whileHover={{ scale: 1.05 }}

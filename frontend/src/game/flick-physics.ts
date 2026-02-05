@@ -1,15 +1,6 @@
-// ============================================================================
-// FLICK PHYSICS ENGINE - High-skill 2D turn-based "búng chun" game
-// ============================================================================
-// Core principle: Skill-based control, NOT realistic physics
-// Win condition: Final visual overlap ("đè lên") only
-// ============================================================================
 
 import type { Vector2D } from "./types";
 
-// ============================================================================
-// Vector2D Utilities
-// ============================================================================
 
 export const vec2 = {
   add: (a: Vector2D, b: Vector2D): Vector2D => ({ x: a.x + b.x, y: a.y + b.y }),
@@ -32,95 +23,73 @@ export const vec2 = {
   }),
 };
 
-// ============================================================================
-// Physics Configuration
-// ============================================================================
 
 export const FLICK_CONFIG = {
-  // === Chun properties ===
   CHUN_RADIUS: 32,
 
-  // === Friction Model (CRITICAL) ===
-  // Dynamic friction: high speed = slides more, low speed = grips
-  FRICTION_HIGH_SPEED: 0.985, // Low friction when moving fast
-  FRICTION_LOW_SPEED: 0.92, // High friction when slowing down
-  FRICTION_SPEED_THRESHOLD: 3, // Speed below which high friction applies
-  VELOCITY_EPSILON: 0.08, // Snap to zero below this
-  SETTLE_FRAMES_REQUIRED: 25, // Frames at near-zero to confirm settled
+  FRICTION_HIGH_SPEED: 0.985, 
+  FRICTION_LOW_SPEED: 0.92, 
+  FRICTION_SPEED_THRESHOLD: 3, 
+  VELOCITY_EPSILON: 0.08, 
+  SETTLE_FRAMES_REQUIRED: 25, 
 
-  // === Flick Strength Curve (NON-LINEAR) ===
-  // Small pulls = precise, Medium = optimal, Large = punished
-  MAX_PULL_LENGTH: 120, // Max drag distance
-  OPTIMAL_PULL_RATIO: 0.6, // 60% of max = optimal power
-  OVERSHOOT_PENALTY_START: 0.75, // Start punishing above 75%
+  MAX_PULL_LENGTH: 120, 
+  OPTIMAL_PULL_RATIO: 0.6, 
+  OVERSHOOT_PENALTY_START: 0.75, 
 
-  // Power scaling (non-linear curve)
   POWER_MIN: 2,
   POWER_OPTIMAL: 12,
-  POWER_MAX: 10, // Max is LESS than optimal (overshoot punishment)
+  POWER_MAX: 10, 
 
-  // Overshoot punishment
-  OVERSHOOT_FRICTION_MULT: 1.3, // Extra friction on overshoot
-  OVERSHOOT_DEVIATION_MAX: 0.15, // Max angular deviation (radians)
+  OVERSHOOT_FRICTION_MULT: 1.3, 
+  OVERSHOOT_DEVIATION_MAX: 0.15, 
 
-  // === Off-center Flick ===
-  // Contact offset causes lateral drift
-  OFF_CENTER_DRIFT_SCALE: 0.3, // How much off-center affects direction
-  OFF_CENTER_POWER_LOSS: 0.15, // Power loss for off-center hits
+  OFF_CENTER_DRIFT_SCALE: 0.3, 
+  OFF_CENTER_POWER_LOSS: 0.15, 
 
-  // === Collision ===
-  // Khi bắn trúng: attacker chậm lại và có thể đè lên defender
-  COLLISION_ATTACKER_SLOWDOWN: 0.15, // Attacker giữ lại 15% tốc độ (dừng gần như ngay)
-  COLLISION_DEFENDER_PUSH: 0.25, // Defender bị đẩy nhẹ (25% của impulse)
-  COLLISION_MIN_OVERLAP: 0.3, // Cho phép overlap 30% bán kính (để đè lên nhau)
+  COLLISION_ATTACKER_SLOWDOWN: 0.15, 
+  COLLISION_DEFENDER_PUSH: 0.25, 
+  COLLISION_MIN_OVERLAP: 0.3, 
 
-  // === Wall Bounce ===
-  WALL_BOUNCE: 0.5, // Energy retained on wall hit
+  WALL_BOUNCE: 0.5, 
 
-  // === Win Detection ===
-  WIN_OVERLAP_TOLERANCE: 1.0, // Chỉ cần chạm nhau (dist < sumRadii) là đủ để xét thắng
-  WIN_Y_MARGIN: 3, // Y difference needed to decide "on top"
+  WIN_OVERLAP_TOLERANCE: 1.0, 
+  WIN_Y_MARGIN: 3, 
 
-  // === Game Feel ===
-  HIT_STOP_FRAMES: 4, // Freeze frames on win (~66ms at 60fps)
+  HIT_STOP_FRAMES: 4, 
   CAMERA_SHAKE_INTENSITY: 8,
   TRAIL_LENGTH: 5,
 
-  // === Bot AI ===
   BOT_THINK_TIME_MIN: 600,
   BOT_THINK_TIME_MAX: 1400,
 
-  // Bot difficulty by tier (1 = easy, 3 = hard)
   BOT_DIFFICULTY: {
     1: {
-      // DỄ - Bot ngu, bắn lung tung
-      aimError: Math.PI / 1.8, // ~100 degrees - bắn rất sai
-      powerError: 0.6, // Sai lệch lực 60%
-      overshootChance: 0.7, // 70% bắn quá mạnh
-      optimalAimChance: 0.1, // Chỉ 10% bắn chính xác vào player
-      randomShotChance: 0.3, // 30% bắn random hoàn toàn
+      aimError: Math.PI / 1.8,
+      powerError: 0.6, 
+      overshootChance: 0.7, 
+      optimalAimChance: 0.1, 
+      randomShotChance: 0.3, 
       thinkTimeMin: 400,
-      thinkTimeMax: 800, // Bắn nhanh, không suy nghĩ
+      thinkTimeMax: 800, 
     },
     2: {
-      // BÌNH THƯỜNG - Bot cân bằng
-      aimError: Math.PI / 6, // ~30 degrees - sai vừa phải
+      aimError: Math.PI / 6, 
       powerError: 0.3,
-      overshootChance: 0.35, // Đôi khi overshoot
-      optimalAimChance: 0.5, // 50% bắn chính xác
-      randomShotChance: 0.1, // 10% bắn random
+      overshootChance: 0.35, 
+      optimalAimChance: 0.5, 
+      randomShotChance: 0.1, 
       thinkTimeMin: 800,
       thinkTimeMax: 1400,
     },
     3: {
-      // KHÓ - Bot thông minh, bắn chính xác
-      aimError: Math.PI / 15, // ~12 degrees - rất chính xác
-      powerError: 0.08, // Sai lệch rất ít
-      overshootChance: 0.05, // Hiếm khi overshoot
-      optimalAimChance: 0.85, // 85% bắn chính xác vào player
-      randomShotChance: 0, // Không bắn random
+      aimError: Math.PI / 15,
+      powerError: 0.08,
+      overshootChance: 0.05, 
+      optimalAimChance: 0.85, 
+      randomShotChance: 0, 
       thinkTimeMin: 1200,
-      thinkTimeMax: 2000, // Suy nghĩ lâu hơn
+      thinkTimeMax: 2000,
     },
   } as Record<
     number,
@@ -135,13 +104,9 @@ export const FLICK_CONFIG = {
     }
   >,
 
-  // === Timing ===
-  MAX_SIMULATION_FRAMES: 300, // Force settle after this many frames
+  MAX_SIMULATION_FRAMES: 300, 
 };
 
-// ============================================================================
-// Types
-// ============================================================================
 
 export interface Chun {
   position: Vector2D;
@@ -149,7 +114,6 @@ export interface Chun {
   radius: number;
   color: string;
   label: string;
-  // For game feel
   lastSpeed: number;
   trailPositions: Vector2D[];
 }
@@ -162,9 +126,9 @@ export interface WorldBounds {
 export type WinResult = "none" | "player_wins" | "bot_wins";
 
 export interface FlickInput {
-  direction: Vector2D; // Normalized direction
-  power: number; // 0-1 normalized
-  contactOffset: Vector2D; // Offset from center where finger touched
+  direction: Vector2D; 
+  power: number; 
+  contactOffset: Vector2D; 
 }
 
 export interface FlickResult {
@@ -172,10 +136,6 @@ export interface FlickResult {
   wasOvershoot: boolean;
   effectivePower: number;
 }
-
-// ============================================================================
-// Chun Factory
-// ============================================================================
 
 export function createChun(
   x: number,
@@ -194,65 +154,47 @@ export function createChun(
   };
 }
 
-// ============================================================================
-// Flick Calculation (HIGH SKILL)
-// ============================================================================
 
-/**
- * Calculate flick velocity from player input
- * Implements non-linear strength curve with overshoot punishment
- */
 export function calculateFlickVelocity(input: FlickInput): FlickResult {
   const { direction, power, contactOffset } = input;
   const cfg = FLICK_CONFIG;
 
-  // === Non-linear power curve ===
   let effectivePower: number;
   let wasOvershoot = false;
   let deviationAngle = 0;
 
   if (power <= cfg.OPTIMAL_PULL_RATIO) {
-    // Below optimal: linear scaling up to optimal power
     const t = power / cfg.OPTIMAL_PULL_RATIO;
     effectivePower = cfg.POWER_MIN + (cfg.POWER_OPTIMAL - cfg.POWER_MIN) * t;
   } else if (power <= cfg.OVERSHOOT_PENALTY_START) {
-    // Between optimal and penalty: slight decrease
     const t =
       (power - cfg.OPTIMAL_PULL_RATIO) /
       (cfg.OVERSHOOT_PENALTY_START - cfg.OPTIMAL_PULL_RATIO);
     effectivePower =
       cfg.POWER_OPTIMAL - (cfg.POWER_OPTIMAL - cfg.POWER_MAX) * t * 0.3;
   } else {
-    // Overshoot zone: punished
     wasOvershoot = true;
     const overshootAmount =
       (power - cfg.OVERSHOOT_PENALTY_START) / (1 - cfg.OVERSHOOT_PENALTY_START);
 
-    // Power decreases significantly
     effectivePower = cfg.POWER_MAX * (1 - overshootAmount * 0.4);
 
-    // Add angular deviation (punishment)
     deviationAngle =
       (Math.random() - 0.5) * cfg.OVERSHOOT_DEVIATION_MAX * overshootAmount * 2;
   }
 
-  // === Off-center contact effect ===
   const offsetMagnitude = vec2.length(contactOffset);
   if (offsetMagnitude > 0.1) {
-    // Reduce power for off-center hits
     effectivePower *= 1 - offsetMagnitude * cfg.OFF_CENTER_POWER_LOSS;
 
-    // Add lateral drift
     const perpendicular = { x: -direction.y, y: direction.x };
     const driftDirection = vec2.dot(contactOffset, perpendicular) > 0 ? 1 : -1;
     deviationAngle +=
       driftDirection * offsetMagnitude * cfg.OFF_CENTER_DRIFT_SCALE;
   }
 
-  // Apply deviation
   const finalDirection = vec2.rotate(direction, deviationAngle);
 
-  // Calculate final velocity
   const velocity = vec2.scale(finalDirection, effectivePower);
 
   return {
@@ -262,9 +204,6 @@ export function calculateFlickVelocity(input: FlickInput): FlickResult {
   };
 }
 
-/**
- * Convert drag input to flick
- */
 export function dragToFlick(
   chunCenter: Vector2D,
   dragStart: Vector2D,
@@ -273,18 +212,14 @@ export function dragToFlick(
   const pullVector = vec2.sub(dragEnd, dragStart);
   const pullLength = vec2.length(pullVector);
 
-  // Direction is OPPOSITE of pull (slingshot style)
   const direction =
     pullLength > 0
       ? vec2.normalize(vec2.scale(pullVector, -1))
       : { x: 0, y: 0 };
 
-  // Power is normalized pull length
   const power = Math.min(pullLength / FLICK_CONFIG.MAX_PULL_LENGTH, 1);
 
-  // Contact offset: where did the drag start relative to chun center
   const contactOffset = vec2.sub(dragStart, chunCenter);
-  // Normalize to radius
   const normalizedOffset = vec2.scale(
     contactOffset,
     1 / FLICK_CONFIG.CHUN_RADIUS,
@@ -297,14 +232,6 @@ export function dragToFlick(
   };
 }
 
-// ============================================================================
-// Physics Update
-// ============================================================================
-
-/**
- * Update chun physics for one frame
- * Implements dynamic friction model
- */
 export function updateChunPhysics(
   chun: Chun,
   bounds: WorldBounds,
@@ -313,7 +240,6 @@ export function updateChunPhysics(
   const cfg = FLICK_CONFIG;
   const speed = vec2.length(chun.velocity);
 
-  // Store for trail
   chun.lastSpeed = speed;
   if (speed > 2) {
     chun.trailPositions.unshift({ ...chun.position });
@@ -324,36 +250,27 @@ export function updateChunPhysics(
     chun.trailPositions = [];
   }
 
-  // === Dynamic Friction ===
   let friction: number;
   if (speed > cfg.FRICTION_SPEED_THRESHOLD) {
-    // High speed: low friction (slides)
     friction = cfg.FRICTION_HIGH_SPEED;
   } else {
-    // Low speed: high friction (grips)
     friction = cfg.FRICTION_LOW_SPEED;
   }
 
-  // Extra friction if overshoot
   if (wasOvershoot) {
     friction /= cfg.OVERSHOOT_FRICTION_MULT;
   }
 
-  // Apply friction
   chun.velocity = vec2.scale(chun.velocity, friction);
 
-  // Snap to zero
   if (vec2.length(chun.velocity) < cfg.VELOCITY_EPSILON) {
     chun.velocity = { x: 0, y: 0 };
   }
 
-  // Update position
   chun.position = vec2.add(chun.position, chun.velocity);
 
-  // === Wall Collisions ===
   const r = chun.radius;
 
-  // Left wall
   if (chun.position.x - r < 0) {
     chun.position.x = r;
     chun.velocity.x = Math.abs(chun.velocity.x) * cfg.WALL_BOUNCE;

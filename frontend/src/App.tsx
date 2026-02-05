@@ -24,16 +24,12 @@ export default function App() {
     claimAchievement,
   } = useSuiProfile();
 
-  // Debug logging
-  console.log('🔍 App render:', { currentScreen, account: account?.address, profile, hasProfile });
-
   const handleLogin = async () => {
     if (!account) {
       toast.error('Vui lòng kết nối ví trước');
       return;
     }
 
-    // Wait a bit for profile to load
     await new Promise(resolve => setTimeout(resolve, 500));
 
     if (hasProfile && profile) {
@@ -43,7 +39,6 @@ export default function App() {
       toast.loading('Chưa có profile. Đang tạo mới...', { id: 'createProfile' });
       createProfile();
       
-      // Wait for profile creation and then navigate
       setTimeout(() => {
         toast.success('Tạo profile thành công!', { id: 'createProfile' });
         setCurrentScreen('dashboard');
@@ -85,7 +80,6 @@ export default function App() {
     setCurrentScreen('dashboard');
   };
 
-  // Auto redirect nếu không có account
   if (!account && currentScreen !== 'login') {
     setCurrentScreen('login');
   }
