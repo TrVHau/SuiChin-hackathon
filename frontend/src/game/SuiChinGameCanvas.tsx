@@ -1,4 +1,3 @@
-// SuiChin Game Canvas - Playable game component with Canvas2D rendering
 
 import { useEffect, useCallback, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -13,7 +12,7 @@ interface SuiChinGameCanvasProps {
   onMatchEnd: (result: "win" | "lose") => void;
   onForfeit: () => void;
   config?: Partial<GameConfig>;
-}
+} 
 
 export default function SuiChinGameCanvas({
   selectedTier,
@@ -31,12 +30,10 @@ export default function SuiChinGameCanvas({
       setFinalResult(result);
       setShowResult(true);
 
-      // Delay before calling onMatchEnd to show the result
       setTimeout(() => {
         if (result === "win" || result === "lose") {
           onMatchEnd(result);
         } else if (result === "draw") {
-          // Treat draw as a loss for simplicity
           onMatchEnd("lose");
         }
       }, 2000);
@@ -76,13 +73,11 @@ export default function SuiChinGameCanvas({
     onFlick: playerFlick,
   });
 
-  // Start game on mount
   useEffect(() => {
     startGame();
     return () => stopGame();
   }, [startGame, stopGame]);
 
-  // Render loop
   useEffect(() => {
     if (!gameState) return;
 

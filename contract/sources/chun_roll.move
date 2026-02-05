@@ -1,5 +1,3 @@
-/// Module: chun_roll
-/// Description: ChunRoll NFT - Cuộn chun có thể transfer
 module suichin::chun_roll {
     use std::string::{Self, String};
     use sui::display;
@@ -11,10 +9,8 @@ module suichin::chun_roll {
 
     // ===== Structs =====
 
-    /// One-Time-Witness cho Display Protocol
     public struct CHUN_ROLL has drop {}
 
-    /// ChunRoll NFT - Transferable
     public struct ChunRoll has key, store {
         id: UID,
         tier: u8,                // 1, 2, hoặc 3
@@ -38,16 +34,12 @@ module suichin::chun_roll {
 
     // ===== Init Function =====
 
-    /// Initialize Display Protocol
     #[allow(lint(share_owned))]
     fun init(otw: CHUN_ROLL, ctx: &mut TxContext) {
-        // Claim Publisher
         let publisher = package::claim(otw, ctx);
 
-        // Setup Display Protocol
         let mut display = display::new<ChunRoll>(&publisher, ctx);
 
-        // Define display fields
         display.add(
             string::utf8(b"name"),
             string::utf8(b"{name}")
@@ -77,17 +69,14 @@ module suichin::chun_roll {
             string::utf8(b"SuiChin Team")
         );
 
-        // Update version
         display.update_version();
 
-        // Share display object (best practice for indexer)
         transfer::public_share_object(display);
         transfer::public_transfer(publisher, ctx.sender());
     }
 
     // ===== Public Functions =====
 
-    /// Mint ChunRoll NFT (called by game module)
     public(package) fun mint(
         tier: u8,
         ctx: &mut TxContext
@@ -113,7 +102,6 @@ module suichin::chun_roll {
         nft
     }
 
-    /// Burn ChunRoll NFT
     public fun burn(nft: ChunRoll) {
         let ChunRoll { id, tier, name: _, description: _, image_url: _ } = nft;
         let nft_id = object::uid_to_inner(&id);
@@ -144,7 +132,6 @@ module suichin::chun_roll {
         nft.image_url
     }
 
-    /// Getter aliases for testing
     public fun get_tier(nft: &ChunRoll): u8 {
         nft.tier
     }
@@ -163,7 +150,6 @@ module suichin::chun_roll {
 
     // ===== Helper Functions =====
 
-    /// Get tier name
     fun get_tier_name(tier: u8): String {
         if (tier == 1) {
             string::utf8(b"Cuon Chun Dong")
@@ -174,7 +160,6 @@ module suichin::chun_roll {
         }
     }
 
-    /// Get tier description
     fun get_tier_description(tier: u8): String {
         if (tier == 1) {
             string::utf8(b"Cuon chun cap do Dong - Danh cho nguoi choi moi bat dau")
@@ -185,22 +170,15 @@ module suichin::chun_roll {
         }
     }
 
-    /// Get tier image URL
-    /// TODO: Replace với URL thật sau khi upload images
     fun get_tier_image_url(tier: u8): String {
         if (tier == 1) {
-            // Tier 1 - Bronze
             string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/nft/tier1.png")
         } else if (tier == 2) {
-            // Tier 2 - Silver
             string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/nft/tier2.png")
         } else {
-            // Tier 3 - Gold
             string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/nft/tier3.png")
         }
     }
-
-    // ===== Test-only Functions =====
 
     #[test_only]
     public fun init_for_testing(ctx: &mut TxContext) {

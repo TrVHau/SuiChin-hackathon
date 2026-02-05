@@ -1,5 +1,3 @@
-/// Module: achievement
-/// Description: Soulbound Achievement NFT - Danh hiệu không thể transfer
 module suichin::achievement {
     use std::string::{Self, String};
     use sui::display;
@@ -7,7 +5,6 @@ module suichin::achievement {
     use sui::event;
     use suichin::player::{Self, PlayerProfile};
 
-    // ===== Constants =====
 
     // Achievement milestones
     const MILESTONE_BEGINNER: u64 = 1;      // Người Mới Bắt Đầu
@@ -17,20 +14,15 @@ module suichin::achievement {
     const MILESTONE_LEGEND: u64 = 67;       // Huyền Thoại Búng Chun
 
     // ===== Errors =====
-
     const E_NOT_OWNER: u64 = 299;
     const E_INVALID_MILESTONE: u64 = 300;
     const E_INSUFFICIENT_STREAK: u64 = 301;
     const E_ALREADY_CLAIMED: u64 = 302;
 
     // ===== Structs =====
-
-    /// One-Time-Witness cho Display Protocol
     public struct ACHIEVEMENT has drop {}
 
-    /// Achievement NFT - Soulbound
-    /// NOTE: 'store' cho phép wallet hiển thị, nhưng vẫn soulbound vì KHÔNG CÓ hàm transfer
-    public struct Achievement has key, store {
+    public struct Achievement has key {
         id: UID,
         milestone: u64,          // 1, 5, 18, 36, 67
         title: String,           // Tên danh hiệu
@@ -52,16 +44,12 @@ module suichin::achievement {
 
     // ===== Init Function =====
 
-    /// Initialize Display Protocol
     #[allow(lint(share_owned))]
     fun init(otw: ACHIEVEMENT, ctx: &mut TxContext) {
-        // Claim Publisher
         let publisher = package::claim(otw, ctx);
 
-        // Setup Display Protocol
         let mut display = display::new<Achievement>(&publisher, ctx);
 
-        // Define display fields
         display.add(
             string::utf8(b"name"),
             string::utf8(b"{title}")
@@ -91,10 +79,8 @@ module suichin::achievement {
             string::utf8(b"https://github.com/TrVHau/SuiChin-hackathon")
         );
 
-        // Update version
         display.update_version();
 
-        // Share display object (best practice for indexer)
         transfer::public_share_object(display);
         transfer::public_transfer(publisher, ctx.sender());
     }
@@ -107,20 +93,15 @@ module suichin::achievement {
         milestone: u64,
         ctx: &mut TxContext
     ) {
-        // CRITICAL: Owner validation
         assert!(player::owner(profile) == tx_context::sender(ctx), E_NOT_OWNER);
         
-        // Validate milestone
         assert!(is_valid_milestone(milestone), E_INVALID_MILESTONE);
 
-        // Check if already claimed
         assert!(!player::has_achievement(profile, milestone), E_ALREADY_CLAIMED);
 
-        // Check if player has enough max_streak
         let max_streak = player::max_streak(profile);
         assert!(max_streak >= milestone, E_INSUFFICIENT_STREAK);
 
-        // Create achievement NFT
         let title = get_milestone_title(milestone);
         let description = get_milestone_description(milestone);
         let image_url = get_milestone_image_url(milestone);
@@ -139,10 +120,8 @@ module suichin::achievement {
 
         let achievement_id = object::id(&achievement);
 
-        // Update profile achievements
         player::add_achievement(profile, milestone);
 
-        // Emit event
         event::emit(AchievementClaimed {
             achievement_id,
             milestone,
@@ -151,7 +130,6 @@ module suichin::achievement {
             claimed_at,
         });
 
-        // Transfer to owner (soulbound - cannot transfer after)
         transfer::public_transfer(achievement, owner);
     }
 
@@ -173,9 +151,6 @@ module suichin::achievement {
         achievement.claimed_at
     }
 
-    // ===== Helper Functions =====
-
-    /// Check if milestone is valid
     fun is_valid_milestone(milestone: u64): bool {
         milestone == MILESTONE_BEGINNER ||
         milestone == MILESTONE_SKILLED ||
@@ -184,7 +159,6 @@ module suichin::achievement {
         milestone == MILESTONE_LEGEND
     }
 
-    /// Get milestone title
     fun get_milestone_title(milestone: u64): String {
         if (milestone == MILESTONE_BEGINNER) {
             string::utf8(b"Nguoi Moi Bat Dau")
@@ -201,7 +175,6 @@ module suichin::achievement {
         }
     }
 
-    /// Get milestone description
     fun get_milestone_description(milestone: u64): String {
         if (milestone == MILESTONE_BEGINNER) {
             string::utf8(b"Thang 1 tran - Buoc dau vao the gioi bung chun")
@@ -218,8 +191,6 @@ module suichin::achievement {
         }
     }
 
-    /// Get milestone image URL
-    /// TODO: Replace với URL thật sau khi upload images
     fun get_milestone_image_url(milestone: u64): String {
         if (milestone == MILESTONE_BEGINNER) {
             string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement1.png")
@@ -234,7 +205,6 @@ module suichin::achievement {
         }
     }
 
-    /// Get all valid milestones
     public fun get_all_milestones(): vector<u64> {
         let mut milestones = vector::empty<u64>();
         vector::push_back(&mut milestones, MILESTONE_BEGINNER);
@@ -244,8 +214,6 @@ module suichin::achievement {
         vector::push_back(&mut milestones, MILESTONE_LEGEND);
         milestones
     }
-
-    // ===== View Functions =====
 
     public fun get_milestone(nft: &Achievement): u64 {
         nft.milestone
@@ -267,7 +235,6 @@ module suichin::achievement {
         nft.claimed_at
     }
 
-    // ===== Test-only Functions =====
 
     #[test_only]
     public fun init_for_testing(ctx: &mut TxContext) {

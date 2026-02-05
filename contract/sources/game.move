@@ -1,5 +1,3 @@
-/// Module: game
-/// Description: Logic game chính - record_session, claim_faucet, craft_roll
 module suichin::game {
     use sui::clock::{Self, Clock};
     use sui::event;
@@ -9,16 +7,13 @@ module suichin::game {
 
     // ===== Constants =====
 
-    // Anti-cheat limits
     const MAX_DELTA_PER_SESSION: u64 = 50; // Max 50 điểm thay đổi/session
     const MIN_SESSION_COOLDOWN_MS: u64 = 3000; // 3 giây giữa các session
 
-    // Faucet config
     const FAUCET_COOLDOWN_MS: u64 = 7200000; // 2 giờ = 7200000ms
     const FAUCET_INTERVAL_MS: u64 = 7200000; // Mỗi 2 giờ = 1 chun
     const MAX_FAUCET_CHUNS: u64 = 10; // Tối đa 10 chun
 
-    // Craft roll requirements
     const MIN_POINTS_TO_CRAFT: u64 = 10; // Tối thiểu 10 điểm để mint
 
     // ===== Errors =====
@@ -63,12 +58,10 @@ module suichin::game {
 
     // ===== Public Entry Functions =====
 
-    /// Record kết quả session sau khi chơi off-chain
-    /// Delta có thể âm (thua nhiều) hoặc dương (thắng nhiều)
     public fun record_session(
         profile: &mut PlayerProfile,
         clock: &Clock,
-        delta_tier1: u64, // Absolute value
+        delta_tier1: u64, 
         delta_tier2: u64,
         delta_tier3: u64,
         is_tier1_positive: bool, // true = +delta, false = -delta
@@ -78,28 +71,23 @@ module suichin::game {
         new_current_streak: u64,
         _ctx: &mut TxContext
     ) {
-        // CRITICAL: Owner validation
         assert!(player::owner(profile) == tx_context::sender(_ctx), E_NOT_OWNER);
         
         let current_time = clock::timestamp_ms(clock);
         let last_time = player::last_session_time(profile);
 
-        // Anti-cheat: Cooldown check
         assert!(
             last_time == 0 || current_time >= last_time + MIN_SESSION_COOLDOWN_MS,
             E_COOLDOWN_NOT_READY
         );
 
-        // Anti-cheat: Rate limiting
         let total_delta = delta_tier1 + delta_tier2 * 2 + delta_tier3 * 3;
         assert!(total_delta <= MAX_DELTA_PER_SESSION, E_DELTA_TOO_LARGE);
 
-        // Anti-cheat: Streak validation
         assert!(new_current_streak <= new_max_streak, E_INVALID_STREAK);
         let old_max_streak = player::max_streak(profile);
         assert!(new_max_streak >= old_max_streak, E_INVALID_STREAK);
 
-        // Calculate new chun values
         let old_tier1 = player::get_chun(profile, 1);
         let old_tier2 = player::get_chun(profile, 2);
         let old_tier3 = player::get_chun(profile, 3);
@@ -125,12 +113,10 @@ module suichin::game {
             old_tier3 - delta_tier3
         };
 
-        // Update profile
         player::update_chun(profile, new_tier1, new_tier2, new_tier3);
         player::update_streak(profile, new_max_streak, new_current_streak);
         player::update_session_time(profile, current_time);
 
-        // Emit event
         event::emit(SessionRecorded {
             profile_id: object::id(profile),
             delta_tier1,
@@ -143,45 +129,35 @@ module suichin::game {
         });
     }
 
-    /// Xin chun miễn phí (Faucet)
-    /// Số chun nhận được = min(thời_gian_qua / 2h, 10)
-    /// Mỗi chun random tier (33.33% mỗi tier)
     public fun claim_faucet(
         profile: &mut PlayerProfile,
         clock: &Clock,
         ctx: &mut TxContext
     ) {
-        // CRITICAL: Owner validation
         assert!(player::owner(profile) == tx_context::sender(ctx), E_NOT_OWNER);
         
         let current_time = clock::timestamp_ms(clock);
         let last_claim = player::faucet_last_claim(profile);
 
-        // Check cooldown (ít nhất 2 giờ)
         let time_passed = current_time - last_claim;
         assert!(time_passed >= FAUCET_COOLDOWN_MS, E_FAUCET_NOT_READY);
 
-        // Calculate số chun được nhận
-        // num_chuns = min(floor(time_passed / 2h), 10)
         let mut num_chuns = time_passed / FAUCET_INTERVAL_MS;
         if (num_chuns > MAX_FAUCET_CHUNS) {
             num_chuns = MAX_FAUCET_CHUNS;
         };
         
-        // CRITICAL: Assert num_chuns > 0
         assert!(num_chuns > 0, E_FAUCET_NOT_READY);
 
-        // Random tier cho mỗi chun và cộng vào profile
         let mut tier1_count = 0u64;
         let mut tier2_count = 0u64;
         let mut tier3_count = 0u64;
 
         let mut i = 0u64;
         while (i < num_chuns) {
-            // Random: epoch + i + sender address value (first 8 bytes)
             let sender_u64 = pseudo_u64_from_address(tx_context::sender(ctx));
             let random_seed = tx_context::epoch(ctx) + i + sender_u64;
-            let tier = (random_seed % 3) + 1; // 1, 2, or 3
+            let tier = (random_seed % 3) + 1; 
 
             if (tier == 1) {
                 tier1_count = tier1_count + 1;
@@ -194,7 +170,6 @@ module suichin::game {
             i = i + 1;
         };
 
-        // Update profile
         let old_tier1 = player::get_chun(profile, 1);
         let old_tier2 = player::get_chun(profile, 2);
         let old_tier3 = player::get_chun(profile, 3);
@@ -207,7 +182,6 @@ module suichin::game {
         );
         player::update_faucet_claim_time(profile, current_time);
 
-        // Emit event
         event::emit(FaucetClaimed {
             profile_id: object::id(profile),
             tier1_received: tier1_count,
@@ -218,9 +192,6 @@ module suichin::game {
         });
     }
 
-    /// Mint Cuộn Chun NFT
-    /// User chọn số lượng chun từng tier để dùng
-    /// Tier NFT được random dựa trên tổng điểm
     #[allow(lint(self_transfer))]
     public fun craft_roll(
         profile: &mut PlayerProfile,
@@ -230,16 +201,12 @@ module suichin::game {
         use_tier3: u64,
         ctx: &mut TxContext
     ) {
-        // CRITICAL: Owner validation
         assert!(player::owner(profile) == tx_context::sender(ctx), E_NOT_OWNER);
         
-        // Calculate total points
         let total_points = use_tier1 * 1 + use_tier2 * 2 + use_tier3 * 3;
         
-        // Validate minimum points
         assert!(total_points >= MIN_POINTS_TO_CRAFT, E_INSUFFICIENT_POINTS);
 
-        // Validate sufficient balance
         let current_tier1 = player::get_chun(profile, 1);
         let current_tier2 = player::get_chun(profile, 2);
         let current_tier3 = player::get_chun(profile, 3);
@@ -248,7 +215,6 @@ module suichin::game {
         assert!(current_tier2 >= use_tier2, E_INSUFFICIENT_CHUN);
         assert!(current_tier3 >= use_tier3, E_INSUFFICIENT_CHUN);
 
-        // Deduct chun from profile
         player::update_chun(
             profile,
             current_tier1 - use_tier1,
@@ -256,14 +222,11 @@ module suichin::game {
             current_tier3 - use_tier3
         );
 
-        // Random tier dựa trên total_points
         let nft_tier = random_nft_tier(total_points, ctx);
 
-        // Mint NFT
         let nft = chun_roll::mint(nft_tier, ctx);
         let nft_id = object::id(&nft);
 
-        // Emit event
         let current_time = clock::timestamp_ms(clock);
         event::emit(ChunRollCrafted {
             profile_id: object::id(profile),
@@ -273,7 +236,6 @@ module suichin::game {
             timestamp: current_time,
         });
 
-        // Transfer NFT to sender
         transfer::public_transfer(nft, tx_context::sender(ctx));
     }
 
@@ -298,37 +260,33 @@ module suichin::game {
     /// 20-29: 60% tier1, 30% tier2, 10% tier3
     /// 30+:   50% tier1, 35% tier2, 15% tier3
     fun random_nft_tier(points: u64, _ctx: &TxContext): u8 {
-        // Random seed with sender address value (first 8 bytes)
         let sender_u64 = pseudo_u64_from_address(tx_context::sender(_ctx));
         let random_seed = tx_context::epoch(_ctx) + points + sender_u64;
         let roll = random_seed % 100; // 0-99
 
         if (points < 20) {
-            // 10-19 points
             if (roll < 75) {
-                1 // 75%
+                1 
             } else if (roll < 95) {
-                2 // 20%
+                2 
             } else {
-                3 // 5%
+                3 
             }
         } else if (points < 30) {
-            // 20-29 points
             if (roll < 60) {
-                1 // 60%
+                1 
             } else if (roll < 90) {
-                2 // 30%
+                2 
             } else {
-                3 // 10%
+                3 
             }
         } else {
-            // 30+ points
             if (roll < 50) {
-                1 // 50%
+                1 
             } else if (roll < 85) {
-                2 // 35%
+                2 
             } else {
-                3 // 15%
+                3 
             }
         }
     }

@@ -1,6 +1,3 @@
-// ============================================================================
-// JUICY GAME CANVAS - Fun physics-based flick game
-// ============================================================================
 
 import {
   useRef,
@@ -31,23 +28,20 @@ import {
 } from "./juicy-physics";
 import type { Vector2D } from "./types";
 
-// ============================================================================
-// Types
-// ============================================================================
 
 export type RoundResult = "win" | "lose" | "draw";
 export type Turn = "player" | "bot";
 export type GamePhase =
-  | "waiting" // Waiting to start
-  | "player-idle" // Player's turn, waiting for input
-  | "player-aiming" // Player dragging
-  | "launch-delay" // Brief pause before launch (juice)
-  | "player-simulating" // Player's shot in motion
-  | "bot-thinking" // Bot's turn, "thinking"
-  | "bot-simulating" // Bot's shot in motion
-  | "settling" // Both settling down
-  | "hit-stop" // Freeze on stomp (juice)
-  | "ended"; // Round over
+  | "waiting"
+  | "player-idle"
+  | "player-aiming"
+  | "launch-delay"
+  | "player-simulating"
+  | "bot-thinking"
+  | "bot-simulating"
+  | "settling"
+  | "hit-stop"
+  | "ended";
 
 export interface JuicyGameCanvasProps {
   tier?: number;
@@ -62,10 +56,6 @@ export interface JuicyGameCanvasHandle {
   startRound: () => void;
   getPhase: () => GamePhase;
 }
-
-// ============================================================================
-// Colors
-// ============================================================================
 
 const COLORS = {
   BACKGROUND: "#1a1f2e",
@@ -110,10 +100,6 @@ function getPowerColor(power: number): string {
   return COLORS.POWER_HIGH;
 }
 
-// ============================================================================
-// Canvas Helpers
-// ============================================================================
-
 function getCanvasPosition(
   canvas: HTMLCanvasElement,
   clientX: number,
@@ -132,10 +118,6 @@ function isInsideChun(pos: Vector2D, chun: Chun): boolean {
   return vec2.distance(pos, chun.position) <= chun.radius * 1.3;
 }
 
-// ============================================================================
-// Component
-// ============================================================================
-
 const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
   function JuicyGameCanvas(
     { tier = 1, onRoundEnd, onGameEvent, debug = false, enabled = true },
@@ -145,10 +127,8 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const animationRef = useRef<number>(0);
 
-    // Canvas size
     const [canvasSize, setCanvasSize] = useState({ width: 800, height: 500 });
 
-    // Game state refs (avoid re-renders during animation)
     const phaseRef = useRef<GamePhase>("waiting");
     const currentTurnRef = useRef<Turn>("player");
     const lastAttackerRef = useRef<"a" | "b" | null>(null);
@@ -158,9 +138,8 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
     const launchDelayFramesRef = useRef(0);
     const pendingLaunchVelocityRef = useRef<Vector2D | null>(null);
     const roundResultRef = useRef<RoundResult | null>(null);
-    const turnCountRef = useRef(0); // Track number of turns
+    const turnCountRef = useRef(0);
 
-    // Chun refs
     const playerRef = useRef<Chun>(
       createChun(200, 400, 32, true, getTierColor(tier), "YOU"),
     );
@@ -168,24 +147,16 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
       createChun(600, 100, 32, false, COLORS.BOT, "BOT"),
     );
 
-    // Drag state
     const dragRef = useRef({
       isDragging: false,
       currentPos: { x: 0, y: 0 },
     });
 
-    // Bot timer
     const botTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Camera shake state (game feel)
     const cameraShakeRef = useRef({ x: 0, y: 0, intensity: 0 });
 
-    // Hit-stop timer for 50ms freeze on win
     const hitStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Resize
-    // ──────────────────────────────────────────────────────────────────────
 
     useEffect(() => {
       const container = containerRef.current;
@@ -206,23 +177,16 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
       return () => resizeObserver.disconnect();
     }, []);
 
-    // Update tier color
     useEffect(() => {
       playerRef.current.color = getTierColor(tier);
     }, [tier]);
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Reset & Start
-    // ──────────────────────────────────────────────────────────────────────
-
     const resetGame = useCallback(() => {
-      // Clear bot timer
       if (botTimerRef.current) {
         clearTimeout(botTimerRef.current);
         botTimerRef.current = null;
       }
 
-      // Reset state
       phaseRef.current = "waiting";
       currentTurnRef.current = "player";
       lastAttackerRef.current = null;
@@ -232,12 +196,11 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
       launchDelayFramesRef.current = 0;
       pendingLaunchVelocityRef.current = null;
       roundResultRef.current = null;
-      turnCountRef.current = 0; // Reset turn counter
+      turnCountRef.current = 0;
 
-      // Reset chuns - positioned on opposite sides of the arena
       playerRef.current = createChun(
         canvasSize.width * 0.25,
-        canvasSize.height * 0.65, // Lower portion of the arena
+        canvasSize.height * 0.65,
         32,
         true,
         getTierColor(tier),
@@ -245,7 +208,7 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
       );
       botRef.current = createChun(
         canvasSize.width * 0.75,
-        canvasSize.height * 0.35, // Upper portion of the arena
+        canvasSize.height * 0.35,
         32,
         false,
         COLORS.BOT,
@@ -260,22 +223,16 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
       phaseRef.current = "player-idle";
     }, [resetGame]);
 
-    // Auto-start on size change if waiting
     useEffect(() => {
       if (phaseRef.current === "waiting") {
         startRound();
       }
     }, [canvasSize, startRound]);
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Handle Win - Called only after motion settles
-    // ──────────────────────────────────────────────────────────────────────
-
     const handleWin = useCallback(
       (stompResult: StompResult) => {
         let result: RoundResult = "draw";
 
-        // Player is 'a', bot is 'b' in our collision
         if (stompResult === "a_wins") {
           result = "win";
         } else if (stompResult === "b_wins") {
@@ -284,11 +241,9 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
 
         roundResultRef.current = result;
 
-        // JUICE: Camera shake and hit-stop for any win
         if (stompResult !== "none") {
           cameraShakeRef.current = { x: 0, y: 0, intensity: 10 };
 
-          // Hit-stop: brief freeze (3 frames at 60fps)
           hitStopFramesRef.current = 3;
           phaseRef.current = "hit-stop";
 
@@ -309,13 +264,8 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
       [onRoundEnd, onGameEvent],
     );
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Switch Turn
-    // ──────────────────────────────────────────────────────────────────────
-
     const switchTurn = useCallback(() => {
-      // Increment turn counter
-      turnCountRef.current++;
+      turnCountRef.current++; 
       console.log(
         "[Game] switchTurn called, turn count:",
         turnCountRef.current,
@@ -323,9 +273,7 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
         currentTurnRef.current,
       );
 
-      // Check if max turns reached - force end game
       if (turnCountRef.current >= PHYSICS_CONFIG.MAX_TURNS) {
-        // Determine winner by Y position (visually higher wins)
         const yDiff = botRef.current.position.y - playerRef.current.position.y;
         const result: StompResult =
           yDiff > 5 ? "a_wins" : yDiff < -5 ? "b_wins" : "none";
@@ -334,7 +282,6 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
       }
 
       if (currentTurnRef.current === "player") {
-        // Switch to bot
         currentTurnRef.current = "bot";
         phaseRef.current = "bot-thinking";
 
@@ -342,7 +289,6 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
         botTimerRef.current = setTimeout(() => {
           if (phaseRef.current !== "bot-thinking") return;
 
-          // Bot launches
           const velocity = calculateBotLaunch(
             botRef.current,
             playerRef.current,
@@ -361,29 +307,21 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
           });
         }, thinkTime);
       } else {
-        // Switch to player
         currentTurnRef.current = "player";
         phaseRef.current = "player-idle";
       }
     }, [tier, onGameEvent, handleWin]);
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Physics Update
-    // ──────────────────────────────────────────────────────────────────────
 
     const updatePhysics = useCallback(() => {
       const player = playerRef.current;
       const bot = botRef.current;
       const bounds: WorldBounds = canvasSize;
 
-      // Update both chuns (no gravity - pure 2D sliding)
       const playerEvents = updateChunPhysics(player, bounds, false);
       const botEvents = updateChunPhysics(bot, bounds, false);
 
-      // Emit events
       [...playerEvents, ...botEvents].forEach((e) => onGameEvent?.(e));
 
-      // Circle-to-circle collision (exaggerated push, attacker advantage)
       const collision = resolveChunCollision(
         player,
         bot,
@@ -396,23 +334,17 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
           position: collision.impactPosition,
           intensity: collision.impactIntensity,
         });
-        // Win is only evaluated after motion settles, not during collision
       }
     }, [canvasSize, onGameEvent]);
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Rendering
-    // ──────────────────────────────────────────────────────────────────────
 
     const drawBackground = useCallback(
       (ctx: CanvasRenderingContext2D) => {
         const { width, height } = canvasSize;
 
-        // Background
         ctx.fillStyle = COLORS.BACKGROUND;
         ctx.fillRect(0, 0, width, height);
 
-        // Grid
+
         ctx.strokeStyle = COLORS.GRID;
         ctx.lineWidth = 0.5;
         const gridSize = 40;
@@ -436,9 +368,8 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
     const drawTrail = useCallback(
       (ctx: CanvasRenderingContext2D, chun: Chun) => {
         const speed = vec2.length(chun.velocity);
-        if (speed < 3) return; // Only show trail when moving fast
+        if (speed < 3) return;
 
-        // Simple trail line behind the chun
         const trailLength = Math.min(speed * 3, 60);
         const direction = vec2.normalize(chun.velocity);
         const trailStart = {
@@ -448,7 +379,6 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
 
         ctx.save();
 
-        // Gradient trail
         const gradient = ctx.createLinearGradient(
           trailStart.x,
           trailStart.y,
@@ -479,26 +409,22 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
         const { scaleX, scaleY } = getSquashScale(chun);
         const { stretchX, stretchY, angle } = getMotionStretch(chun);
 
-        // Combine scales
         const finalScaleX = scaleX * stretchX;
         const finalScaleY = scaleY * stretchY;
 
         ctx.translate(chun.position.x, chun.position.y);
 
-        // Rotate for motion stretch
         if (Math.abs(angle) > 0.1 && vec2.length(chun.velocity) > 5) {
           ctx.rotate(angle);
         }
 
         ctx.scale(finalScaleX, finalScaleY);
 
-        // Shadow
         ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
         ctx.shadowBlur = 12;
         ctx.shadowOffsetX = 4;
         ctx.shadowOffsetY = 4;
 
-        // Main circle - hollow ring (dây chun)
         ctx.beginPath();
         ctx.arc(0, 0, chun.radius, 0, Math.PI * 2);
         ctx.strokeStyle = chun.color;
@@ -507,28 +433,23 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
 
         ctx.shadowColor = "transparent";
 
-        // Highlight ring
         if (highlight) {
           ctx.strokeStyle = "#fdc700";
           ctx.lineWidth = 4;
           ctx.stroke();
 
-          // Glow
           ctx.shadowColor = "#fdc700";
           ctx.shadowBlur = 15;
           ctx.stroke();
           ctx.shadowColor = "transparent";
         }
 
-        // Border
         ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Reset transform for label
         ctx.setTransform(1, 0, 0, 1, chun.position.x, chun.position.y);
 
-        // Label
         ctx.fillStyle = "white";
         ctx.font = "bold 13px 'Inter', Arial, sans-serif";
         ctx.textAlign = "center";
@@ -551,7 +472,6 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
 
       ctx.save();
 
-      // Pull line (from chun to clamped drag position)
       ctx.strokeStyle = COLORS.AIM_LINE_WEAK;
       ctx.lineWidth = 3;
       ctx.setLineDash([8, 6]);
@@ -560,7 +480,6 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
       ctx.lineTo(info.clampedEnd.x, info.clampedEnd.y);
       ctx.stroke();
 
-      // Projection line (where shot will go)
       ctx.strokeStyle = COLORS.AIM_LINE;
       ctx.lineWidth = 3;
       ctx.setLineDash([12, 8]);
@@ -569,7 +488,6 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
       ctx.lineTo(info.projectedEnd.x, info.projectedEnd.y);
       ctx.stroke();
 
-      // Arrow head
       ctx.setLineDash([]);
       const arrowSize = 14;
       const arrowAngle = Math.atan2(
@@ -589,7 +507,7 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
       );
       ctx.stroke();
 
-      // Power bar
+
       const barWidth = 70;
       const barHeight = 10;
       const barX = player.position.x - barWidth / 2;
@@ -603,7 +521,6 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
       ctx.fill();
       ctx.stroke();
 
-      // Power fill
       const powerColor = getPowerColor(info.power);
       const gradient = ctx.createLinearGradient(
         barX,
@@ -728,12 +645,11 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
 
     const render = useCallback(
       (ctx: CanvasRenderingContext2D) => {
-        // Apply camera shake
         const shake = cameraShakeRef.current;
         if (shake.intensity > 0) {
           shake.x = (Math.random() - 0.5) * shake.intensity;
           shake.y = (Math.random() - 0.5) * shake.intensity;
-          shake.intensity *= 0.85; // Decay
+          shake.intensity *= 0.85;
           if (shake.intensity < 0.5) shake.intensity = 0;
         }
 
@@ -744,11 +660,9 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
 
         drawBackground(ctx);
 
-        // Trails
         drawTrail(ctx, playerRef.current);
         drawTrail(ctx, botRef.current);
 
-        // Chuns
         const highlightPlayer =
           phaseRef.current === "player-idle" ||
           phaseRef.current === "player-aiming";
@@ -763,7 +677,6 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
 
         ctx.restore();
 
-        // Phase indicator without shake
         drawPhaseIndicator(ctx);
         drawDebug(ctx);
       },
@@ -777,9 +690,6 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
       ],
     );
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Game Loop
-    // ──────────────────────────────────────────────────────────────────────
 
     const gameLoop = useCallback(() => {
       const canvas = canvasRef.current;
@@ -790,9 +700,6 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
 
       const phase = phaseRef.current;
 
-      // ─────────────────────────────────────────────────────────────────────
-      // HIT-STOP (juice freeze frames)
-      // ─────────────────────────────────────────────────────────────────────
       if (phase === "hit-stop") {
         hitStopFramesRef.current--;
         if (hitStopFramesRef.current <= 0) {
@@ -804,13 +711,9 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
         return;
       }
 
-      // ─────────────────────────────────────────────────────────────────────
-      // LAUNCH DELAY (juice snap feeling)
-      // ─────────────────────────────────────────────────────────────────────
       if (phase === "launch-delay") {
         launchDelayFramesRef.current--;
         if (launchDelayFramesRef.current <= 0) {
-          // Apply the pending velocity
           if (pendingLaunchVelocityRef.current) {
             playerRef.current.velocity = pendingLaunchVelocityRef.current;
             pendingLaunchVelocityRef.current = null;
@@ -824,9 +727,6 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
         return;
       }
 
-      // ─────────────────────────────────────────────────────────────────────
-      // PHYSICS SIMULATION
-      // ─────────────────────────────────────────────────────────────────────
       if (
         phase === "player-simulating" ||
         phase === "bot-simulating" ||
@@ -834,7 +734,6 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
       ) {
         simulationFrameRef.current++;
 
-        // Safety: force settle after max frames
         if (simulationFrameRef.current > PHYSICS_CONFIG.MAX_SIMULATION_FRAMES) {
           const settled = checkSettledWin(
             playerRef.current,
@@ -849,19 +748,16 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
 
         updatePhysics();
 
-        // Check if round already ended (stomp)
         if (phaseRef.current === "hit-stop" || phaseRef.current === "ended") {
           render(ctx);
           animationRef.current = requestAnimationFrame(gameLoop);
           return;
         }
 
-        // Check if settled
         if (areBothSettled(playerRef.current, botRef.current)) {
           settleCountRef.current++;
 
           if (settleCountRef.current >= PHYSICS_CONFIG.SETTLE_FRAMES_REQUIRED) {
-            // Check win condition (Y-position based, attacker wins ties)
             const settled = checkSettledWin(
               playerRef.current,
               botRef.current,
@@ -878,7 +774,6 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
             if (settled !== "none") {
               handleWin(settled);
             } else {
-              // No winner yet, switch turn
               console.log("[Game] Switching turn...");
               onGameEvent?.({
                 type: "settled",
@@ -896,14 +791,11 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
         }
       }
 
-      // Render
       render(ctx);
 
-      // Continue loop
       animationRef.current = requestAnimationFrame(gameLoop);
     }, [updatePhysics, handleWin, switchTurn, render, onRoundEnd, onGameEvent]);
 
-    // Start game loop
     useEffect(() => {
       animationRef.current = requestAnimationFrame(gameLoop);
       return () => {
@@ -913,7 +805,6 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
       };
     }, [gameLoop]);
 
-    // Cleanup bot timer
     useEffect(() => {
       return () => {
         if (botTimerRef.current) {
@@ -925,9 +816,6 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
       };
     }, []);
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Input Handlers
-    // ──────────────────────────────────────────────────────────────────────
 
     const handlePointerDown = useCallback(
       (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -1004,9 +892,6 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
       }
     }, []);
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Imperative Handle
-    // ──────────────────────────────────────────────────────────────────────
 
     useImperativeHandle(
       ref,

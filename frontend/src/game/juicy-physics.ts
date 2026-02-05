@@ -62,9 +62,6 @@ export const PHYSICS_CONFIG = {
   PULL_POWER_CURVE: 0.5,
 
   LAUNCH_DELAY_FRAMES: 1,
-  // ─────────────────────────────────────────────────────────────────────────
-  // CIRCLE-TO-CIRCLE COLLISION - Exaggerated push, favors attacker
-  // ─────────────────────────────────────────────────────────────────────────
   RESTITUTION: 0.85,
   COLLISION_BIAS: 1.4,
   ATTACKER_PUSH_BONUS: 0.25,
@@ -72,22 +69,16 @@ export const PHYSICS_CONFIG = {
   WIN_Y_MARGIN: 5,
   WIN_OVERLAP_REQUIRED: 0.1,
   ATTACKER_ADVANTAGE: true,
-  // ─────────────────────────────────────────────────────────────────────────
-  // SETTLING & TURN SWITCH - Physics runs until both chuns settle
-  // ─────────────────────────────────────────────────────────────────────────
-  VELOCITY_THRESHOLD: 0.15, // Speed below this = considered stopped
-  SETTLE_FRAMES_REQUIRED: 20, // Consecutive low-velocity frames to settle
-  MAX_SIMULATION_FRAMES: 480, // Force settle after this many frames (8s @ 60fps)
-  MAX_TURNS: 8, // Maximum number of turns before forced win check
+  VELOCITY_THRESHOLD: 0.15,
+  SETTLE_FRAMES_REQUIRED: 20,
+  MAX_SIMULATION_FRAMES: 480,
+  MAX_TURNS: 8,
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // JUICE & GAME FEEL
-  // ─────────────────────────────────────────────────────────────────────────
-  HIT_STOP_FRAMES: 4, // Freeze frames on stomp win
-  SQUASH_AMOUNT: 0.15, // How much to squash on impact (0-1)
-  SQUASH_RECOVERY_SPEED: 0.2, // How fast squash returns to normal
-  TRAIL_LENGTH: 8, // Number of trail positions to keep
-  TRAIL_MIN_SPEED: 3, // Minimum speed to show trail
+  HIT_STOP_FRAMES: 4,
+  SQUASH_AMOUNT: 0.15,
+  SQUASH_RECOVERY_SPEED: 0.2,
+  TRAIL_LENGTH: 8,
+  TRAIL_MIN_SPEED: 3,
 };
 
 
@@ -96,15 +87,13 @@ export interface Chun {
   velocity: Vector2D;
   radius: number;
 
-  // Juice state
-  squash: number; // Current squash factor (0 = normal, positive = squashed)
-  trailPositions: Vector2D[]; // Recent positions for trail effect
+  squash: number;
+  trailPositions: Vector2D[];
 
-  // Identity
   isPlayer: boolean;
   color: string;
   label: string;
-}
+} 
 
 export function createChun(
   x: number,
@@ -126,28 +115,21 @@ export function createChun(
   };
 }
 
-// ============================================================================
-// GAME EVENTS (for sound/visual hooks)
-// ============================================================================
-
 export type GameEventType =
-  | "launch" // Player/bot launched
-  | "wall_hit" // Hit wall
-  | "floor_hit" // Hit floor
-  | "chun_collision" // Chun hit chun
-  | "stomp_win" // Stomp detected
-  | "settled"; // Motion settled
+  | "launch"
+  | "wall_hit"
+  | "floor_hit"
+  | "chun_collision"
+  | "stomp_win"
+  | "settled";
 
 export interface GameEvent {
   type: GameEventType;
   position: Vector2D;
-  intensity: number; // 0-1, for sound volume/effect size
+  intensity: number;
   data?: unknown;
-}
+} 
 
-// ============================================================================
-// ELASTIC FLICK CALCULATION
-// ============================================================================
 
 export function calculateLaunchVelocity(
   chunPosition: Vector2D,
@@ -156,7 +138,6 @@ export function calculateLaunchVelocity(
   const pullVector = vec2.sub(dragEnd, chunPosition);
   const pullDistance = vec2.length(pullVector);
 
-  // Clamp to max pull
   const clampedDistance = Math.min(
     pullDistance,
     PHYSICS_CONFIG.MAX_PULL_DISTANCE,
@@ -184,9 +165,9 @@ export function getPullInfo(
 ): {
   direction: Vector2D;
   clampedEnd: Vector2D;
-  power: number; // 0-1
+  power: number;
   projectedEnd: Vector2D;
-} {
+}  {
   const pullVector = vec2.sub(currentDragPos, chunPosition);
   const pullDistance = vec2.length(pullVector);
   const clampedDistance = Math.min(
@@ -202,9 +183,8 @@ export function getPullInfo(
   );
   const power = clampedDistance / PHYSICS_CONFIG.MAX_PULL_DISTANCE;
 
-  // Project where chun will go (opposite direction)
   const launchDirection = vec2.scale(direction, -1);
-  const projectedDistance = clampedDistance * 1.5; // Visual extension
+  const projectedDistance = clampedDistance * 1.5;
   const projectedEnd = vec2.add(
     chunPosition,
     vec2.scale(launchDirection, projectedDistance),
@@ -213,9 +193,6 @@ export function getPullInfo(
   return { direction, clampedEnd, power, projectedEnd };
 }
 
-// ============================================================================
-// PHYSICS UPDATE
-// ============================================================================
 
 export interface WorldBounds {
   width: number;
@@ -230,7 +207,6 @@ export function updateChunPhysics(
   const events: GameEvent[] = [];
   const speed = vec2.length(chun.velocity);
 
-  // Update trail
   if (speed > PHYSICS_CONFIG.TRAIL_MIN_SPEED) {
     chun.trailPositions.unshift(vec2.clone(chun.position));
     if (chun.trailPositions.length > PHYSICS_CONFIG.TRAIL_LENGTH) {
@@ -240,7 +216,6 @@ export function updateChunPhysics(
     chun.trailPositions.pop();
   }
 
-  // Update squash (recover towards 0)
   if (chun.squash > 0) {
     chun.squash = Math.max(
       0,
@@ -248,26 +223,18 @@ export function updateChunPhysics(
     );
   }
 
-  // Apply velocity (position update)
   chun.position.x += chun.velocity.x;
   chun.position.y += chun.velocity.y;
 
-  // Apply constant friction damping each frame
   chun.velocity.x *= PHYSICS_CONFIG.FRICTION;
   chun.velocity.y *= PHYSICS_CONFIG.FRICTION;
 
-  // Snap velocity to zero when very small (prevents endless tiny movements)
   if (vec2.length(chun.velocity) < PHYSICS_CONFIG.VELOCITY_SNAP_THRESHOLD) {
     chun.velocity.x = 0;
     chun.velocity.y = 0;
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // WALL COLLISIONS - All walls behave identically (flat 2D plane)
-  // ─────────────────────────────────────────────────────────────────────────
-
-  // Left wall
-  if (chun.position.x - chun.radius < 0) {
+if (chun.position.x - chun.radius < 0) {
     chun.position.x = chun.radius;
     const impactSpeed = Math.abs(chun.velocity.x);
     chun.velocity.x = impactSpeed * PHYSICS_CONFIG.WALL_BOUNCE;
@@ -282,7 +249,6 @@ export function updateChunPhysics(
     }
   }
 
-  // Right wall
   if (chun.position.x + chun.radius > bounds.width) {
     chun.position.x = bounds.width - chun.radius;
     const impactSpeed = Math.abs(chun.velocity.x);
@@ -298,7 +264,6 @@ export function updateChunPhysics(
     }
   }
 
-  // Top wall
   if (chun.position.y - chun.radius < 0) {
     chun.position.y = chun.radius;
     const impactSpeed = Math.abs(chun.velocity.y);
@@ -314,7 +279,6 @@ export function updateChunPhysics(
     }
   }
 
-  // Bottom wall
   if (chun.position.y + chun.radius > bounds.height) {
     chun.position.y = bounds.height - chun.radius;
     const impactSpeed = Math.abs(chun.velocity.y);
@@ -333,18 +297,15 @@ export function updateChunPhysics(
   return events;
 }
 
-// ============================================================================
-// CHUN-TO-CHUN COLLISION
-// ============================================================================
 
 export type StompResult = "none" | "a_wins" | "b_wins";
 
 export interface CollisionResult {
   collided: boolean;
   stompResult: StompResult;
-  impactIntensity: number; // 0-1
+  impactIntensity: number;
   impactPosition: Vector2D;
-}
+} 
 
 export function resolveChunCollision(
   a: Chun,
@@ -354,7 +315,6 @@ export function resolveChunCollision(
   const dist = vec2.distance(a.position, b.position);
   const minDist = a.radius + b.radius;
 
-  // No collision
   if (dist >= minDist || dist === 0) {
     return {
       collided: false,
@@ -364,56 +324,40 @@ export function resolveChunCollision(
     };
   }
 
-  // Collision detected!
   const overlap = minDist - dist;
   const normal = vec2.normalize(vec2.sub(b.position, a.position));
   const impactPosition = vec2.lerp(a.position, b.position, a.radius / minDist);
 
-  // Win is only evaluated after motion settles, not during collision
   const stompResult: StompResult = "none";
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // POSITIONAL CORRECTION (separate overlapping circles)
-  // ─────────────────────────────────────────────────────────────────────────
   const separation = overlap / 2 + 0.5;
   a.position = vec2.sub(a.position, vec2.scale(normal, separation));
   b.position = vec2.add(b.position, vec2.scale(normal, separation));
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // IMPULSE RESPONSE - Exaggerated push force, favors attacker
-  // ─────────────────────────────────────────────────────────────────────────
   const relativeVelocity = vec2.sub(a.velocity, b.velocity);
   const normalVelocity = vec2.dot(relativeVelocity, normal);
 
-  // Only resolve if moving towards each other
   if (normalVelocity > 0) {
-    // Base impulse (assuming equal mass)
     const restitution = PHYSICS_CONFIG.RESTITUTION;
     let impulseScalar = (-(1 + restitution) * normalVelocity) / 2;
 
-    // JUICE: Exaggerate the impulse for satisfying impacts
     impulseScalar *= PHYSICS_CONFIG.COLLISION_BIAS;
 
-    // Apply base impulses (equal and opposite)
     const impulse = vec2.scale(normal, impulseScalar);
     a.velocity = vec2.sub(a.velocity, impulse);
     b.velocity = vec2.add(b.velocity, impulse);
 
-    // ATTACKER ADVANTAGE: Give extra push to the attacker
     if (lastAttacker) {
       const attackerBonus =
         Math.abs(impulseScalar) * PHYSICS_CONFIG.ATTACKER_PUSH_BONUS;
       const bonusImpulse = vec2.scale(normal, attackerBonus);
       if (lastAttacker === "a") {
-        // A is attacker, push B more
         b.velocity = vec2.add(b.velocity, bonusImpulse);
       } else {
-        // B is attacker, push A more
         a.velocity = vec2.sub(a.velocity, bonusImpulse);
       }
     }
 
-    // Ensure minimum separation velocity (prevent sticking)
     const newRelVel = vec2.dot(vec2.sub(a.velocity, b.velocity), normal);
     if (newRelVel > -PHYSICS_CONFIG.MIN_SEPARATION_VELOCITY) {
       const adjustment = vec2.scale(
@@ -425,7 +369,6 @@ export function resolveChunCollision(
     }
   }
 
-  // JUICE: Apply squash on impact
   const impactSpeed = Math.abs(normalVelocity);
   const squashAmount = Math.min(PHYSICS_CONFIG.SQUASH_AMOUNT, impactSpeed / 15);
   a.squash = Math.max(a.squash, squashAmount);
@@ -436,7 +379,7 @@ export function resolveChunCollision(
     stompResult,
     impactIntensity: Math.min(1, impactSpeed / 12),
     impactPosition,
-  };
+  }; 
 }
 
 export function checkSettledWin(
@@ -446,35 +389,27 @@ export function checkSettledWin(
 ): StompResult {
   const dist = vec2.distance(a.position, b.position);
   const minDist = a.radius + b.radius;
-  const overlapRatio = 1 - dist / minDist; // Positive = overlapping, negative = apart
+  const overlapRatio = 1 - dist / minDist;
 
-  // Only determine winner if circles are touching/overlapping
-  // If not overlapping, return "none" so game switches turn
   if (overlapRatio < PHYSICS_CONFIG.WIN_OVERLAP_REQUIRED) {
-    return "none"; // Not touching - switch turn, game continues
+    return "none";
   }
 
-  // Circles ARE overlapping - determine winner by Y position
-  // Smaller Y = visually above on screen (wins)
-  const yDiff = b.position.y - a.position.y; // Positive = A is above B
+  const yDiff = b.position.y - a.position.y;
 
   if (yDiff > PHYSICS_CONFIG.WIN_Y_MARGIN) {
-    return "a_wins"; // A has smaller Y, is visually above
+    return "a_wins";
   } else if (yDiff < -PHYSICS_CONFIG.WIN_Y_MARGIN) {
-    return "b_wins"; // B has smaller Y, is visually above
+    return "b_wins";
   }
 
-  // Circles overlapping but same Y - use attacker advantage
   if (PHYSICS_CONFIG.ATTACKER_ADVANTAGE && lastAttacker) {
     return lastAttacker === "a" ? "a_wins" : "b_wins";
   }
 
-  return "none"; // True draw - switch turn
+  return "none";
 }
 
-// ============================================================================
-// SETTLING DETECTION
-// ============================================================================
 
 export function isChunSettled(chun: Chun): boolean {
   const speed = vec2.length(chun.velocity);
@@ -485,38 +420,32 @@ export function areBothSettled(a: Chun, b: Chun): boolean {
   return isChunSettled(a) && isChunSettled(b);
 }
 
-// ============================================================================
-// BOT AI (Beatable)
-// ============================================================================
 
 export interface BotConfig {
-  aimRandomness: number; // Radians of random aim error
-  powerMin: number; // Minimum power multiplier (0-1)
-  powerMax: number; // Maximum power multiplier (0-1)
-  thinkTimeMin: number; // Minimum think time in ms
-  thinkTimeMax: number; // Maximum think time in ms
-}
+  aimRandomness: number;
+  powerMin: number;
+  powerMax: number;
+  thinkTimeMin: number;
+  thinkTimeMax: number;
+} 
 
 export const BOT_DIFFICULTY: Record<number, BotConfig> = {
   1: {
-    // Easy - very beatable
-    aimRandomness: Math.PI / 2.5, // ±72 degrees
+    aimRandomness: Math.PI / 2.5,
     powerMin: 0.25,
     powerMax: 0.55,
     thinkTimeMin: 600,
     thinkTimeMax: 1200,
   },
   2: {
-    // Medium
-    aimRandomness: Math.PI / 4, // ±45 degrees
+    aimRandomness: Math.PI / 4,
     powerMin: 0.35,
     powerMax: 0.7,
     thinkTimeMin: 400,
     thinkTimeMax: 900,
   },
   3: {
-    // Hard - still beatable but challenging
-    aimRandomness: Math.PI / 7, // ±26 degrees
+    aimRandomness: Math.PI / 7,
     powerMin: 0.45,
     powerMax: 0.85,
     thinkTimeMin: 300,
@@ -534,21 +463,17 @@ export function calculateBotLaunch(
 ): Vector2D {
   const config = BOT_DIFFICULTY[tier] || BOT_DIFFICULTY[2];
 
-  // Direction towards player
   const toPlayer = vec2.sub(player.position, bot.position);
   let direction = vec2.normalize(toPlayer);
 
-  // Add random aim error
   const aimError = (Math.random() - 0.5) * 2 * config.aimRandomness;
   direction = vec2.rotate(direction, aimError);
 
-  // Random power within tier range
   const powerFactor =
     config.powerMin + Math.random() * (config.powerMax - config.powerMin);
   const power =
     PHYSICS_CONFIG.PULL_POWER_BASE +
     powerFactor * PHYSICS_CONFIG.PULL_POWER_MULTIPLIER;
-
   return vec2.scale(direction, power);
 }
 
@@ -563,16 +488,12 @@ export function getBotThinkTime(tier: number): number {
   );
 }
 
-// ============================================================================
-// JUICE RENDERING HELPERS
-// ============================================================================
 
 /**
  * Get squash/stretch scale for rendering.
  */
 export function getSquashScale(chun: Chun): { scaleX: number; scaleY: number } {
   const squashFactor = chun.squash;
-  // Squash on Y, stretch on X (or vice versa based on movement)
   const speed = vec2.length(chun.velocity);
   const isVertical = Math.abs(chun.velocity.y) > Math.abs(chun.velocity.x);
 

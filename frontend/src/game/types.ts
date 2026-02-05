@@ -1,9 +1,7 @@
-// Core game types for SuiChin flicking game
-
 export interface Vector2D {
   x: number;
   y: number;
-}
+} 
 
 export interface Chun {
   id: string;
@@ -24,12 +22,12 @@ export interface GameBoard {
 }
 
 export type TurnPhase =
-  | "player-aim" // Player is aiming/dragging
-  | "player-flick" // Player chun is moving
-  | "bot-aim" // Bot is calculating move
-  | "bot-flick" // Bot chun is moving
-  | "checking" // Checking win/lose condition
-  | "round-end"; // Round has ended
+  | "player-aim"
+  | "player-flick"
+  | "bot-aim"
+  | "bot-flick"
+  | "checking"
+  | "round-end";
 
 export type MatchResult = "win" | "lose" | "draw" | null;
 
@@ -49,7 +47,7 @@ export interface GameState {
 export interface FlickInput {
   startPosition: Vector2D;
   endPosition: Vector2D;
-  power: number; // 0-1 normalized
+  power: number;
 }
 
 export interface GameConfig {

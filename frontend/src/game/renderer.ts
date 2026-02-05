@@ -25,9 +25,9 @@ export const DEFAULT_RENDER_CONFIG: RenderConfig = {
 };
 
 const TIER_COLORS: Record<number, string> = {
-  1: "#ff8904", // Bronze
-  2: "#99a1af", // Silver
-  3: "#fdc700", // Gold
+  1: "#ff8904",
+  2: "#99a1af",
+  3: "#fdc700",
 };
 
 export function getTierColor(tier: number): string {

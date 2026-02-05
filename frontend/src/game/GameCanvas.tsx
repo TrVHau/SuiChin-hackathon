@@ -660,10 +660,8 @@ const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(
           else if (winResultRef.current === "bot_wins") result = "lose";
           handleWin(result);
         } else if (checkSettled()) {
-          // Check if settled
-          settleCountRef.current++;
+          settleCountRef.current++; 
           if (settleCountRef.current >= PHYSICS.SETTLE_FRAMES) {
-            // Check for overlap win after settling
             const player = playerRef.current;
             const bot = botRef.current;
 
@@ -687,7 +685,6 @@ const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(
               else if (settledResult === "bot_wins") result = "lose";
               handleWin(result);
             } else {
-              // No winner yet - switch turn
               switchTurn();
             }
           } else {
@@ -695,7 +692,6 @@ const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(
           }
         } else {
           settleCountRef.current = 0;
-          // Stay in current simulating phase
         }
       }
 
@@ -784,9 +780,6 @@ const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(
       }
     }, []);
 
-    // ============================================================================
-    // Public API via ref
-    // ============================================================================
 
     const resetGame = useCallback(() => {
       if (botThinkTimerRef.current) {
@@ -796,7 +789,7 @@ const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(
 
       phaseRef.current = "idle";
       currentTurnRef.current = "player";
-      lastAttackerRef.current = null; // Reset attacker
+      lastAttackerRef.current = null;
       settleCountRef.current = 0;
       winResultRef.current = "none";
 
@@ -815,7 +808,6 @@ const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(
       dragRef.current.isDragging = false;
     }, [canvasSize]);
 
-    // Expose methods via ref
     useImperativeHandle(
       ref,
       () => ({
@@ -825,7 +817,6 @@ const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(
       [resetGame],
     );
 
-    // Cleanup bot timer on unmount
     useEffect(() => {
       return () => {
         if (botThinkTimerRef.current) {
@@ -834,9 +825,6 @@ const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(
       };
     }, []);
 
-    // ============================================================================
-    // Render
-    // ============================================================================
 
     return (
       <div
