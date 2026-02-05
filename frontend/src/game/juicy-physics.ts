@@ -453,9 +453,6 @@ export const BOT_DIFFICULTY: Record<number, BotConfig> = {
   },
 };
 
-/**
- * Calculate bot's launch velocity.
- */
 export function calculateBotLaunch(
   bot: Chun,
   player: Chun,
@@ -477,9 +474,6 @@ export function calculateBotLaunch(
   return vec2.scale(direction, power);
 }
 
-/**
- * Get random think time for bot.
- */
 export function getBotThinkTime(tier: number): number {
   const config = BOT_DIFFICULTY[tier] || BOT_DIFFICULTY[2];
   return (
@@ -489,9 +483,6 @@ export function getBotThinkTime(tier: number): number {
 }
 
 
-/**
- * Get squash/stretch scale for rendering.
- */
 export function getSquashScale(chun: Chun): { scaleX: number; scaleY: number } {
   const squashFactor = chun.squash;
   const speed = vec2.length(chun.velocity);
@@ -510,9 +501,6 @@ export function getSquashScale(chun: Chun): { scaleX: number; scaleY: number } {
   }
 }
 
-/**
- * Get motion blur/stretch for fast-moving chun.
- */
 export function getMotionStretch(chun: Chun): {
   stretchX: number;
   stretchY: number;

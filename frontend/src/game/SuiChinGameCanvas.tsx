@@ -101,7 +101,6 @@ export default function SuiChinGameCanvas({
   return (
     <div className="min-h-screen bg-[#101828] flex items-center justify-center p-6">
       <div className="bg-[#1e2939] rounded-3xl overflow-hidden max-w-5xl w-full shadow-2xl">
-        {/* Header */}
         <div className="bg-[#1e2939] border-b border-[#364153] px-6 py-4 flex items-center justify-between">
           <h2 className="font-bold text-[20px] text-white">{getTierName()}</h2>
           <button
@@ -112,7 +111,6 @@ export default function SuiChinGameCanvas({
           </button>
         </div>
 
-        {/* Canvas */}
         <div className="relative">
           <canvas
             ref={canvasRef}
@@ -129,7 +127,6 @@ export default function SuiChinGameCanvas({
             onTouchEnd={handleTouchEnd}
           />
 
-          {/* Result Overlay */}
           <AnimatePresence>
             {showResult && finalResult && (
               <motion.div
@@ -170,7 +167,6 @@ export default function SuiChinGameCanvas({
           </AnimatePresence>
         </div>
 
-        {/* Instructions */}
         <div className="bg-[#1e2939] border-t border-[#364153] px-6 py-3">
           <p className="text-center text-[14px] text-gray-400">
             {gameState?.turnPhase === "player-aim"

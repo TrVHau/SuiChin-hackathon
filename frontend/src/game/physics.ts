@@ -34,9 +34,6 @@ export const vec2 = {
   zero: (): Vector2D => ({ x: 0, y: 0 }),
 };
 
-/**
- * Calculate flick velocity from drag gesture
- */
 export function calculateFlickVelocity(
   startPos: Vector2D,
   endPos: Vector2D,
@@ -48,9 +45,6 @@ export function calculateFlickVelocity(
   return vec2.scale(normalized, power);
 }
 
-/**
- * Update chun physics for one frame
- */
 export function updateChunPhysics(
   chun: Chun,
   board: GameBoard,
@@ -93,17 +87,11 @@ export function updateChunPhysics(
   };
 }
 
-/**
- * Check if two chuns are colliding
- */
 export function checkChunCollision(a: Chun, b: Chun): boolean {
   const distance = vec2.distance(a.position, b.position);
   return distance < a.radius + b.radius;
 }
 
-/**
- * Resolve collision between two chuns
- */
 export function resolveChunCollision(a: Chun, b: Chun): [Chun, Chun] {
   const distance = vec2.distance(a.position, b.position);
   const minDistance = a.radius + b.radius;
@@ -147,16 +135,10 @@ export function resolveChunCollision(a: Chun, b: Chun): [Chun, Chun] {
   ];
 }
 
-/**
- * Check if a chun has stopped moving
- */
 export function isChunStationary(chun: Chun, threshold: number): boolean {
   return vec2.length(chun.velocity) < threshold;
 }
 
-/**
- * Check if all chuns have stopped moving
- */
 export function areAllChunsStationary(
   chuns: Chun[],
   threshold: number,
@@ -164,10 +146,6 @@ export function areAllChunsStationary(
   return chuns.every((chun) => isChunStationary(chun, threshold));
 }
 
-/**
- * Determine winner based on chun positions
- * The chun on top (lower Y value) wins when overlapping
- */
 export function determineWinner(
   playerChun: Chun,
   botChun: Chun,
@@ -188,9 +166,6 @@ export function determineWinner(
   return "draw";
 }
 
-/**
- * Get initial positions for chuns
- */
 export function getInitialPositions(config: GameConfig): {
   player: Vector2D;
   bot: Vector2D;

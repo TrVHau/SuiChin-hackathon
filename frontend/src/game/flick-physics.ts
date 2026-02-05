@@ -344,9 +344,6 @@ export function resolveChunCollision(
 }
 
 
-/**
- * Check if a chun is settled (not moving)
- */
 export function isChunSettled(chun: Chun): boolean {
   return vec2.length(chun.velocity) < FLICK_CONFIG.VELOCITY_EPSILON;
 }
@@ -473,9 +470,6 @@ export function getPowerColor(power: number): string {
   }
 }
 
-/**
- * Get power zone label
- */
 export function getPowerZone(
   power: number,
 ): "weak" | "optimal" | "strong" | "overshoot" {

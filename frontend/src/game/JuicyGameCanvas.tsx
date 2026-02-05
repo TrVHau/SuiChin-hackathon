@@ -787,7 +787,6 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
           }
         } else {
           settleCountRef.current = 0;
-          // Stay in current simulating phase
         }
       }
 
@@ -867,7 +866,6 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
         canvas.releasePointerCapture(e.pointerId);
 
         if (power > 0) {
-          // JUICE: Launch delay for snap feeling
           pendingLaunchVelocityRef.current = velocity;
           launchDelayFramesRef.current = PHYSICS_CONFIG.LAUNCH_DELAY_FRAMES;
           phaseRef.current = "launch-delay";
@@ -903,9 +901,6 @@ const JuicyGameCanvas = forwardRef<JuicyGameCanvasHandle, JuicyGameCanvasProps>(
       [resetGame, startRound],
     );
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Render
-    // ──────────────────────────────────────────────────────────────────────
 
     return (
       <div
