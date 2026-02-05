@@ -1,5 +1,55 @@
-.github
+# GitHub workflows
+.github/
 
-.vscode
+# Editor
+.vscode/
+.idea/
 
-ui
+# Move build outputs
+contract/build/
+contract/Move.lock
+contract/Published.toml
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Build outputs
+dist/
+dist-ssr/
+build/
+*.local
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.swp
+*~
+
+# Temp files
+*.tmp
+*.temp
+.cache/
+
+# Test coverage
+coverage/
+*.lcov
+
+# Debug logs
+debug*.log
