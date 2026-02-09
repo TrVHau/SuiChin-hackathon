@@ -1,233 +1,142 @@
-1. Smart contract: BẮT BUỘC phải sửa, nhưng sửa có kiểm soát
-Vì sao phải sửa?
-
-Smart contract hiện tại của SuiChin:
-
-ghi kết quả trận
-
-quản lý chun, faucet, mint NFT
-
-chưa có khái niệm season
-
-event phát ra chưa đủ dữ liệu cho phân tích hành vi
-
-Trong mô hình mới (season + airdrop score), on-chain phải làm 1 việc rất rõ:
-
-Ghi lại SỰ THẬT, không tính toán kinh tế phức tạp
-
-Bạn cần sửa gì trong smart contract?
-
-Không nhiều, nhưng đúng chỗ:
-
-1. Thêm khái niệm Season (tối thiểu)
-
-Không cần DAO, không cần phức tạp.
-
-Chỉ cần:
-
-current_season_id
-
-hoặc season_id truyền vào khi record trận
-
-👉 Mục đích: mỗi event biết nó thuộc mùa nào
-
-2. Mở rộng event record_session
-
-Event là “nguồn dữ liệu vàng”.
-
-Hiện tại bạn có:
-
-ai chơi
-
-thắng hay thua
-
-Cần thêm:
-
-season_id
-
-stake_tier
-
-points_delta (được hay mất bao nhiêu)
-
-timestamp / epoch
-
-❗ Lưu ý:
-
-Không tính leaderboard, không tính score trên chain
-
-Chỉ emit event
-
-3. Điều chỉnh faucet (nhẹ)
-
-Thêm giới hạn theo ngày (hoặc theo season)
-
-Ghi event faucet_claimed(player, season_id)
-
-👉 Để backend biết: ai đang farm, ai chỉ onboarding.
-
-4. Achievement vẫn giữ nguyên
-
-Cái này bạn đã làm rất tốt:
-
-soulbound
-
-khó fake
-
-dùng được cho airdrop score
-
-Chỉ cần:
-
-gắn achievement với season_id (nếu là achievement theo mùa)
-
-Kết luận smart contract
-
-Có sửa
-
-Sửa ~20–30% code
-
-Không tăng độ phức tạp logic
-
-Tăng rất mạnh giá trị dữ liệu
-
-2. Frontend (FE): BẮT BUỘC phải sửa, đây là thứ người ta “nhìn thấy”
-
-Frontend là nơi:
-
-người chơi cảm nhận “game đã khác”
-
-mentor / interviewer đánh giá dự án
-
-FE hiện tại thiếu gì?
-
-Không có khái niệm season
-
-Không có leaderboard
-
-Không có quest / daily
-
-Người chơi không biết mình đang “phấn đấu vì cái gì”
-
-FE cần thêm gì?
-1. UI Season
-
-Season hiện tại
-
-Thời gian còn lại
-
-Rank tạm tính
-
-Đây là xương sống tâm lý người chơi.
-
-2. Leaderboard (rất quan trọng)
-
-Top players
-
-Rank của bản thân
-
-Refresh định kỳ
-
-Leaderboard không nên lấy trực tiếp từ chain
-→ lấy từ backend/indexer.
-
-3. Profile người chơi
-
-Stats theo mùa:
-
-số trận
-
-thắng/thua
-
-streak
-
-Achievement đã đạt
-
-👉 FE chỉ hiển thị, không tính.
-
-4. Quest / Daily (nếu còn thời gian)
-
-UI rất đơn giản
-
-Backend trả về “đã xong hay chưa”
-
-Kết luận FE
-
-Bắt buộc sửa
-
-Đây là nơi thể hiện “tư duy thiết kế”
-
-Không cần đẹp, nhưng phải rõ
-
-3. Backend (BE): CẦN – nhưng là “BE phân tích”, không phải BE truyền thống
-
-Đây là chỗ rất nhiều người hiểu sai.
-
-Bạn KHÔNG cần:
-
-Auth
-
-Database phức tạp
-
-Server scale lớn
-
-Microservice
-
-Bạn CẦN:
-
-Một indexer + analytics service nhỏ
-
-Backend này làm gì?
-1. Lắng nghe event on-chain
-
-record_session
-
-faucet_claimed
-
-achievement_minted
-
-Lưu vào:
-
-SQLite / Postgres là đủ
-
-2. Tính toán off-chain
-
-Season score
-
-Leaderboard
-
-Airdrop score (ẩn)
-
-❗ Đây là chủ ý thiết kế, không phải thiếu sót:
-
-nếu tính on-chain → farm được
-
-nếu tính off-chain → khó tối ưu
-
-3. API cho FE
-
-Ví dụ:
-
-/leaderboard?season=1
-
-/player/:address
-
-/season/current
-
-FE chỉ việc gọi API → render.
-
-Công nghệ backend tối thiểu
-
-Node.js + TypeScript
-
-Một process chạy cron / worker
-
-Không cần framework nặng
-
-Kết luận backend
-
-Có cần
-
-Nhưng là:
-
-“analytics service”, không phải “backend app”
-
-Làm xong backend này, bạn ăn điểm cực mạnh khi nói về GameFi / airdrop.
+Architecture
+1) Tổng quan kiến trúc
+SuiChin dùng mô hình hybrid:
+Off-chain (Frontend Game): gameplay + canvas render skin (đồng/bạc/vàng)
+On-chain (Sui Move): mint/burn NFT, craft & trade-up theo xác suất, marketplace mua bán bằng SUI testnet, metadata để ví hiển thị NFT
+Điểm mấu chốt: blockchain không chạy gameplay, chỉ quản lý tài sản (NFT) + giao dịch.
+
+2) Sơ đồ thành phần
+┌──────────────────────────┐
+│  Frontend (Web Game)     │
+│  - Canvas renderer        │
+│  - Craft / Trade-up UI    │
+│  - Inventory + Market UI  │
+│  - Wallet connect         │
+└───────────┬──────────────┘
+            │  Sui RPC (read/write tx)
+            ▼
+┌──────────────────────────┐
+│  Sui Blockchain (Move)   │
+│  - ChunNFT (skin_type)    │
+│  - Scrap resource         │
+│  - RNG-based Craft         │
+│  - Trade-up (burn + mint) │
+│  - Marketplace (list/buy) │
+│  - Display/Metadata        │
+└──────────────────────────┘
+            │
+            │  image_url points to
+            ▼
+┌──────────────────────────┐
+│  Static Asset Hosting     │
+│  - 4 preview PNG          │
+│  (exported from canvas)   │
+└──────────────────────────┘
+
+3) Luồng dữ liệu chính
+3.1 Craft NFT (rủi ro cao)
+FE gọi craft() → gửi transaction lên chain
+Contract dùng RNG (theo thiết kế repo hiện tại) để quyết định:
+Fail → mint Scrap
+Success → mint ChunNFT với skin_type (Bronze/Silver/Gold)
+FE đọc kết quả mint (object changes) → cập nhật inventory UI
+
+3.2 Trade-up (CS:GO style, có fail)
+FE cho user chọn số lượng NFT cần trade-up (vd 8 Bronze)
+FE gọi trade_up() kèm list object ids
+Contract:
+verify tier đúng + đủ số lượng
+roll xác suất (vd 70% hoặc 50–60%)
+Success: burn input + mint output tier cao
+Fail: burn input + mint Scrap
+FE refresh inventory
+
+3.3 Marketplace (SUI testnet)
+Seller chọn NFT → list(nft_id, price_in_sui)
+Buyer gọi buy(listing_id, Coin<SUI>)
+Contract:
+chuyển NFT cho buyer
+chuyển SUI cho seller (trừ fee nếu có)
+FE hiển thị ownership thay đổi + ví nhận/chi SUI
+
+4) Thành phần On-chain (Move)
+4.1 ChunNFT
+Object transferable
+Fields tối thiểu:
+skin_type: u8 (0 default, 1 bronze, 2 silver, 3 gold)
+name: String (để ví hiển thị đẹp)
+image_url: String (trỏ tới preview PNG)
+(optional) created_at, serial
+
+
+4.3 Craft module
+Entry functions:
+craft_chun()
+Logic:
+roll xác suất 80/12/6/2
+mint ChunNFT 
+
+4.4 Trade-up module
+Entry functions:
+trade_up_bronze_to_silver(nfts: vector<ChunNFT>)
+trade_up_silver_to_gold(nfts: vector<ChunNFT>)
+Logic:
+verify skin_type của từng input
+burn inputs
+roll success rate
+mint output hoặc scrap
+
+4.5 Marketplace module
+Shared object Market
+Listing struct:
+seller
+nft_id
+price_in_sui
+Entry functions:
+list(market, nft, price)
+buy(market, listing_id, payment Coin<SUI>)
+cancel(market, listing_id)
+Events:
+Listed, Sold, Cancelled (để debug + demo)
+
+4.6 Display / Metadata
+NFT có name + image_url để:
+ví hiển thị trong tab Collectible
+marketplace UI render đẹp
+image_url trỏ tới 4 preview PNG (export từ canvas)
+
+5) Thành phần Off-chain (Frontend)
+5.1 Game Renderer (Canvas)
+Render chun base
+Apply effect theo skin_type:
+Bronze: tint + glow nhẹ
+Silver: glow + pulse
+Gold: aura mạnh
+Có “export preview” để tạo PNG đồng bộ với in-game
+
+5.2 Web3 layer
+Wallet connect
+Tx builders cho:
+craft
+trade-up
+list/buy/cancel
+Query owned objects để hiển thị inventory
+
+5.3 UI pages
+Inventory: stack theo skin_type, xem chi tiết NFT
+Craft: button craft + hiển thị tỷ lệ
+Trade-up: chọn batch, confirm
+Marketplace: browse listings, buy/sell
+
+6) Những thứ cố tình không có trong architecture
+Backend server/indexer (không cần cho demo)
+PvP/matchmaking
+Daily/leaderboard/reputation
+Token riêng (chỉ dùng SUI testnet)
+
+7) Artifact IDs cần cấu hình (deployment)
+Frontend cần các biến cấu hình sau:
+PACKAGE_ID
+MARKET_OBJECT_ID
+(nếu có) ADMIN_CAP / TREASURY_CAP (chỉ dùng khi deploy/maintain)
+PREVIEW_IMAGE_BASE_URL (nơi host preview PNG)
