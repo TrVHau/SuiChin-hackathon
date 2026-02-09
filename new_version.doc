@@ -1,0 +1,206 @@
+SuiChin – Mô tả dự án (phiên bản cải tiến 1 tháng)
+Tổng quan
+
+SuiChin là một trò chơi 2D dựa trên vật lý, được xây dựng trên blockchain Sui, trong đó gameplay diễn ra off-chain nhưng kết quả và hành vi người chơi được ghi nhận on-chain thông qua smart contract Move.
+
+Dự án ban đầu được phát triển trong khuôn khổ hackathon. Trong giai đoạn cải tiến kéo dài 1 tháng, SuiChin được thiết kế lại thành một prototype GameFi theo mô hình play-to-airdrop dựa trên mùa giải (season-based), tập trung vào việc:
+
+đánh giá người chơi thông qua dữ liệu gameplay thật
+
+hạn chế farm và hành vi tự động
+
+thử nghiệm cơ chế phân phối phần thưởng trả chậm thay vì Play-to-Earn trực tiếp
+
+Bối cảnh và vấn đề cần giải quyết
+
+Phiên bản hackathon ban đầu của SuiChin có các đặc điểm:
+
+Gameplay đơn giản, chơi nhanh
+
+Có staking tài nguyên “chun” trước mỗi trận
+
+Có faucet tài nguyên định kỳ
+
+Có NFT ngẫu nhiên và achievement soulbound
+
+Tuy nhiên, mô hình này tồn tại các hạn chế phổ biến của GameFi giai đoạn đầu:
+
+Faucet và reward tuyến tính dễ bị farm
+
+Không có khái niệm mùa giải hoặc cạnh tranh dài hạn
+
+Không phân biệt rõ người chơi nghiêm túc và người chơi farm ngắn hạn
+
+Chưa có cơ chế đánh giá hành vi để làm airdrop hoặc phân phối giá trị về sau
+
+Giai đoạn cải tiến 1 tháng tập trung giải quyết trực tiếp các điểm yếu này, thay vì mở rộng phạm vi quá lớn.
+
+Mục tiêu cải tiến trong 1 tháng
+
+Phiên bản cải tiến của SuiChin hướng tới các mục tiêu kỹ thuật và thiết kế sau:
+
+Chuyển game sang mô hình season-based với leaderboard rõ ràng
+
+Thay reward tức thời bằng điểm mùa (Season Score) và Airdrop Score ẩn
+
+Giữ faucet chỉ phục vụ onboarding và comeback, không phải nguồn farm chính
+
+Thu thập và phân tích dữ liệu hành vi người chơi thông qua event on-chain
+
+Chuẩn bị nền tảng dữ liệu cho airdrop hoặc phân phối token trong tương lai
+
+Thiết kế gameplay sau cải tiến
+
+Gameplay cốt lõi không thay đổi nhiều để đảm bảo khả thi trong 1 tháng:
+
+Người chơi tham gia các trận đấu 2D vật lý ngắn
+
+Trước mỗi trận, người chơi chọn mức stake tài nguyên
+
+Trận đấu kết thúc với thắng hoặc thua
+
+Điểm khác biệt nằm ở cách đánh giá kết quả:
+
+Thắng/thua không trả token ngay
+
+Kết quả chỉ ảnh hưởng đến điểm mùa, streak, và hồ sơ hành vi
+
+Giá trị chỉ được tổng hợp và phân phối sau khi mùa giải kết thúc
+
+Mô hình mùa giải (Season-based Design)
+
+Mỗi mùa giải kéo dài khoảng 4 tuần, bao gồm:
+
+Giai đoạn onboarding & chơi tự do
+
+Giai đoạn ranked và tích luỹ điểm mùa
+
+Giai đoạn cạnh tranh cao điểm (cuối mùa)
+
+Snapshot dữ liệu và tổng kết mùa
+
+Sau mỗi mùa:
+
+Leaderboard được lưu trữ
+
+Achievement soulbound theo mùa được mint
+
+Airdrop Score được chốt (chưa nhất thiết phát token thật)
+
+Cách tiếp cận này giúp:
+
+Tạo động lực cạnh tranh dài hạn
+
+Ngăn farm ngắn hạn
+
+Cho phép reset kinh tế có kiểm soát
+
+Hệ thống đánh giá người chơi
+Điểm mùa (Season Score)
+
+Season Score được tính dựa trên:
+
+Kết quả trận đấu
+
+Mức stake
+
+Chuỗi thắng (streak)
+
+Số trận trong ngày (có diminishing return)
+
+Điểm này hiển thị công khai trên leaderboard.
+
+Airdrop Score (ẩn)
+
+Song song với Season Score, hệ thống tính một Airdrop Score không hiển thị, dựa trên hành vi dài hạn:
+
+Số ngày hoạt động khác nhau trong mùa
+
+Streak cao nhất đạt được
+
+Tỉ lệ chơi tiếp sau khi thua
+
+Độ đa dạng stake và thời gian chơi
+
+Achievement soulbound đã đạt
+
+Airdrop Score không hiển thị cho người chơi nhằm tránh tối ưu farm.
+
+Faucet và tài nguyên
+
+Faucet trong phiên bản cải tiến được giới hạn lại:
+
+Chỉ cho phép claim theo ngày
+
+Có giới hạn tổng tài nguyên nhận được mỗi mùa
+
+Có bonus comeback cho người chơi quay lại sau thời gian nghỉ
+
+Mục tiêu của faucet là:
+
+hỗ trợ người chơi mới
+
+không trở thành nguồn lợi nhuận chính
+
+NFT và achievement
+Chun NFT (transferable)
+
+Có thể craft từ tài nguyên trong mùa
+
+Có phiên bản giới hạn theo mùa
+
+Không tạo lợi thế sức mạnh vô hạn
+
+Achievement NFT (soulbound)
+
+Ghi nhận thành tích và hành vi khó giả mạo
+
+Dùng làm danh tính và uy tín lâu dài
+
+Có thể ảnh hưởng đến Airdrop Score và quyền truy cập về sau
+
+Kiến trúc kỹ thuật (tóm tắt)
+
+On-chain (Sui Move):
+
+Player profile
+
+Match result event
+
+Streak và achievement
+
+Season identifier
+
+Off-chain:
+
+Gameplay engine
+
+Indexer đọc event
+
+Leaderboard và analytics
+
+Tính Season Score & Airdrop Score
+
+Thiết kế hybrid này đảm bảo:
+
+minh bạch dữ liệu quan trọng
+
+hiệu năng gameplay
+
+khả năng phân tích hành vi phức tạp
+
+Giá trị của dự án
+
+Phiên bản cải tiến của SuiChin đóng vai trò là:
+
+Một prototype GameFi nghiêm túc trong phạm vi nhỏ
+
+Một case study thực tế về play-to-airdrop và season-based economy
+
+Một dự án portfolio thể hiện tư duy:
+
+incentive design
+
+game economy
+
+on-chain/off-chain architecture

@@ -1,0 +1,233 @@
+1. Smart contract: BẮT BUỘC phải sửa, nhưng sửa có kiểm soát
+Vì sao phải sửa?
+
+Smart contract hiện tại của SuiChin:
+
+ghi kết quả trận
+
+quản lý chun, faucet, mint NFT
+
+chưa có khái niệm season
+
+event phát ra chưa đủ dữ liệu cho phân tích hành vi
+
+Trong mô hình mới (season + airdrop score), on-chain phải làm 1 việc rất rõ:
+
+Ghi lại SỰ THẬT, không tính toán kinh tế phức tạp
+
+Bạn cần sửa gì trong smart contract?
+
+Không nhiều, nhưng đúng chỗ:
+
+1. Thêm khái niệm Season (tối thiểu)
+
+Không cần DAO, không cần phức tạp.
+
+Chỉ cần:
+
+current_season_id
+
+hoặc season_id truyền vào khi record trận
+
+👉 Mục đích: mỗi event biết nó thuộc mùa nào
+
+2. Mở rộng event record_session
+
+Event là “nguồn dữ liệu vàng”.
+
+Hiện tại bạn có:
+
+ai chơi
+
+thắng hay thua
+
+Cần thêm:
+
+season_id
+
+stake_tier
+
+points_delta (được hay mất bao nhiêu)
+
+timestamp / epoch
+
+❗ Lưu ý:
+
+Không tính leaderboard, không tính score trên chain
+
+Chỉ emit event
+
+3. Điều chỉnh faucet (nhẹ)
+
+Thêm giới hạn theo ngày (hoặc theo season)
+
+Ghi event faucet_claimed(player, season_id)
+
+👉 Để backend biết: ai đang farm, ai chỉ onboarding.
+
+4. Achievement vẫn giữ nguyên
+
+Cái này bạn đã làm rất tốt:
+
+soulbound
+
+khó fake
+
+dùng được cho airdrop score
+
+Chỉ cần:
+
+gắn achievement với season_id (nếu là achievement theo mùa)
+
+Kết luận smart contract
+
+Có sửa
+
+Sửa ~20–30% code
+
+Không tăng độ phức tạp logic
+
+Tăng rất mạnh giá trị dữ liệu
+
+2. Frontend (FE): BẮT BUỘC phải sửa, đây là thứ người ta “nhìn thấy”
+
+Frontend là nơi:
+
+người chơi cảm nhận “game đã khác”
+
+mentor / interviewer đánh giá dự án
+
+FE hiện tại thiếu gì?
+
+Không có khái niệm season
+
+Không có leaderboard
+
+Không có quest / daily
+
+Người chơi không biết mình đang “phấn đấu vì cái gì”
+
+FE cần thêm gì?
+1. UI Season
+
+Season hiện tại
+
+Thời gian còn lại
+
+Rank tạm tính
+
+Đây là xương sống tâm lý người chơi.
+
+2. Leaderboard (rất quan trọng)
+
+Top players
+
+Rank của bản thân
+
+Refresh định kỳ
+
+Leaderboard không nên lấy trực tiếp từ chain
+→ lấy từ backend/indexer.
+
+3. Profile người chơi
+
+Stats theo mùa:
+
+số trận
+
+thắng/thua
+
+streak
+
+Achievement đã đạt
+
+👉 FE chỉ hiển thị, không tính.
+
+4. Quest / Daily (nếu còn thời gian)
+
+UI rất đơn giản
+
+Backend trả về “đã xong hay chưa”
+
+Kết luận FE
+
+Bắt buộc sửa
+
+Đây là nơi thể hiện “tư duy thiết kế”
+
+Không cần đẹp, nhưng phải rõ
+
+3. Backend (BE): CẦN – nhưng là “BE phân tích”, không phải BE truyền thống
+
+Đây là chỗ rất nhiều người hiểu sai.
+
+Bạn KHÔNG cần:
+
+Auth
+
+Database phức tạp
+
+Server scale lớn
+
+Microservice
+
+Bạn CẦN:
+
+Một indexer + analytics service nhỏ
+
+Backend này làm gì?
+1. Lắng nghe event on-chain
+
+record_session
+
+faucet_claimed
+
+achievement_minted
+
+Lưu vào:
+
+SQLite / Postgres là đủ
+
+2. Tính toán off-chain
+
+Season score
+
+Leaderboard
+
+Airdrop score (ẩn)
+
+❗ Đây là chủ ý thiết kế, không phải thiếu sót:
+
+nếu tính on-chain → farm được
+
+nếu tính off-chain → khó tối ưu
+
+3. API cho FE
+
+Ví dụ:
+
+/leaderboard?season=1
+
+/player/:address
+
+/season/current
+
+FE chỉ việc gọi API → render.
+
+Công nghệ backend tối thiểu
+
+Node.js + TypeScript
+
+Một process chạy cron / worker
+
+Không cần framework nặng
+
+Kết luận backend
+
+Có cần
+
+Nhưng là:
+
+“analytics service”, không phải “backend app”
+
+Làm xong backend này, bạn ăn điểm cực mạnh khi nói về GameFi / airdrop.
