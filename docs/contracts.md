@@ -4,6 +4,7 @@
 
 ```
 contract/sources/
+├── player_profile.move # PlayerProfile — per-wallet on-chain state
 ├── cuon_chun.move      # CuonChunNFT — NFT chính
 ├── scrap.move          # Scrap — byproduct thất bại
 ├── craft.move          # Craft + Treasury + AdminCap
@@ -14,6 +15,74 @@ contract/sources/
 
 Package: `suichin`  
 Edition: `2024.beta`
+
+---
+
+## Module: `player_profile`
+
+### Struct
+
+```move
+// 1 object per wallet — tạo bằng init_profile(), owned bởi sender
+public struct PlayerProfile has key {
+    id: UID,
+    owner: address,
+    chun_raw: u64,
+    wins: u64,
+    losses: u64,
+    streak: u64,
+    last_played_ms: u64,   // anti-spam cooldown timestamp
+}
+```
+
+### Constants
+
+```move
+const COOLDOWN_MS:     u64 = 10_000; // 10 giây giữa hai lần report_result
+const MAX_DELTA_CHUN:  u64 = 20;     // delta tối đa mỗi ván
+```
+
+### Functions
+
+| Function                                            | Visibility     | Mô tả                                                        |
+| --------------------------------------------------- | -------------- | ------------------------------------------------------------ |
+| `init_profile(ctx)`                                 | `public entry` | Tạo PlayerProfile cho sender (gọi 1 lần khi kết nối lần đầu) |
+| `report_result(profile, delta, is_win, clock, ctx)` | `public entry` | Cập nhật chun_raw + stats sau mỗi ván                        |
+| `chun_raw(profile): u64`                            | `public`       | Đọc chun_raw                                                 |
+| `streak(profile): u64`                              | `public`       | Đọc streak                                                   |
+| `wins(profile): u64`                                | `public`       | Đọc wins                                                     |
+
+### Logic `report_result`
+
+```
+1. assert sender == profile.owner
+2. assert clock_ms - profile.last_played_ms >= COOLDOWN_MS
+3. assert delta <= MAX_DELTA_CHUN
+4. if is_win:
+     profile.chun_raw += delta
+     profile.wins++
+     profile.streak++
+   else:
+     profile.chun_raw = if chun_raw > 0 { chun_raw - 1 } else { 0 }
+     profile.losses++
+     profile.streak = 0
+5. profile.last_played_ms = clock_ms
+```
+
+### Events
+
+```move
+ProfileCreated { owner: address }
+ResultReported { owner: address, delta: u64, is_win: bool, new_chun_raw: u64 }
+```
+
+### Error codes
+
+| Code | Constant            | Nghĩa                        |
+| ---- | ------------------- | ---------------------------- |
+| 100  | `E_NOT_OWNER`       | Không phải owner của profile |
+| 101  | `E_COOLDOWN_ACTIVE` | Chưa hết cooldown 10 giây    |
+| 102  | `E_DELTA_TOO_LARGE` | delta vượt MAX_DELTA_CHUN    |
 
 ---
 
@@ -104,7 +173,8 @@ public struct AdminCap has key, store {
 ### Constants
 
 ```move
-const CRAFT_FEE: u64 = 100_000_000; // 0.1 SUI = 100_000_000 MIST
+const CRAFT_FEE:           u64 = 100_000_000; // 0.1 SUI = 100_000_000 MIST
+const COST_CHUN_PER_CRAFT: u64 = 10;          // chun_raw cần để craft
 ```
 
 ### RNG logic
@@ -124,9 +194,11 @@ Seed = clock_ms XOR (epoch × 1_000_003) XOR (address_bytes[:8])
 ### Entry functions
 
 ```move
-// Craft một CuonChunNFT. Tốn CRAFT_FEE SUI.
-// Tiền thừa được trả lại sender.
+// Craft một CuonChunNFT.
+// Yêu cầu: profile.chun_raw >= COST_CHUN_PER_CRAFT (10) và CRAFT_FEE SUI.
+// Trừ chun_raw tờ profile trước khi RNG. Tiền thừa trả lại sender.
 public fun craft_chun(
+    profile: &mut PlayerProfile,
     treasury: &mut Treasury,
     payment: Coin<SUI>,
     clock: &Clock,
@@ -305,6 +377,8 @@ public struct AchievementBadge has key {
 
 ### Milestones
 
+Badge được claim khi `profile.streak` đạt mốc tương ứng — contract verify on-chain.
+
 | badge_type | Tên                   | Điều kiện   |
 | ---------- | --------------------- | ----------- |
 | 1          | Người Mới Bắt Đầu     | Streak ≥ 1  |
@@ -317,8 +391,10 @@ public struct AchievementBadge has key {
 
 ```move
 // Mint AchievementBadge cho sender.
-// Contract KHÔNG check duplicate — FE chịu trách nhiệm.
+// Contract verify profile.streak >= milestone tương ứng.
+// Contract KHÔNG check duplicate — FE chịu trách nhiệm không gọi 2 lần.
 public fun claim_badge(
+    profile: &PlayerProfile,
     badge_type: u64,  // phải là 1|5|18|36|67
     clock: &Clock,
     ctx: &mut TxContext
@@ -327,16 +403,18 @@ public fun claim_badge(
 
 ### Error codes
 
-| Code | Nghĩa                                            |
-| ---- | ------------------------------------------------ |
-| 400  | `E_INVALID_BADGE_TYPE` — badge_type không hợp lệ |
+| Code | Nghĩa                                                  |
+| ---- | ------------------------------------------------------ |
+| 400  | `E_INVALID_BADGE_TYPE` — badge_type không hợp lệ       |
+| 401  | `E_STREAK_TOO_LOW` — profile.streak chưa đạt milestone |
 
 ---
 
-## Tóm tắt shared objects sau deploy
+## Tóm tắt objects sau deploy
 
-| Object     | Module      | Ai cầm                              |
-| ---------- | ----------- | ----------------------------------- |
-| `Treasury` | craft       | Shared — mọi người gửi SUI vào      |
-| `AdminCap` | craft       | Deployer giữ — dùng để rút Treasury |
-| `Market`   | marketplace | Shared — mọi người list/buy         |
+| Object          | Module         | Loại               | Ai cầm                                       |
+| --------------- | -------------- | ------------------ | -------------------------------------------- |
+| `PlayerProfile` | player_profile | Owned (per wallet) | Wallet người chơi — tạo qua `init_profile()` |
+| `Treasury`      | craft          | Shared             | Mọi người gửi SUI vào                        |
+| `AdminCap`      | craft          | Owned              | Deployer giữ — dùng để rút Treasury          |
+| `Market`        | marketplace    | Shared             | Mọi người list/buy                           |

@@ -19,10 +19,13 @@
 ┌─────────────────────────────────────────────┐
 │           SUI BLOCKCHAIN (Move)             │
 │                                             │
-│  craft.move        marketplace.move         │
-│  trade_up.move     achievement.move         │
-│  cuon_chun.move    scrap.move               │
+│  player_profile.move  craft.move            │
+│  marketplace.move     trade_up.move         │
+│  cuon_chun.move       achievement.move      │
+│  scrap.move                                 │
 │                                             │
+│  Owned objects (per wallet):                │
+│    PlayerProfile { chun_raw, wins, streak } │
 │  Shared objects:                            │
 │    Market { listings: Table, ofields }      │
 │    Treasury { balance: Balance<SUI> }       │
@@ -44,14 +47,14 @@
 
 ## Nguyên tắc phân chia trách nhiệm
 
-| Tầng              | Làm gì                                         | KHÔNG làm gì                   |
-| ----------------- | ---------------------------------------------- | ------------------------------ |
-| **Frontend Game** | Chạy gameplay, tính điểm, lưu chun raw         | Không verify gameplay on-chain |
-| **Frontend Web3** | Build & sign transactions, query owned objects | Không giữ private key          |
-| **Sui Move**      | Mint/burn NFT, escrow marketplace, RNG craft   | Không chạy game logic          |
-| **localStorage**  | Lưu chun raw, streak theo địa chỉ ví           | Không lưu private key          |
+| Tầng              | Làm gì                                          | KHÔNG làm gì                       |
+| ----------------- | ----------------------------------------------- | ---------------------------------- |
+| **Frontend Game** | Chạy gameplay, tính điểm, gọi `report_result`   | Không verify gameplay on-chain     |
+| **Frontend Web3** | Build & sign transactions, query owned objects  | Không giữ private key              |
+| **Sui Move**      | Lưu `PlayerProfile`, mint/burn NFT, escrow, RNG | Không chạy game logic              |
+| **localStorage**  | Cache UI state tạm thời (không critical)        | Không lưu chun raw hay private key |
 
-**Điểm mấu chốt:** Blockchain không biết người chơi có bao nhiêu chun raw. Chain chỉ nhận lệnh "craft" kèm SUI và thực thi — hoàn toàn độc lập với gameplay.
+**Điểm mấu chốt:** Mỗi ví có một `PlayerProfile` on-chain riêng lưu `chun_raw`, `wins`, `losses`, `streak`. Frontend chơi xong gọi `report_result()` để cập nhật — chain là **source of truth** cho chun raw. Để tránh spam, contract enforce cooldown 10 giây và giới hạn delta tối đa 20.
 
 ---
 
@@ -60,30 +63,40 @@
 ### 1. Gameplay → Chun raw
 
 ```
-Người chơi bắn chun  →  gameEngine tính kết quả  →  playerStore.addChun(delta)
-                                                          │
-                                                   localStorage update
-                                                   playerState:<addr>.chun += delta
+Người chơi bắn chun  →  gameEngine tính kết quả
+                               │
+                    FE gọi tx report_result(profile, deltaChun, is_win)
+                               │
+                    Contract kiểm tra:
+                      • now - last_played_ms >= COOLDOWN_MS (10 000 ms)
+                      • deltaChun trong 0..MAX_DELTA_CHUN (20)
+                               │
+                    profile.chun_raw += delta  (thắng)
+                    profile.chun_raw -= 1      (thua, sàn 0)
+                    profile.wins / losses / streak cập nhật on-chain
+                    profile.last_played_ms = now
 ```
 
 ### 2. Craft NFT
 
 ```
-FE check: player.chun >= 10 ?
+FE check: profile.chun_raw >= COST_CHUN_PER_CRAFT (10) ?
     NO  → Nút Craft disabled
     YES → Người chơi ký tx
            ↓
-    craft_chun(treasury, Coin<SUI> 0.1, clock)
+    craft_chun(profile, treasury, Coin<SUI> 0.1, clock)
            ↓
+    Contract: profile.chun_raw -= 10 (trừ trước khi RNG)
     Contract RNG:
       80% → mint Scrap   → transfer sender
       12% → mint Bronze  → transfer sender
        6% → mint Silver  → transfer sender
        2% → mint Gold    → transfer sender
            ↓
-    Tx SUCCESS → playerStore.spendChun(10)
+    Tx SUCCESS → FE query profile.chun_raw (đã trừ on-chain)
                → FE query owned objects → refresh inventory
-               → check milestone → claimBadge nếu đạt
+               → FE check profile.streak / wins
+               → claimBadge(profile, badge_type) nếu đạt milestone
 ```
 
 ### 3. Trade-up NFT
@@ -141,6 +154,15 @@ Khi bestStreak đạt mốc {1, 5, 18, 36, 67}:
 ## On-chain Object Model
 
 ```
+PlayerProfile (has key)  ← 1 object per wallet, tạo qua init_profile()
+  id: UID
+  owner: address
+  chun_raw: u64
+  wins: u64
+  losses: u64
+  streak: u64
+  last_played_ms: u64   ← anti-spam cooldown
+
 CuonChunNFT (has key, store)
   id: UID
   tier: u8          ← 1=Bronze 2=Silver 3=Gold

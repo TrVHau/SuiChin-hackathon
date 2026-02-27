@@ -2,7 +2,7 @@
 
 ## Tổng quan
 
-SuiChin là game **bắn chun 2D** (marble flicking game) người chơi đấu với bot. Gameplay hoàn toàn **off-chain** — không tốn gas để chơi. Kết quả gameplay tích lũy thành **chun raw** (nguyên liệu), sau đó người chơi mang vào Workshop để craft NFT on-chain.
+SuiChin là game **bắn chun 2D** (marble flicking game) người chơi đấu với bot. Gameplay hoàn toàn **off-chain** — không tốn gas để chơi. Khi ván kết thúc, frontend gọi `report_result()` để đẩy kết quả lên chain, cập nhật **chun raw** trong `PlayerProfile` on-chain. Chun raw sau đó được dùng trong Workshop để craft NFT.
 
 ---
 
@@ -24,12 +24,12 @@ Chơi đến khi một bên thắng (chun đối phương bị đè).
 
 ### Kết quả một ván
 
-| Kết quả   | Thay đổi                                                                                      |
-| --------- | --------------------------------------------------------------------------------------------- |
-| **Thắng** | `chun += (1 + currentStreak)`, `currentStreak++`                                              |
-| **Thua**  | `chun -= 1` (không về âm), `bestStreak = max(bestStreak, currentStreak)`, `currentStreak = 0` |
+| Kết quả   | Thay đổi                                                                                                     |
+| --------- | ------------------------------------------------------------------------------------------------------------ |
+| **Thắng** | FE gọi `report_result(delta = 1 + streak, is_win = true)` — chain: `chun_raw += delta`, `wins++`, `streak++` |
+| **Thua**  | FE gọi `report_result(delta = 1, is_win = false)` — chain: `chun_raw -= 1` (sàn 0), `losses++`, `streak = 0` |
 
-> Streak thưởng thêm chun khi thắng liên tiếp — khuyến khích chơi dài.
+> `delta` tối đa là `MAX_DELTA_CHUN = 20` — contract từ chối nếu vượt. Cooldown 10 giây giữa hai lần gọi.
 
 ---
 
@@ -67,8 +67,8 @@ localStorage.setItem(
 
 ### Streak là gì?
 
-`currentStreak` đếm số ván thắng liên tiếp, reset về 0 khi thua.  
-`bestStreak` là kỷ lục cao nhất — dùng để unlock Achievement Badge.
+`streak` đếm số ván thắng liên tiếp, reset về 0 khi thua — lưu on-chain trong `PlayerProfile`.
+Chỉ dùng `profile.streak` (không dùng localStorage) để unlock Achievement Badge.
 
 ### Milestone Achievement
 
@@ -80,7 +80,7 @@ localStorage.setItem(
 | 36     | ⭐    | Cao Thủ Búng Chun     |
 | 67     | 💎    | Huyền Thoại Búng Chun |
 
-Khi `bestStreak` đạt mốc mới, frontend tự động gọi `claim_badge()` on-chain.  
+Khi `profile.streak` đạt mốc mới, frontend tự động gọi `claim_badge(profile, badge_type)` on-chain.  
 Badge là **Soulbound** — không thể chuyển nhượng, gắn vĩnh viễn với địa chỉ ví.
 
 ---
@@ -134,5 +134,7 @@ Bot chơi theo thuật toán đơn giản (off-chain):
 | Cơ chế                      | Giá trị       | Mục đích                   |
 | --------------------------- | ------------- | -------------------------- |
 | Chun không về âm            | min = 0       | Tránh state âm             |
+| Cooldown giữa các ván       | 10 000 ms     | Không spam report_result   |
+| Delta tối đa mỗi ván        | MAX = 20 chun | Giới hạn chun kiếm được    |
 | SUI phí craft               | 0.1 SUI / lần | Cost-of-production thực    |
 | Chỉ trừ chun sau tx success | —             | Tránh mất chun khi tx fail |
