@@ -44,13 +44,16 @@ const MAX_DELTA_CHUN:  u64 = 20;     // delta tối đa mỗi ván
 
 ### Functions
 
-| Function                                            | Visibility     | Mô tả                                                        |
-| --------------------------------------------------- | -------------- | ------------------------------------------------------------ |
-| `init_profile(ctx)`                                 | `public entry` | Tạo PlayerProfile cho sender (gọi 1 lần khi kết nối lần đầu) |
-| `report_result(profile, delta, is_win, clock, ctx)` | `public entry` | Cập nhật chun_raw + stats sau mỗi ván                        |
-| `chun_raw(profile): u64`                            | `public`       | Đọc chun_raw                                                 |
-| `streak(profile): u64`                              | `public`       | Đọc streak                                                   |
-| `wins(profile): u64`                                | `public`       | Đọc wins                                                     |
+| Function                                            | Visibility        | Mô tả                                                        |
+| --------------------------------------------------- | ----------------- | ------------------------------------------------------------ |
+| `init_profile(ctx)`                                 | `public entry`    | Tạo PlayerProfile cho sender (gọi 1 lần khi kết nối lần đầu) |
+| `report_result(profile, delta, is_win, clock, ctx)` | `public entry`    | Cập nhật chun_raw + stats sau mỗi ván                        |
+| `chun_raw(profile): u64`                            | `public`          | Đọc chun_raw                                                 |
+| `streak(profile): u64`                              | `public`          | Đọc streak                                                   |
+| `wins(profile): u64`                                | `public`          | Đọc wins                                                     |
+| `losses(profile): u64`                              | `public`          | Đọc losses                                                   |
+| `owner(profile): address`                           | `public`          | Đọc owner address                                            |
+| `spend_chun(profile, amount)`                       | `public(package)` | Trừ chun_raw (chỉ gọi từ trong package)                      |
 
 ### Logic `report_result`
 
@@ -78,11 +81,12 @@ ResultReported { owner: address, delta: u64, is_win: bool, new_chun_raw: u64 }
 
 ### Error codes
 
-| Code | Constant            | Nghĩa                        |
-| ---- | ------------------- | ---------------------------- |
-| 100  | `E_NOT_OWNER`       | Không phải owner của profile |
-| 101  | `E_COOLDOWN_ACTIVE` | Chưa hết cooldown 10 giây    |
-| 102  | `E_DELTA_TOO_LARGE` | delta vượt MAX_DELTA_CHUN    |
+| Code | Constant              | Nghĩa                          |
+| ---- | --------------------- | ------------------------------ |
+| 100  | `E_NOT_OWNER`         | Không phải owner của profile   |
+| 101  | `E_COOLDOWN_ACTIVE`   | Chưa hết cooldown 10 giây      |
+| 102  | `E_DELTA_TOO_LARGE`   | delta vượt MAX_DELTA_CHUN      |
+| 103  | `E_INSUFFICIENT_CHUN` | chun_raw không đủ (spend_chun) |
 
 ---
 
@@ -197,7 +201,7 @@ Seed = clock_ms XOR (epoch × 1_000_003) XOR (address_bytes[:8])
 // Craft một CuonChunNFT.
 // Yêu cầu: profile.chun_raw >= COST_CHUN_PER_CRAFT (10) và CRAFT_FEE SUI.
 // Trừ chun_raw tờ profile trước khi RNG. Tiền thừa trả lại sender.
-public fun craft_chun(
+public entry fun craft_chun(
     profile: &mut PlayerProfile,
     treasury: &mut Treasury,
     payment: Coin<SUI>,
@@ -206,7 +210,7 @@ public fun craft_chun(
 )
 
 // Rút SUI từ Treasury. Chỉ AdminCap holder.
-public fun withdraw(
+public entry fun withdraw(
     _cap: &AdminCap,
     treasury: &mut Treasury,
     amount: u64,
@@ -226,6 +230,13 @@ CraftResult {
 }
 ```
 
+### Error codes
+
+| Code | Constant                 | Nghĩa                        |
+| ---- | ------------------------ | ---------------------------- |
+| 500  | `E_INSUFFICIENT_PAYMENT` | Phí SUI không đủ             |
+| 501  | `E_NOT_OWNER`            | Không phải owner của profile |
+
 ---
 
 ## Module: `trade_up`
@@ -244,14 +255,14 @@ const SILVER_TO_GOLD_RATE:   u64 = 55; // 55% thành công
 ```move
 // Trade-up 8 Bronze → Silver (70%) hoặc Scrap (30%)
 // Tất cả input bị burn dù thành công hay thất bại
-public fun trade_up_bronze_to_silver(
+public entry fun trade_up_bronze_to_silver(
     nfts: vector<CuonChunNFT>,  // require: len==8, tier==1
     clock: &Clock,
     ctx: &mut TxContext
 )
 
 // Trade-up 6 Silver → Gold (55%) hoặc Scrap (45%)
-public fun trade_up_silver_to_gold(
+public entry fun trade_up_silver_to_gold(
     nfts: vector<CuonChunNFT>,  // require: len==6, tier==2
     clock: &Clock,
     ctx: &mut TxContext
@@ -301,7 +312,7 @@ public struct Market has key {
     listings: Table<ID, ListingMeta>,
 }
 
-public struct ListingMeta has store {
+public struct ListingMeta has store, drop {
     seller: address,
     price: u64,      // MIST (1 SUI = 1_000_000_000 MIST)
     tier: u8,        // để FE filter
@@ -313,7 +324,7 @@ public struct ListingMeta has store {
 
 ```move
 // List NFT lên marketplace. NFT bị lock vào Market.
-public fun list(
+public entry fun list(
     market: &mut Market,
     nft: CuonChunNFT,
     price: u64,    // > 0
@@ -322,7 +333,7 @@ public fun list(
 )
 
 // Mua NFT. Tiền thừa trả buyer.
-public fun buy(
+public entry fun buy(
     market: &mut Market,
     listing_id: ID,
     payment: Coin<SUI>,  // >= price
@@ -330,7 +341,7 @@ public fun buy(
 )
 
 // Hủy listing. Chỉ seller.
-public fun cancel(
+public entry fun cancel(
     market: &mut Market,
     listing_id: ID,
     ctx: &mut TxContext
@@ -346,6 +357,15 @@ public fun cancel(
 | 302  | `E_CANNOT_BUY_OWN`       | Không tự mua NFT của mình |
 | 303  | `E_ZERO_PRICE`           | Giá không được = 0        |
 | 304  | `E_LISTING_NOT_FOUND`    | Listing không tồn tại     |
+
+### View Helpers
+
+| Function                                      | Visibility | Mô tả                        |
+| --------------------------------------------- | ---------- | ---------------------------- |
+| `has_listing(market, listing_id): bool`       | `public`   | Kiểm tra listing còn tồn tại |
+| `listing_price(market, listing_id): u64`      | `public`   | Đọc giá listing              |
+| `listing_seller(market, listing_id): address` | `public`   | Đọc seller address           |
+| `listing_tier(market, listing_id): u8`        | `public`   | Đọc tier NFT trong listing   |
 
 ### Events
 
@@ -393,7 +413,7 @@ Badge được claim khi `profile.streak` đạt mốc tương ứng — contrac
 // Mint AchievementBadge cho sender.
 // Contract verify profile.streak >= milestone tương ứng.
 // Contract KHÔNG check duplicate — FE chịu trách nhiệm không gọi 2 lần.
-public fun claim_badge(
+public entry fun claim_badge(
     profile: &PlayerProfile,
     badge_type: u64,  // phải là 1|5|18|36|67
     clock: &Clock,
@@ -407,6 +427,7 @@ public fun claim_badge(
 | ---- | ------------------------------------------------------ |
 | 400  | `E_INVALID_BADGE_TYPE` — badge_type không hợp lệ       |
 | 401  | `E_STREAK_TOO_LOW` — profile.streak chưa đạt milestone |
+| 402  | `E_NOT_OWNER` — Không phải owner của profile           |
 
 ---
 

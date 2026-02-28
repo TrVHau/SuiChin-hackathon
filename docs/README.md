@@ -18,14 +18,16 @@ Blockchain chỉ làm đúng 1 việc: **chứng minh quyền sở hữu NFT và
 
 ---
 
-## Hai lớp tài sản
+## Tài sản on-chain
 
-| Lớp       | Tên               | Nơi lưu                        | Vai trò                 |
-| --------- | ----------------- | ------------------------------ | ----------------------- |
-| Off-chain | **Chun raw**      | localStorage (theo địa chỉ ví) | Nguyên liệu gameplay    |
-| On-chain  | **Cuộn Chun NFT** | Sui Blockchain                 | Sản phẩm có thể mua bán |
+| Tài sản              | Nơi lưu                               | Vai trò                  |
+| -------------------- | ------------------------------------- | ------------------------ |
+| **Chun raw**         | `PlayerProfile` on-chain (per wallet) | Nguyên liệu craft NFT    |
+| **Cuộn Chun NFT**    | Sui Blockchain (owned object)         | Sản phẩm có thể mua bán  |
+| **Scrap**            | Sui Blockchain (owned object)         | Byproduct craft thất bại |
+| **AchievementBadge** | Sui Blockchain (soulbound)            | Danh hiệu streak         |
 
-**Chun raw** là số nguyên đơn giản — người chơi kiếm được bằng cách thắng ván bắn chun, tiêu vào Workshop để craft NFT.
+**Chun raw** là trường `chun_raw: u64` trong `PlayerProfile` on-chain — người chơi kiếm bằng cách thắng ván (`report_result`), tiêu vào Workshop để craft NFT. Chain là **source of truth**.
 
 **Cuộn Chun NFT** là Sui object thật sự — có 3 tier (Bronze / Silver / Gold), hiển thị trong ví, mua bán bằng SUI testnet.
 
@@ -40,7 +42,8 @@ Blockchain chỉ làm đúng 1 việc: **chứng minh quyền sở hữu NFT và
 | Frontend        | React + TypeScript + Vite         |
 | Canvas          | HTML5 Canvas                      |
 | Web3            | `@mysten/sui` SDK, Sui Wallet     |
-| State off-chain | localStorage                      |
+| State on-chain  | PlayerProfile (chun_raw, streak)  |
+| State off-chain | localStorage (UI cache only)      |
 | Ảnh NFT         | Static hosting (GitHub raw / CDN) |
 
 ---
@@ -52,6 +55,7 @@ SuiChin-hackathon/
 ├── contract/
 │   ├── Move.toml
 │   └── sources/
+│       ├── player_profile.move  # PlayerProfile — per-wallet on-chain state
 │       ├── cuon_chun.move       # NFT chính (tier Bronze/Silver/Gold)
 │       ├── scrap.move           # Byproduct thất bại
 │       ├── craft.move           # Craft NFT, Treasury, AdminCap
@@ -62,11 +66,15 @@ SuiChin-hackathon/
 │   ├── src/
 │   │   ├── game/               # Canvas engine, physics
 │   │   ├── lib/
-│   │   │   ├── playerStore.ts  # Off-chain state theo địa chỉ ví
-│   │   │   ├── gameEngine.ts   # Tính reward, streak
-│   │   │   └── suiTx.ts        # Wrapper on-chain transactions
-│   │   ├── components/         # UI pages
-│   │   └── config/             # Contract IDs
+│   │   │   └── sui-client.ts   # Transaction builders (moveCall)
+│   │   ├── hooks/
+│   │   │   ├── useSuiProfile.ts # Query/mutate PlayerProfile on-chain
+│   │   │   ├── useGameEngine.ts # React hook wrap game loop
+│   │   │   ├── useDragInput.ts  # Touch/mouse drag input
+│   │   │   └── useCanvasRenderer.ts
+│   │   ├── components/         # UI screens
+│   │   ├── providers/          # SuiProvider (dapp-kit)
+│   │   └── config/             # Contract IDs, constants
 │   └── public/nft/             # Ảnh PNG cho NFT
 └── docs/                       # Tài liệu này
 ```

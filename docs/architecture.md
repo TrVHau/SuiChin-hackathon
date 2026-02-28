@@ -1,17 +1,17 @@
 # Kiến trúc hệ thống
 
-## Mô hình hybrid Off-chain / On-chain
+## Mô hình Off-chain gameplay / On-chain state
 
 ```
 ┌─────────────────────────────────────────────┐
 │              FRONTEND (Browser)             │
 │                                             │
 │  ┌──────────┐  ┌────────────┐  ┌─────────┐ │
-│  │gameEngine│  │playerStore │  │  suiTx  │ │
-│  │(physics) │  │(localStorage│  │(SDK tx) │ │
+│  │gameEngine│  │ React UI   │  │  suiTx  │ │
+│  │(physics) │  │(components)│  │(SDK tx) │ │
 │  └──────────┘  └────────────┘  └────┬────┘ │
 │       │               │             │      │
-│   deltaChun      chun: number   sign tx    │
+│   kết quả ván    query profile  sign tx    │
 │       └───────────────┘             │      │
 └─────────────────────────────────────┼──────┘
                                       │ Sui RPC

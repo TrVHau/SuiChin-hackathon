@@ -33,33 +33,36 @@ Chơi đến khi một bên thắng (chun đối phương bị đè).
 
 ---
 
-## Chun raw — Off-chain state
+## Chun raw — On-chain state
 
 ### Lưu trữ
 
-```typescript
-// Key theo địa chỉ ví — mỗi ví có state độc lập
-localStorage.setItem(
-  `playerState:${walletAddress}`,
-  JSON.stringify({
-    chun: 12,
-    currentStreak: 3,
-    bestStreak: 7,
-  }),
-);
+`chun_raw` được lưu trực tiếp trong `PlayerProfile` on-chain:
+
+```move
+public struct PlayerProfile has key {
+    id: UID,
+    owner: address,
+    chun_raw: u64,      // ← source of truth
+    wins: u64,
+    losses: u64,
+    streak: u64,
+    last_played_ms: u64, // cooldown anti-spam
+}
 ```
 
-### Tại sao off-chain?
+Sau mỗi ván, FE gọi `report_result(profile, delta, is_win, clock)` → contract cập nhật `chun_raw` on-chain. Gameplay (physics, animation) chạy off-chain — chỉ **kết quả** được ghi lên chain.
 
-- Chơi mượt, không tốn gas cho mỗi ván
-- Phù hợp phạm vi demo/hackathon
-- Nếu production: có thể đưa lên chain (Coin type) hoặc backend verify
+### Anti-abuse
+
+- Cooldown 10 giây giữa hai lần `report_result` (contract enforce)
+- Delta tối đa 20 chun mỗi ván (`MAX_DELTA_CHUN`)
+- Craft yêu cầu vừa chun_raw on-chain vừa SUI thật → không craft miễn phí
 
 ### Câu hỏi thường gặp
 
-**"Người chơi có thể hack chun không?"**  
-→ Demo scope: chun off-chain nên có thể tự sửa. Nếu production: backend verify hoặc ZK proof.  
-→ Điều quan trọng hơn: NFT on-chain không thể giả mạo — dù có hack chun thì vẫn phải trả SUI để craft.
+**"Chun raw có thể bị giả mạo không?"**
+→ Không. `chun_raw` nằm on-chain trong `PlayerProfile` — chỉ có thể thay đổi qua `report_result()` (có cooldown + delta cap). Người chơi không thể tự sửa giá trị.
 
 ---
 
@@ -91,7 +94,7 @@ Badge là **Soulbound** — không thể chuyển nhượng, gắn vĩnh viễn 
 ┌─────────────────────────────────────────────────────────┐
 │                    GAMEPLAY LOOP                        │
 │                                                         │
-│  Chơi ván  →  Thắng  →  +chun (off-chain)              │
+│  Chơi ván  →  Thắng  →  +chun (on-chain)               │
 │      ↑           │                                      │
 │      │           ↓                                      │
 │  Bot AI    chun >= 10?                                  │
