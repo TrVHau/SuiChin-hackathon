@@ -73,7 +73,7 @@ module suichin::marketplace {
     // ─── Entry Functions ──────────────────────────────────────────────────────
 
     /// List NFT lên marketplace với giá price (MIST). NFT bị lock vào Market.
-    public entry fun list(
+    public fun list(
         market: &mut Market,
         nft: CuonChunNFT,
         price: u64,
@@ -102,7 +102,8 @@ module suichin::marketplace {
     }
 
     /// Mua NFT theo listing_id. Tiền thừa được hoàn trả buyer.
-    public entry fun buy(
+    #[allow(lint(self_transfer))]
+    public fun buy(
         market: &mut Market,
         listing_id: ID,
         mut payment: Coin<SUI>,
@@ -141,7 +142,8 @@ module suichin::marketplace {
     }
 
     /// Hủy listing. Chỉ seller gốc mới gọi được.
-    public entry fun cancel(
+    #[allow(lint(self_transfer))]
+    public fun cancel(
         market: &mut Market,
         listing_id: ID,
         ctx: &mut TxContext,

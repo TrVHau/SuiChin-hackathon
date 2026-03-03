@@ -70,7 +70,7 @@ module suichin::trade_up_tests {
     #[expected_failure]
     fun test_trade_up_bronze_wrong_count_too_few() {
         let mut scenario = test_scenario::begin(PLAYER);
-        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+        let clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
 
         test_scenario::next_tx(&mut scenario, PLAYER);
         {
@@ -90,7 +90,7 @@ module suichin::trade_up_tests {
     #[expected_failure]
     fun test_trade_up_bronze_wrong_count_too_many() {
         let mut scenario = test_scenario::begin(PLAYER);
-        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+        let clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
 
         test_scenario::next_tx(&mut scenario, PLAYER);
         {
@@ -110,7 +110,7 @@ module suichin::trade_up_tests {
     #[expected_failure]
     fun test_trade_up_bronze_wrong_tier() {
         let mut scenario = test_scenario::begin(PLAYER);
-        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+        let clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
 
         test_scenario::next_tx(&mut scenario, PLAYER);
         {
@@ -130,7 +130,7 @@ module suichin::trade_up_tests {
     #[expected_failure]
     fun test_trade_up_silver_wrong_count() {
         let mut scenario = test_scenario::begin(PLAYER);
-        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+        let clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
 
         test_scenario::next_tx(&mut scenario, PLAYER);
         {
@@ -150,7 +150,7 @@ module suichin::trade_up_tests {
     #[expected_failure]
     fun test_trade_up_silver_wrong_tier() {
         let mut scenario = test_scenario::begin(PLAYER);
-        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+        let clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
 
         test_scenario::next_tx(&mut scenario, PLAYER);
         {

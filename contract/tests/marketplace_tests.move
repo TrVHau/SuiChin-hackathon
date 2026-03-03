@@ -3,7 +3,7 @@
 #[test_only]
 module suichin::marketplace_tests {
     use sui::test_scenario;
-    use sui::clock;
+    use sui::clock::{Self, Clock};
     use sui::coin;
     use sui::sui::SUI;
     use suichin::cuon_chun::{Self, CuonChunNFT};

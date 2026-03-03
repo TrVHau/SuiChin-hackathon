@@ -86,7 +86,7 @@ module suichin::achievement {
     /// Mint AchievementBadge cho sender.
     /// Contract verify profile.streak >= milestone tương ứng.
     /// Contract KHÔNG check duplicate — FE không gọi 2 lần cùng badge_type.
-    public entry fun claim_badge(
+    public fun claim_badge(
         profile: &PlayerProfile,
         badge_type: u64,
         clock: &Clock,

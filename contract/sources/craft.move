@@ -97,7 +97,8 @@ module suichin::craft {
     /// Craft một CuonChunNFT hoặc Scrap.
     /// Yêu cầu: profile.chun_raw >= 10 và payment >= 0.1 SUI.
     /// Trừ chun_raw trước khi RNG. Tiền thừa trả lại sender.
-    public entry fun craft_chun(
+    #[allow(lint(self_transfer))]
+    public fun craft_chun(
         profile: &mut PlayerProfile,
         treasury: &mut Treasury,
         mut payment: Coin<SUI>,
@@ -152,7 +153,8 @@ module suichin::craft {
     }
 
     /// Rút SUI từ Treasury. Chỉ AdminCap holder mới gọi được.
-    public entry fun withdraw(
+    #[allow(lint(self_transfer))]
+    public fun withdraw(
         _cap: &AdminCap,
         treasury: &mut Treasury,
         amount: u64,

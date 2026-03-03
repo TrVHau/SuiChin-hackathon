@@ -42,7 +42,7 @@ module suichin::player_profile {
     // ─── Entry Functions ──────────────────────────────────────────────────────
 
     /// Tạo PlayerProfile cho sender. Gọi 1 lần khi connect ví lần đầu.
-    public entry fun init_profile(ctx: &mut TxContext) {
+    public fun init_profile(ctx: &mut TxContext) {
         let sender = tx_context::sender(ctx);
         let profile = PlayerProfile {
             id: object::new(ctx),
@@ -60,7 +60,7 @@ module suichin::player_profile {
     /// Cập nhật chun_raw + stats sau mỗi ván.
     /// Thắng: chun_raw += delta, wins++, streak++
     /// Thua:  chun_raw -= 1 (sàn 0), losses++, streak = 0
-    public entry fun report_result(
+    public fun report_result(
         profile: &mut PlayerProfile,
         delta: u64,
         is_win: bool,

@@ -3,7 +3,7 @@
 #[test_only]
 module suichin::achievement_tests {
     use sui::test_scenario;
-    use sui::clock;
+    use sui::clock::{Self, Clock};
     use suichin::player_profile::{Self, PlayerProfile};
     use suichin::achievement::{Self, AchievementBadge};
 
