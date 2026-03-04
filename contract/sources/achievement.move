@@ -74,11 +74,11 @@ module suichin::achievement {
 
     /// Tra cứu image URL badge.
     fun badge_image_url(badge_type: u64): String {
-        if      (badge_type == 1)  { string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/achievements/streak-1.png")  }
-        else if (badge_type == 5)  { string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/achievements/streak-5.png")  }
-        else if (badge_type == 18) { string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/achievements/streak-18.png") }
-        else if (badge_type == 36) { string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/achievements/streak-36.png") }
-        else                       { string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/achievements/streak-67.png") }
+        if      (badge_type == 1)  { string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/achievements/achievement1.png")  }
+        else if (badge_type == 5)  { string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/achievements/achievement2.png")  }
+        else if (badge_type == 18) { string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/achievements/achievement3.png") }
+        else if (badge_type == 36) { string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/achievements/achievement4.png") }
+        else                       { string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/achievements/achievement5.png") }
     }
 
     // ─── Entry Function ───────────────────────────────────────────────────────

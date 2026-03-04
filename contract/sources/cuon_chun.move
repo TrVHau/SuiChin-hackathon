@@ -63,17 +63,17 @@ module suichin::cuon_chun {
         let (name_str, image_str) = if (tier == 1) {
             (
                 string::utf8(b"Cuon Chun Dong"),
-                string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/nft/bronze.png"),
+                string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/nft/tier1.png"),
             )
         } else if (tier == 2) {
             (
                 string::utf8(b"Cuon Chun Bac"),
-                string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/nft/silver.png"),
+                string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/nft/tier2.png"),
             )
         } else {
             (
                 string::utf8(b"Cuon Chun Vang"),
-                string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/nft/gold.png"),
+                string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/nft/tier3.png"),
             )
         };
 
