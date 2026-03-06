@@ -1,95 +1,70 @@
-import { useState } from 'react';
-import { Toaster, toast } from 'sonner';
-import { motion, AnimatePresence } from 'framer-motion';
-import LoginScreen from '@/components/LoginScreen';
-import Dashboard from '@/components/Dashboard';
-import FaucetScreen from '@/components/FaucetScreen';
-import MintScreen from '@/components/MintScreen';
-import AchievementScreen from '@/components/AchievementScreen';
-import GameSession, { SessionData } from '@/components/GameSession';
-import { useSuiProfile } from '@/hooks/useSuiProfile';
+import { useState } from "react";
+import { Toaster } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
+import LoginScreen from "@/components/LoginScreen";
+import Dashboard from "@/components/Dashboard";
+import MintScreen from "@/components/MintScreen";
+import AchievementScreen from "@/components/AchievementScreen";
+import GameSession from "@/components/GameSession";
+import { useSuiProfile } from "@/hooks/useSuiProfile";
+import { toast } from "sonner";
 
-type Screen = 'login' | 'dashboard' | 'faucet' | 'mint' | 'achievements' | 'session';
+type Screen = "login" | "dashboard" | "mint" | "achievements" | "session";
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<Screen>('login');
+  const [currentScreen, setCurrentScreen] = useState<Screen>("login");
   const {
     account,
     profile,
     hasProfile,
     createProfile,
-    recordSession,
-    claimFaucet,
-    craftRoll,
+    reportResult,
     claimAchievement,
+    refreshProfile,
   } = useSuiProfile();
 
   const handleLogin = async () => {
     if (!account) {
-      toast.error('Vui lòng kết nối ví trước');
+      toast.error("Vui lòng kết nối ví trước");
       return;
     }
 
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     if (hasProfile && profile) {
-      toast.success('Chào mừng trở lại!');
-      setCurrentScreen('dashboard');
+      toast.success("Chào mừng trở lại!");
+      setCurrentScreen("dashboard");
     } else {
-      toast.loading('Chưa có profile. Đang tạo mới...', { id: 'createProfile' });
+      toast.loading("Chưa có profile. Đang tạo mới...", {
+        id: "createProfile",
+      });
       createProfile();
-      
       setTimeout(() => {
-        toast.success('Tạo profile thành công!', { id: 'createProfile' });
-        setCurrentScreen('dashboard');
+        toast.success("Tạo profile thành công!", { id: "createProfile" });
+        setCurrentScreen("dashboard");
       }, 4000);
     }
   };
 
   const handleLogout = () => {
-    setCurrentScreen('login');
-    toast.success('Đã đăng xuất');
-  };
-
-  const handleClaimFaucet = () => {
-    claimFaucet();
-  };
-
-  const handleMint = (useTier1: number, useTier2: number, useTier3: number) => {
-    craftRoll(useTier1, useTier2, useTier3);
+    setCurrentScreen("login");
+    toast.success("Đã đăng xuất");
   };
 
   const handleClaimAchievement = (milestone: number) => {
     claimAchievement(milestone);
   };
 
-  const handleSaveSession = (sessionData: SessionData) => {
-    if (!profile) return;
-
-    recordSession(
-      sessionData.deltaTier1,
-      sessionData.deltaTier2,
-      sessionData.deltaTier3,
-      sessionData.isTier1Positive,
-      sessionData.isTier2Positive,
-      sessionData.isTier3Positive,
-      sessionData.newMaxStreak,
-      sessionData.newCurrentStreak
-    );
-
-    setCurrentScreen('dashboard');
-  };
-
-  if (!account && currentScreen !== 'login') {
-    setCurrentScreen('login');
+  if (!account && currentScreen !== "login") {
+    setCurrentScreen("login");
   }
 
   return (
     <>
       <Toaster position="top-center" richColors />
-      
+
       <AnimatePresence mode="wait">
-        {currentScreen === 'login' && (
+        {currentScreen === "login" && (
           <motion.div
             key="login"
             initial={{ opacity: 0 }}
@@ -100,7 +75,7 @@ export default function App() {
           </motion.div>
         )}
 
-        {currentScreen === 'dashboard' && profile && (
+        {currentScreen === "dashboard" && profile && (
           <motion.div
             key="dashboard"
             initial={{ opacity: 0 }}
@@ -109,38 +84,21 @@ export default function App() {
           >
             <Dashboard
               playerData={{
-                tier1: profile.tier1,
-                tier2: profile.tier2,
-                tier3: profile.tier3,
-                maxStreak: profile.maxStreak,
-                currentStreak: profile.currentStreak,
-                address: account?.address || '',
+                chun_raw: profile.chun_raw,
+                wins: profile.wins,
+                losses: profile.losses,
+                streak: profile.streak,
+                address: account?.address || "",
               }}
-              onStartGame={() => setCurrentScreen('session')}
-              onOpenFaucet={() => setCurrentScreen('faucet')}
-              onOpenMint={() => setCurrentScreen('mint')}
-              onOpenAchievements={() => setCurrentScreen('achievements')}
+              onStartGame={() => setCurrentScreen("session")}
+              onOpenMint={() => setCurrentScreen("mint")}
+              onOpenAchievements={() => setCurrentScreen("achievements")}
               onLogout={handleLogout}
             />
           </motion.div>
         )}
 
-        {currentScreen === 'faucet' && profile && (
-          <motion.div
-            key="faucet"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <FaucetScreen
-              onBack={() => setCurrentScreen('dashboard')}
-              lastClaimTime={profile.faucetLastClaim}
-              onClaim={handleClaimFaucet}
-            />
-          </motion.div>
-        )}
-
-        {currentScreen === 'mint' && profile && (
+        {currentScreen === "mint" && profile && (
           <motion.div
             key="mint"
             initial={{ opacity: 0 }}
@@ -148,18 +106,15 @@ export default function App() {
             exit={{ opacity: 0 }}
           >
             <MintScreen
-              onBack={() => setCurrentScreen('dashboard')}
-              playerData={{
-                tier1: profile.tier1,
-                tier2: profile.tier2,
-                tier3: profile.tier3,
-              }}
-              onMint={handleMint}
+              onBack={() => setCurrentScreen("dashboard")}
+              profileId={profile.objectId}
+              chunRaw={profile.chun_raw}
+              onSuccess={refreshProfile}
             />
           </motion.div>
         )}
 
-        {currentScreen === 'achievements' && profile && (
+        {currentScreen === "achievements" && profile && (
           <motion.div
             key="achievements"
             initial={{ opacity: 0 }}
@@ -167,15 +122,15 @@ export default function App() {
             exit={{ opacity: 0 }}
           >
             <AchievementScreen
-              onBack={() => setCurrentScreen('dashboard')}
-              maxStreak={profile.maxStreak}
-              claimedAchievements={profile.achievements}
+              onBack={() => setCurrentScreen("dashboard")}
+              maxStreak={profile.streak}
+              claimedAchievements={[]}
               onClaim={handleClaimAchievement}
             />
           </motion.div>
         )}
 
-        {currentScreen === 'session' && profile && (
+        {currentScreen === "session" && profile && (
           <motion.div
             key="session"
             initial={{ opacity: 0 }}
@@ -183,15 +138,17 @@ export default function App() {
             exit={{ opacity: 0 }}
           >
             <GameSession
-              onBack={() => setCurrentScreen('dashboard')}
-              initialData={{
-                tier1: profile.tier1,
-                tier2: profile.tier2,
-                tier3: profile.tier3,
-                maxStreak: profile.maxStreak,
-                currentStreak: profile.currentStreak,
+              onBack={() => {
+                refreshProfile();
+                setCurrentScreen("dashboard");
               }}
-              onSaveSession={handleSaveSession}
+              currentStreak={profile.streak}
+              onReportResult={(isWin, onDone) => {
+                reportResult(isWin, () => {
+                  refreshProfile();
+                  onDone?.();
+                });
+              }}
             />
           </motion.div>
         )}
