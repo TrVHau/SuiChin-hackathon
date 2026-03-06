@@ -6,10 +6,21 @@ import Dashboard from "@/components/Dashboard";
 import MintScreen from "@/components/MintScreen";
 import AchievementScreen from "@/components/AchievementScreen";
 import GameSession from "@/components/GameSession";
+import InventoryScreen from "@/components/InventoryScreen";
+import TradeUpScreen from "@/components/TradeUpScreen";
+import MarketplaceScreen from "@/components/MarketplaceScreen";
 import { useSuiProfile } from "@/hooks/useSuiProfile";
 import { toast } from "sonner";
 
-type Screen = "login" | "dashboard" | "mint" | "achievements" | "session";
+type Screen =
+  | "login"
+  | "dashboard"
+  | "mint"
+  | "achievements"
+  | "session"
+  | "inventory"
+  | "tradeup"
+  | "marketplace";
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>("login");
@@ -93,6 +104,9 @@ export default function App() {
               onStartGame={() => setCurrentScreen("session")}
               onOpenMint={() => setCurrentScreen("mint")}
               onOpenAchievements={() => setCurrentScreen("achievements")}
+              onOpenInventory={() => setCurrentScreen("inventory")}
+              onOpenTradeUp={() => setCurrentScreen("tradeup")}
+              onOpenMarketplace={() => setCurrentScreen("marketplace")}
               onLogout={handleLogout}
             />
           </motion.div>
@@ -150,6 +164,39 @@ export default function App() {
                 });
               }}
             />
+          </motion.div>
+        )}
+
+        {currentScreen === "inventory" && (
+          <motion.div
+            key="inventory"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <InventoryScreen onBack={() => setCurrentScreen("dashboard")} />
+          </motion.div>
+        )}
+
+        {currentScreen === "tradeup" && (
+          <motion.div
+            key="tradeup"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <TradeUpScreen onBack={() => setCurrentScreen("dashboard")} />
+          </motion.div>
+        )}
+
+        {currentScreen === "marketplace" && (
+          <motion.div
+            key="marketplace"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <MarketplaceScreen onBack={() => setCurrentScreen("dashboard")} />
           </motion.div>
         )}
       </AnimatePresence>

@@ -1,4 +1,12 @@
-import { Flame, Image as ImageIcon, Award, Play } from "lucide-react";
+import {
+  Flame,
+  Image as ImageIcon,
+  Award,
+  Play,
+  Package,
+  ArrowUpCircle,
+  ShoppingCart,
+} from "lucide-react";
 import { motion } from "framer-motion";
 import Header from "./Header";
 
@@ -13,6 +21,9 @@ interface DashboardProps {
   onStartGame: () => void;
   onOpenMint: () => void;
   onOpenAchievements: () => void;
+  onOpenInventory: () => void;
+  onOpenTradeUp: () => void;
+  onOpenMarketplace: () => void;
   onLogout: () => void;
 }
 
@@ -36,6 +47,9 @@ export default function Dashboard({
   onStartGame,
   onOpenMint,
   onOpenAchievements,
+  onOpenInventory,
+  onOpenTradeUp,
+  onOpenMarketplace,
   onLogout,
 }: DashboardProps) {
   return (
@@ -209,6 +223,78 @@ export default function Dashboard({
                 </h3>
                 <p className="text-gray-700 font-semibold text-lg">
                   Soulbound NFT danh hiệu
+                </p>
+              </div>
+            </motion.button>
+
+            {/* Inventory */}
+            <motion.button
+              variants={item}
+              onClick={onOpenInventory}
+              whileHover={{ scale: 1.05, rotate: 1 }}
+              whileTap={{ scale: 0.95 }}
+              className="bg-white border-8 border-playful-blue rounded-4xl p-8 text-left shadow-2xl group relative overflow-hidden"
+            >
+              <div className="absolute top-4 right-4 text-6xl opacity-20 group-hover:scale-150 transition-transform">
+                🎒
+              </div>
+              <div className="relative z-10">
+                <div className="bg-playful-blue text-white p-5 rounded-3xl mb-5 inline-block border-4 border-white shadow-lg">
+                  <Package className="size-12" />
+                </div>
+                <h3 className="font-display font-black text-3xl text-gray-900 mb-3">
+                  Kho Đồ
+                </h3>
+                <p className="text-gray-700 font-semibold text-lg">
+                  Xem NFT, Scrap và Danh hiệu của bạn
+                </p>
+              </div>
+            </motion.button>
+
+            {/* Trade-up */}
+            <motion.button
+              variants={item}
+              onClick={onOpenTradeUp}
+              whileHover={{ scale: 1.05, rotate: -1 }}
+              whileTap={{ scale: 0.95 }}
+              className="bg-white border-8 border-playful-orange rounded-4xl p-8 text-left shadow-2xl group relative overflow-hidden"
+            >
+              <div className="absolute top-4 right-4 text-6xl opacity-20 group-hover:scale-150 transition-transform">
+                ⬆️
+              </div>
+              <div className="relative z-10">
+                <div className="bg-playful-orange text-white p-5 rounded-3xl mb-5 inline-block border-4 border-white shadow-lg">
+                  <ArrowUpCircle className="size-12" />
+                </div>
+                <h3 className="font-display font-black text-3xl text-gray-900 mb-3">
+                  Trade-up
+                </h3>
+                <p className="text-gray-700 font-semibold text-lg">
+                  Gộp NFT để nâng tier: Bronze→Silver→Gold
+                </p>
+              </div>
+            </motion.button>
+
+            {/* Marketplace */}
+            <motion.button
+              variants={item}
+              onClick={onOpenMarketplace}
+              whileHover={{ scale: 1.05, rotate: 2 }}
+              whileTap={{ scale: 0.95 }}
+              className="bg-white border-8 border-playful-green rounded-4xl p-8 text-left shadow-2xl group relative overflow-hidden md:col-span-2"
+            >
+              <div className="absolute top-4 right-4 text-6xl opacity-20 group-hover:scale-150 transition-transform">
+                🛒
+              </div>
+              <div className="relative z-10">
+                <div className="bg-playful-green text-white p-5 rounded-3xl mb-5 inline-block border-4 border-white shadow-lg">
+                  <ShoppingCart className="size-12" />
+                </div>
+                <h3 className="font-display font-black text-3xl text-gray-900 mb-3">
+                  Marketplace
+                </h3>
+                <p className="text-gray-700 font-semibold text-lg">
+                  Mua bán Cuộn Chun NFT on-chain
                 </p>
               </div>
             </motion.button>
