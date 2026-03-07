@@ -15,6 +15,7 @@ import {
   MAX_DELTA_CHUN,
   ACHIEVEMENT_MILESTONES,
 } from "@/config/sui.config";
+import { useGameStore } from "@/stores/gameStore";
 
 export interface PlayerProfileData {
   objectId: string;
@@ -30,6 +31,7 @@ export function useSuiProfile() {
   const account = useCurrentAccount();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const suiClient = useSuiClient();
+  const setStoreProfile = useGameStore((s) => s.setProfile);
 
   const [profile, setProfile] = useState<PlayerProfileData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -49,6 +51,7 @@ export function useSuiProfile() {
       if (objects.data.length === 0) {
         setHasProfile(false);
         setProfile(null);
+        setStoreProfile(null);
         return;
       }
 
@@ -58,7 +61,7 @@ export function useSuiProfile() {
       const content = profileObj.data?.content;
       if (content && "fields" in content && profileObj.data) {
         const fields = content.fields as Record<string, unknown>;
-        setProfile({
+        const data: PlayerProfileData = {
           objectId: profileObj.data.objectId,
           owner: account.address,
           chun_raw: Number(fields.chun_raw ?? 0),
@@ -66,7 +69,9 @@ export function useSuiProfile() {
           losses: Number(fields.losses ?? 0),
           streak: Number(fields.streak ?? 0),
           last_played_ms: Number(fields.last_played_ms ?? 0),
-        });
+        };
+        setProfile(data);
+        setStoreProfile(data);
       }
     } catch (error) {
       console.error("Error loading profile:", error);
@@ -74,7 +79,7 @@ export function useSuiProfile() {
     } finally {
       setLoading(false);
     }
-  }, [account?.address, suiClient]);
+  }, [account?.address, suiClient, setStoreProfile]);
 
   const createProfile = () => {
     if (!account?.address) {

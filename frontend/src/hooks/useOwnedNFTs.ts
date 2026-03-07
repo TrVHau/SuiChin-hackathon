@@ -2,6 +2,7 @@ import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { CUON_CHUN_TYPE, SCRAP_TYPE, BADGE_TYPE } from "@/config/sui.config";
+import { useGameStore } from "@/stores/gameStore";
 
 export interface CuonChunNFT {
   objectId: string;
@@ -36,6 +37,9 @@ export interface OwnedNFTs {
 export function useOwnedNFTs(): OwnedNFTs {
   const account = useCurrentAccount();
   const suiClient = useSuiClient();
+  const setStoreNFTs = useGameStore((s) => s.setOwnedNFTs);
+  const setStoreScraps = useGameStore((s) => s.setScraps);
+  const setStoreBadges = useGameStore((s) => s.setBadges);
 
   const [cuonChuns, setCuonChuns] = useState<CuonChunNFT[]>([]);
   const [scraps, setScraps] = useState<ScrapItem[]>([]);
@@ -108,11 +112,22 @@ export function useOwnedNFTs(): OwnedNFTs {
         };
       };
 
-      setCuonChuns(nftRes.data.map(mapNFT).filter(Boolean) as CuonChunNFT[]);
-      setScraps(scrapRes.data.map(mapScrap).filter(Boolean) as ScrapItem[]);
-      setBadges(
-        badgeRes.data.map(mapBadge).filter(Boolean) as AchievementBadgeItem[],
-      );
+      const parsedNFTs = nftRes.data
+        .map(mapNFT)
+        .filter(Boolean) as CuonChunNFT[];
+      const parsedScraps = scrapRes.data
+        .map(mapScrap)
+        .filter(Boolean) as ScrapItem[];
+      const parsedBadges = badgeRes.data
+        .map(mapBadge)
+        .filter(Boolean) as AchievementBadgeItem[];
+
+      setCuonChuns(parsedNFTs);
+      setScraps(parsedScraps);
+      setBadges(parsedBadges);
+      setStoreNFTs(parsedNFTs);
+      setStoreScraps(parsedScraps);
+      setStoreBadges(parsedBadges);
     } catch (error) {
       console.error("Error fetching owned NFTs:", error);
       toast.error("Không thể tải NFT");
