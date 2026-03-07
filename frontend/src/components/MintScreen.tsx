@@ -1,5 +1,5 @@
 import { ArrowLeft, Hammer, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useSuiClient, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
@@ -9,6 +9,44 @@ import {
   TREASURY_OBJECT_ID,
   PACKAGE_ID,
 } from "@/config/sui.config";
+
+// ── Confetti ──
+const CONFETTI_COLORS = ["#FF6B6B","#FFE66D","#4ECDC4","#A78BFA","#34D399","#F472B6","#FCD34D","#60A5FA"];
+
+function Confetti() {
+  const pieces = useMemo(
+    () =>
+      Array.from({ length: 30 }, (_, i) => ({
+        id: i,
+        x: (Math.random() - 0.5) * 700,
+        y: -(Math.random() * 600 + 100),
+        rotate: Math.random() * 720 - 360,
+        color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+        size: Math.random() * 10 + 6,
+        delay: Math.random() * 0.3,
+      })),
+    [],
+  );
+  return (
+    <div className="fixed inset-0 pointer-events-none overflow-hidden z-50 flex items-center justify-center">
+      {pieces.map((p) => (
+        <motion.div
+          key={p.id}
+          initial={{ x: 0, y: 0, opacity: 1, scale: 1, rotate: 0 }}
+          animate={{ x: p.x, y: p.y, opacity: 0, scale: 0.4, rotate: p.rotate }}
+          transition={{ duration: 1.4, ease: "easeOut", delay: p.delay }}
+          style={{
+            position: "absolute",
+            width: p.size,
+            height: p.size,
+            borderRadius: "2px",
+            background: p.color,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
 interface CraftResultData {
   tier: number; // 0=Scrap, 1=Bronze, 2=Silver, 3=Gold
@@ -174,6 +212,7 @@ export default function WorkshopScreen({
               exit={{ opacity: 0 }}
               className={`rounded-4xl shadow-2xl p-10 border-8 text-center ${cfg.bg} ${cfg.borderColor}`}
             >
+              {craftResult.tier >= 2 && <Confetti />}
               <motion.div
                 animate={{ rotate: [0, -15, 15, -15, 0], scale: [1, 1.3, 1] }}
                 transition={{ duration: 0.9 }}
@@ -212,6 +251,61 @@ export default function WorkshopScreen({
                 >
                   Về Dashboard
                 </motion.button>
+              </div>
+            </motion.div>
+          ) : crafting ? (
+            /* ── Forging Animation ── */
+            <motion.div
+              key="forging"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3 }}
+              className="bg-white rounded-4xl shadow-2xl p-10 border-8 border-playful-purple text-center"
+            >
+              <div className="relative flex justify-center mb-6">
+                <motion.div
+                  animate={{
+                    rotate: [-15, 15, -15, 15, -15],
+                    scale: [1, 1.15, 1, 1.15, 1],
+                  }}
+                  transition={{
+                    duration: 0.9,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
+                  className="text-9xl select-none"
+                >
+                  ⚒️
+                </motion.div>
+                <motion.div
+                  animate={{ scale: [1, 2.2, 1], opacity: [0.25, 0.05, 0.25] }}
+                  transition={{ duration: 1.1, repeat: Infinity }}
+                  className="absolute size-24 rounded-full bg-playful-purple/30 self-center -z-10"
+                />
+              </div>
+              <motion.div
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 1.4, repeat: Infinity }}
+                className="text-5xl mb-4"
+              >
+                🏮
+              </motion.div>
+              <h2 className="font-display font-black text-3xl text-playful-purple mb-2">
+                Đang rèn NFT...
+              </h2>
+              <p className="text-gray-500 font-semibold mb-6">
+                Chờ blockchain xác nhận ⛓️
+              </p>
+              <div className="flex justify-center gap-2">
+                {[0, 0.25, 0.5].map((delay, i) => (
+                  <motion.div
+                    key={i}
+                    animate={{ scale: [1, 1.6, 1], opacity: [0.3, 1, 0.3] }}
+                    transition={{ duration: 0.75, repeat: Infinity, delay }}
+                    className="size-3 bg-playful-purple rounded-full"
+                  />
+                ))}
               </div>
             </motion.div>
           ) : (

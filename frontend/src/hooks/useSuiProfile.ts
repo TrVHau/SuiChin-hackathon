@@ -108,7 +108,11 @@ export function useSuiProfile() {
    * - Thắng: delta = min(1 + streak, MAX_DELTA_CHUN), isWin = true
    * - Thua:  delta = 1, isWin = false
    */
-  const reportResult = (isWin: boolean, onSuccess?: () => void) => {
+  const reportResult = (
+    isWin: boolean,
+    onSuccess?: () => void,
+    onError?: () => void,
+  ) => {
     if (!profile) {
       toast.error("Không tìm thấy profile");
       return;
@@ -140,6 +144,7 @@ export function useSuiProfile() {
           } else {
             toast.error("Lưu kết quả thất bại");
           }
+          onError?.();
         },
       },
     );

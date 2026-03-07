@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 type NavScreen =
   | "dashboard"
   | "session"
-  | "mint"
+  | "workshop"
   | "inventory"
   | "tradeup"
   | "marketplace"
@@ -23,7 +23,7 @@ interface HeaderProps {
 
 const NAV_ITEMS: { screen: NavScreen; label: string; emoji: string }[] = [
   { screen: "session", label: "Chơi", emoji: "🎮" },
-  { screen: "mint", label: "Workshop", emoji: "⚒️" },
+  { screen: "workshop", label: "Workshop", emoji: "⚒️" },
   { screen: "inventory", label: "Kho đồ", emoji: "📦" },
   { screen: "tradeup", label: "Trade-up", emoji: "🔄" },
   { screen: "marketplace", label: "Chợ", emoji: "🏪" },

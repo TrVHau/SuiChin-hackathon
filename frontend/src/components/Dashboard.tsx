@@ -6,10 +6,13 @@ import {
   Package,
   ArrowUpCircle,
   ShoppingCart,
+  Clock,
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
 import Header from "./Header";
 import { useOwnedNFTs } from "@/hooks/useOwnedNFTs";
+import { COOLDOWN_MS } from "@/config/sui.config";
 
 interface DashboardProps {
   playerData: {
@@ -18,6 +21,7 @@ interface DashboardProps {
     losses: number;
     streak: number;
     address: string;
+    last_played_ms: number;
   };
   onStartGame: () => void;
   onOpenMint: () => void;
@@ -29,7 +33,7 @@ interface DashboardProps {
     screen:
       | "dashboard"
       | "session"
-      | "mint"
+      | "workshop"
       | "inventory"
       | "tradeup"
       | "marketplace"
@@ -68,6 +72,18 @@ export default function Dashboard({
   const bronze = cuonChuns.filter((n) => n.tier === 1).length;
   const silver = cuonChuns.filter((n) => n.tier === 2).length;
   const gold = cuonChuns.filter((n) => n.tier === 3).length;
+
+  // Cooldown countdown
+  const [cooldownLeft, setCooldownLeft] = useState(0);
+  useEffect(() => {
+    const update = () => {
+      const elapsed = Date.now() - playerData.last_played_ms;
+      setCooldownLeft(Math.max(0, Math.ceil((COOLDOWN_MS - elapsed) / 1000)));
+    };
+    update();
+    const id = setInterval(update, 500);
+    return () => clearInterval(id);
+  }, [playerData.last_played_ms]);
 
   return (
     <div className="min-h-screen bg-sunny-gradient pb-24 lg:pb-0">
@@ -138,13 +154,27 @@ export default function Dashboard({
               </div>
 
               <motion.button
-                onClick={onStartGame}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="btn-playful text-2xl flex items-center gap-3 border-4 bg-gradient-to-r from-playful-green to-playful-blue text-white border-white shadow-2xl"
+                onClick={cooldownLeft > 0 ? undefined : onStartGame}
+                disabled={cooldownLeft > 0}
+                whileHover={cooldownLeft === 0 ? { scale: 1.05 } : {}}
+                whileTap={cooldownLeft === 0 ? { scale: 0.95 } : {}}
+                className={`btn-playful text-2xl flex items-center gap-3 border-4 ${
+                  cooldownLeft > 0
+                    ? "bg-gray-200 text-gray-400 border-gray-300 cursor-not-allowed"
+                    : "bg-gradient-to-r from-playful-green to-playful-blue text-white border-white shadow-2xl"
+                }`}
               >
-                <Play className="size-8 fill-current" />
-                CHƠI NGAY!
+                {cooldownLeft > 0 ? (
+                  <>
+                    <Clock className="size-8 animate-pulse" />
+                    Chờ {cooldownLeft}s...
+                  </>
+                ) : (
+                  <>
+                    <Play className="size-8 fill-current" />
+                    CHƠI NGAY!
+                  </>
+                )}
               </motion.button>
             </div>
           </motion.div>

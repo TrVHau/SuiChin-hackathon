@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowUpCircle, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useSuiClient, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
@@ -11,17 +11,76 @@ import {
 } from "@/lib/sui-client";
 import { PACKAGE_ID } from "@/config/sui.config";
 
+// ── Confetti ──
+const CONFETTI_COLORS = ["#FF6B6B","#FFE66D","#4ECDC4","#A78BFA","#34D399","#F472B6","#FCD34D","#60A5FA"];
+
+function Confetti() {
+  const pieces = useMemo(
+    () =>
+      Array.from({ length: 30 }, (_, i) => ({
+        id: i,
+        x: (Math.random() - 0.5) * 700,
+        y: -(Math.random() * 600 + 100),
+        rotate: Math.random() * 720 - 360,
+        color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+        size: Math.random() * 10 + 6,
+        delay: Math.random() * 0.3,
+      })),
+    [],
+  );
+  return (
+    <div className="fixed inset-0 pointer-events-none overflow-hidden z-50 flex items-center justify-center">
+      {pieces.map((p) => (
+        <motion.div
+          key={p.id}
+          initial={{ x: 0, y: 0, opacity: 1, scale: 1, rotate: 0 }}
+          animate={{ x: p.x, y: p.y, opacity: 0, scale: 0.4, rotate: p.rotate }}
+          transition={{ duration: 1.4, ease: "easeOut", delay: p.delay }}
+          style={{
+            position: "absolute",
+            width: p.size,
+            height: p.size,
+            borderRadius: "2px",
+            background: p.color,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 interface TradeUpResultData {
-  toTier: number;   // 0=Scrap, 2=Silver, 3=Gold
+  toTier: number; // 0=Scrap, 2=Silver, 3=Gold
   fromTier: number;
   success: boolean;
   roll: number;
 }
 
 const RESULT_CONFIG = {
-  0: { label: "Scrap",  emoji: "💀", color: "text-gray-500",   borderColor: "border-gray-400",   bg: "bg-gray-100",  headline: "Thất bại — Nhận Scrap!" },
-  2: { label: "Silver", emoji: "🥈", color: "text-slate-600",  borderColor: "border-slate-400",  bg: "bg-slate-50",  headline: "Silver NFT! ✨🥈" },
-  3: { label: "Gold",   emoji: "🥇", color: "text-yellow-600", borderColor: "border-yellow-400", bg: "bg-yellow-50", headline: "GOLD NFT! 🥇🎉" },
+  0: {
+    label: "Scrap",
+    emoji: "💀",
+    color: "text-gray-500",
+    borderColor: "border-gray-400",
+    bg: "bg-gray-100",
+    headline: "Thất bại — Nhận Scrap!",
+  },
+  2: {
+    label: "Silver",
+    emoji: "🥈",
+    color: "text-slate-600",
+    borderColor: "border-slate-400",
+    bg: "bg-slate-50",
+    headline: "Silver NFT! ✨🥈",
+  },
+  3: {
+    label: "Gold",
+    emoji: "🥇",
+    color: "text-yellow-600",
+    borderColor: "border-yellow-400",
+    bg: "bg-yellow-50",
+    headline: "GOLD NFT! 🥇🎉",
+  },
 } as const;
 
 interface TradeUpScreenProps {
@@ -75,7 +134,9 @@ export default function TradeUpScreen({ onBack }: TradeUpScreenProps) {
   const [trading, setTrading] = useState(false);
   const [result, setResult] = useState<TradeUpResultData | null>(null);
 
-  const parseTradeEvent = async (digest: string): Promise<TradeUpResultData> => {
+  const parseTradeEvent = async (
+    digest: string,
+  ): Promise<TradeUpResultData> => {
     const txBlock = await suiClient.getTransactionBlock({
       digest,
       options: { showEvents: true },
@@ -98,7 +159,12 @@ export default function TradeUpScreen({ onBack }: TradeUpScreenProps) {
       };
     }
     const fallbackTier = mode === "bronze-to-silver" ? 2 : 3;
-    return { toTier: fallbackTier, fromTier: config.inputTier, success: true, roll: 0 };
+    return {
+      toTier: fallbackTier,
+      fromTier: config.inputTier,
+      success: true,
+      roll: 0,
+    };
   };
 
   const config = TRADE_CONFIG[mode];
@@ -256,46 +322,99 @@ export default function TradeUpScreen({ onBack }: TradeUpScreenProps) {
 
         {/* Result card */}
         <AnimatePresence>
-          {result && (() => {
-            const cfg = RESULT_CONFIG[result.toTier as keyof typeof RESULT_CONFIG] ?? RESULT_CONFIG[0];
-            return (
-              <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                className={`rounded-4xl shadow-2xl p-8 border-8 text-center mb-6 ${cfg.bg} ${cfg.borderColor}`}
-              >
+          {result &&
+            (() => {
+              const cfg =
+                RESULT_CONFIG[result.toTier as keyof typeof RESULT_CONFIG] ??
+                RESULT_CONFIG[0];
+              return (
                 <motion.div
-                  animate={{ rotate: [0, -15, 15, -15, 0], scale: [1, 1.3, 1] }}
-                  transition={{ duration: 0.9 }}
-                  className="text-8xl mb-4"
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  className={`rounded-4xl shadow-2xl p-8 border-8 text-center mb-6 ${cfg.bg} ${cfg.borderColor}`}
                 >
-                  {cfg.emoji}
+                  {result.success && result.toTier >= 2 && <Confetti />}
+                  <motion.div
+                    animate={{
+                      rotate: [0, -15, 15, -15, 0],
+                      scale: [1, 1.3, 1],
+                    }}
+                    transition={{ duration: 0.9 }}
+                    className="text-8xl mb-4"
+                  >
+                    {cfg.emoji}
+                  </motion.div>
+                  <h3
+                    className={`font-display font-black text-2xl mb-2 ${cfg.color}`}
+                  >
+                    {cfg.headline}
+                  </h3>
+                  <p className="text-gray-500 font-semibold mb-1">
+                    Roll: {result.roll} / 99
+                  </p>
+                  <p className="text-gray-500 text-sm mb-4">
+                    {result.success
+                      ? "NFT đã về ví 🎉"
+                      : "Scrap đã về ví — thử lại lần sau!"}
+                  </p>
+                  <motion.button
+                    onClick={() => setResult(null)}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="btn-playful bg-playful-orange text-white border-4 border-white px-8"
+                  >
+                    Trade tiếp
+                  </motion.button>
                 </motion.div>
-                <h3 className={`font-display font-black text-2xl mb-2 ${cfg.color}`}>
-                  {cfg.headline}
-                </h3>
-                <p className="text-gray-500 font-semibold mb-1">
-                  Roll: {result.roll} / 99
-                </p>
-                <p className="text-gray-500 text-sm mb-4">
-                  {result.success ? "NFT đã về ví 🎉" : "Scrap đã về ví — thử lại lần sau!"}
-                </p>
-                <motion.button
-                  onClick={() => setResult(null)}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className="btn-playful bg-playful-orange text-white border-4 border-white px-8"
-                >
-                  Trade tiếp
-                </motion.button>
-              </motion.div>
-            );
-          })()}
+              );
+            })()}
         </AnimatePresence>
 
-        {/* NFT Grid */}
-        {loading ? (
+        {/* NFT Grid / Trading animation */}
+        {trading ? (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ duration: 0.3 }}
+            className="bg-white rounded-4xl shadow-2xl p-10 border-8 border-playful-orange text-center"
+          >
+            <div className="relative flex justify-center mb-6">
+              <motion.div
+                animate={{
+                  scale: [1, 1.25, 1, 1.2, 1],
+                  rotate: [0, -10, 10, -10, 0],
+                }}
+                transition={{ duration: 0.7, repeat: Infinity }}
+                className="text-9xl select-none"
+              >
+                🔥
+              </motion.div>
+              <motion.div
+                animate={{ scale: [1, 2.8, 1], opacity: [0.3, 0.04, 0.3] }}
+                transition={{ duration: 1.0, repeat: Infinity }}
+                className="absolute size-24 rounded-full bg-playful-orange/30 self-center -z-10"
+              />
+            </div>
+            <h2 className="font-display font-black text-3xl text-playful-orange mb-2">
+              Đang burn &amp; forge...
+            </h2>
+            <p className="text-gray-500 font-semibold mb-6">
+              {selected.length} NFT đang bị thiêu ⛓️
+            </p>
+            <div className="flex justify-center gap-2">
+              {[0, 0.2, 0.4].map((delay, i) => (
+                <motion.div
+                  key={i}
+                  animate={{ scale: [1, 1.6, 1], opacity: [0.3, 1, 0.3] }}
+                  transition={{ duration: 0.75, repeat: Infinity, delay }}
+                  className="size-3 bg-playful-orange rounded-full"
+                />
+              ))}
+            </div>
+          </motion.div>
+        ) : loading ? (
           <div className="text-center py-16">
             <div className="text-6xl animate-bounce mb-4">🔍</div>
             <p className="font-bold text-gray-600">Đang tải NFT...</p>

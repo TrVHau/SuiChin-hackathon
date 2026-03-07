@@ -7,7 +7,11 @@ import GameCanvas from "./GameCanvas";
 interface GameSessionProps {
   onBack: () => void;
   currentStreak: number;
-  onReportResult: (isWin: boolean, onDone?: () => void) => void;
+  onReportResult: (
+    isWin: boolean,
+    onDone?: () => void,
+    onError?: () => void,
+  ) => void;
 }
 
 type Phase = "lobby" | "playing" | "submitting" | "result";
@@ -28,12 +32,19 @@ export default function GameSession({
     setLastResult("win");
     toast.loading("Đang lưu kết quả lên blockchain...", { id: "report" });
 
-    onReportResult(true, () => {
-      setSessionWins((w) => w + 1);
-      setStreak((s) => s + 1);
-      setPhase("result");
-      toast.success("Thắng! Kết quả đã lưu on-chain 🎉", { id: "report" });
-    });
+    onReportResult(
+      true,
+      () => {
+        setSessionWins((w) => w + 1);
+        setStreak((s) => s + 1);
+        setPhase("result");
+        toast.success("Thắng! Kết quả đã lưu on-chain 🎉", { id: "report" });
+      },
+      () => {
+        setPhase("lobby");
+        setLastResult(null);
+      },
+    );
   };
 
   const handleLose = () => {
@@ -41,12 +52,19 @@ export default function GameSession({
     setLastResult("lose");
     toast.loading("Đang lưu kết quả lên blockchain...", { id: "report" });
 
-    onReportResult(false, () => {
-      setSessionLosses((l) => l + 1);
-      setStreak(0);
-      setPhase("result");
-      toast.error("Thua! Kết quả đã lưu on-chain", { id: "report" });
-    });
+    onReportResult(
+      false,
+      () => {
+        setSessionLosses((l) => l + 1);
+        setStreak(0);
+        setPhase("result");
+        toast.error("Thua! Kết quả đã lưu on-chain", { id: "report" });
+      },
+      () => {
+        setPhase("lobby");
+        setLastResult(null);
+      },
+    );
   };
 
   if (phase === "playing" || phase === "submitting") {

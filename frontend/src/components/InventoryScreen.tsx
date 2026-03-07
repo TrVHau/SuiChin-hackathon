@@ -1,4 +1,9 @@
-import { ArrowLeft, RefreshCw, ShoppingCart, ArrowUpCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  RefreshCw,
+  ShoppingCart,
+  ArrowUpCircle,
+} from "lucide-react";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useOwnedNFTs } from "@/hooks/useOwnedNFTs";
@@ -20,7 +25,7 @@ const FILTER_TABS: { label: string; value: TierFilter; emoji: string }[] = [
   { label: "Tất cả", value: "all", emoji: "" },
   { label: "Bronze", value: 1, emoji: "🥉" },
   { label: "Silver", value: 2, emoji: "🥈" },
-  { label: "Gold",   value: 3, emoji: "🥇" },
+  { label: "Gold", value: 3, emoji: "🥇" },
 ];
 
 const TIER_LABELS: Record<
@@ -32,33 +37,62 @@ const TIER_LABELS: Record<
   3: { label: "Gold", emoji: "🥇", color: "border-yellow-400 bg-yellow-50" },
 };
 
-function NFTCard({ nft }: { nft: CuonChunNFT }) {
+function NFTCard({
+  nft,
+  onList,
+  onTradeUp,
+}: {
+  nft: CuonChunNFT;
+  onList?: () => void;
+  onTradeUp?: () => void;
+}) {
   const tier = TIER_LABELS[nft.tier] ?? TIER_LABELS[1];
   return (
     <motion.div
-      whileHover={{ scale: 1.04, rotate: 1 }}
-      className={`rounded-3xl border-4 p-4 shadow-lg ${tier.color}`}
+      whileHover={{ scale: 1.03 }}
+      className={`rounded-3xl border-4 p-3 shadow-lg flex flex-col ${tier.color}`}
     >
       {nft.image_url ? (
         <img
           src={nft.image_url}
           alt={nft.name}
-          className="w-full aspect-square object-cover rounded-2xl mb-3"
+          className="w-full aspect-square object-cover rounded-2xl mb-2"
         />
       ) : (
-        <div className="w-full aspect-square rounded-2xl mb-3 bg-white/60 flex items-center justify-center text-6xl">
+        <div className="w-full aspect-square rounded-2xl mb-2 bg-white/60 flex items-center justify-center text-5xl">
           🏮
         </div>
       )}
-      <p className="font-display font-black text-sm text-gray-900 truncate">
-        {nft.name}
+      <p className="font-display font-black text-xs text-gray-900 truncate">
+        {nft.name || `#${nft.objectId.slice(-4)}`}
       </p>
-      <p className="text-xs font-bold text-gray-500">
+      <p className="text-xs font-bold text-gray-500 mb-2">
         {tier.emoji} {tier.label}
       </p>
-      <p className="text-xs text-gray-400 font-mono truncate mt-1">
-        {nft.objectId.slice(0, 10)}...
-      </p>
+      <div className="flex gap-1 mt-auto">
+        {onList && (
+          <motion.button
+            onClick={onList}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.93 }}
+            className="flex-1 flex items-center justify-center gap-1 text-xs font-black py-1.5 rounded-xl bg-white border-2 border-playful-blue text-playful-blue hover:bg-playful-blue hover:text-white transition-colors"
+          >
+            <ShoppingCart className="size-3" />
+            List
+          </motion.button>
+        )}
+        {onTradeUp && (
+          <motion.button
+            onClick={onTradeUp}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.93 }}
+            className="flex-1 flex items-center justify-center gap-1 text-xs font-black py-1.5 rounded-xl bg-white border-2 border-playful-orange text-playful-orange hover:bg-playful-orange hover:text-white transition-colors"
+          >
+            <ArrowUpCircle className="size-3" />
+            Trade
+          </motion.button>
+        )}
+      </div>
     </motion.div>
   );
 }
@@ -212,24 +246,61 @@ export default function InventoryScreen({
             {/* Cuon Chun NFTs */}
             {cuonChuns.length > 0 && (
               <section>
-                <h2 className="font-display font-black text-2xl text-gray-900 mb-4 flex items-center gap-2">
-                  🏮 Cuộn Chun NFT
-                  <span className="bg-playful-purple text-white text-sm font-black px-3 py-1 rounded-full">
-                    {cuonChuns.length}
-                  </span>
-                </h2>
-                <motion.div
-                  variants={container}
-                  initial="hidden"
-                  animate="show"
-                  className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"
-                >
-                  {cuonChuns.map((nft) => (
-                    <motion.div key={nft.objectId} variants={item}>
-                      <NFTCard nft={nft} />
-                    </motion.div>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="font-display font-black text-2xl text-gray-900 flex items-center gap-2">
+                    🏮 Cuộn Chun NFT
+                    <span className="bg-playful-purple text-white text-sm font-black px-3 py-1 rounded-full">
+                      {filteredNFTs.length}
+                      {tierFilter !== "all" && ` / ${cuonChuns.length}`}
+                    </span>
+                  </h2>
+                </div>
+
+                {/* Tier filter bar */}
+                <div className="flex gap-2 mb-4 flex-wrap">
+                  {FILTER_TABS.map((tab) => (
+                    <motion.button
+                      key={String(tab.value)}
+                      onClick={() => setTierFilter(tab.value)}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className={`px-4 py-1.5 rounded-2xl text-sm font-black border-2 transition-all ${
+                        tierFilter === tab.value
+                          ? "bg-playful-purple text-white border-white shadow-md"
+                          : "bg-white text-gray-600 border-gray-200 hover:border-playful-purple"
+                      }`}
+                    >
+                      {tab.emoji} {tab.label}
+                    </motion.button>
                   ))}
-                </motion.div>
+                </div>
+
+                {filteredNFTs.length === 0 ? (
+                  <p className="text-gray-500 font-semibold py-4">
+                    Không có NFT tier này.
+                  </p>
+                ) : (
+                  <motion.div
+                    variants={container}
+                    initial="hidden"
+                    animate="show"
+                    className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"
+                  >
+                    {filteredNFTs.map((nft) => (
+                      <motion.div key={nft.objectId} variants={item}>
+                        <NFTCard
+                          nft={nft}
+                          onList={onOpenMarketplace}
+                          onTradeUp={
+                            nft.tier === 1 || nft.tier === 2
+                              ? onOpenTradeUp
+                              : undefined
+                          }
+                        />
+                      </motion.div>
+                    ))}
+                  </motion.div>
+                )}
               </section>
             )}
 

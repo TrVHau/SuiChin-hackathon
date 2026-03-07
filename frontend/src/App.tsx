@@ -15,7 +15,7 @@ import { toast } from "sonner";
 type Screen =
   | "login"
   | "dashboard"
-  | "mint"
+  | "workshop"
   | "achievements"
   | "session"
   | "inventory"
@@ -97,9 +97,10 @@ export default function App() {
                 losses: profile.losses,
                 streak: profile.streak,
                 address: account?.address || "",
+                last_played_ms: profile.last_played_ms,
               }}
               onStartGame={() => setCurrentScreen("session")}
-              onOpenMint={() => setCurrentScreen("mint")}
+              onOpenMint={() => setCurrentScreen("workshop")}
               onOpenAchievements={() => setCurrentScreen("achievements")}
               onOpenInventory={() => setCurrentScreen("inventory")}
               onOpenTradeUp={() => setCurrentScreen("tradeup")}
@@ -110,9 +111,9 @@ export default function App() {
           </motion.div>
         )}
 
-        {currentScreen === "mint" && profile && (
+        {currentScreen === "workshop" && profile && (
           <motion.div
-            key="mint"
+            key="workshop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -154,11 +155,15 @@ export default function App() {
                 setCurrentScreen("dashboard");
               }}
               currentStreak={profile.streak}
-              onReportResult={(isWin, onDone) => {
-                reportResult(isWin, () => {
-                  refreshProfile();
-                  onDone?.();
-                });
+              onReportResult={(isWin, onDone, onError) => {
+                reportResult(
+                  isWin,
+                  () => {
+                    refreshProfile();
+                    onDone?.();
+                  },
+                  onError,
+                );
               }}
             />
           </motion.div>
@@ -171,7 +176,11 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <InventoryScreen onBack={() => setCurrentScreen("dashboard")} />
+            <InventoryScreen
+              onBack={() => setCurrentScreen("dashboard")}
+              onOpenMarketplace={() => setCurrentScreen("marketplace")}
+              onOpenTradeUp={() => setCurrentScreen("tradeup")}
+            />
           </motion.div>
         )}
 
