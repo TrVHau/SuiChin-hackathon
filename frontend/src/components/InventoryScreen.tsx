@@ -1,4 +1,5 @@
-import { ArrowLeft, RefreshCw } from "lucide-react";
+import { ArrowLeft, RefreshCw, ShoppingCart, ArrowUpCircle } from "lucide-react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { useOwnedNFTs } from "@/hooks/useOwnedNFTs";
 import type {
@@ -9,7 +10,18 @@ import type {
 
 interface InventoryScreenProps {
   onBack: () => void;
+  onOpenMarketplace?: () => void;
+  onOpenTradeUp?: () => void;
 }
+
+type TierFilter = "all" | 1 | 2 | 3;
+
+const FILTER_TABS: { label: string; value: TierFilter; emoji: string }[] = [
+  { label: "Tất cả", value: "all", emoji: "" },
+  { label: "Bronze", value: 1, emoji: "🥉" },
+  { label: "Silver", value: 2, emoji: "🥈" },
+  { label: "Gold",   value: 3, emoji: "🥇" },
+];
 
 const TIER_LABELS: Record<
   number,
@@ -112,8 +124,18 @@ const container = {
 };
 const item = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } };
 
-export default function InventoryScreen({ onBack }: InventoryScreenProps) {
+export default function InventoryScreen({
+  onBack,
+  onOpenMarketplace,
+  onOpenTradeUp,
+}: InventoryScreenProps) {
   const { cuonChuns, scraps, badges, loading, refetch } = useOwnedNFTs();
+  const [tierFilter, setTierFilter] = useState<TierFilter>("all");
+
+  const filteredNFTs =
+    tierFilter === "all"
+      ? cuonChuns
+      : cuonChuns.filter((n) => n.tier === tierFilter);
 
   const totalItems = cuonChuns.length + scraps.length + badges.length;
 

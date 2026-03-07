@@ -2,9 +2,54 @@ import { ArrowLeft, Hammer, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import { useSuiClient, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
 import { buildCraftChunTx } from "@/lib/sui-client";
-import { CRAFT_CHUN_COST, TREASURY_OBJECT_ID } from "@/config/sui.config";
+import {
+  CRAFT_CHUN_COST,
+  TREASURY_OBJECT_ID,
+  PACKAGE_ID,
+} from "@/config/sui.config";
+
+interface CraftResultData {
+  tier: number; // 0=Scrap, 1=Bronze, 2=Silver, 3=Gold
+  success: boolean;
+  roll: number;
+}
+
+const TIER_CONFIG = {
+  0: {
+    label: "Scrap",
+    emoji: "💀",
+    color: "text-gray-500",
+    borderColor: "border-gray-400",
+    bg: "bg-gray-100",
+    headline: "Thất bại — Nhận Scrap!",
+  },
+  1: {
+    label: "Bronze",
+    emoji: "🥉",
+    color: "text-amber-700",
+    borderColor: "border-amber-400",
+    bg: "bg-amber-50",
+    headline: "Bronze NFT! 🥉",
+  },
+  2: {
+    label: "Silver",
+    emoji: "🥈",
+    color: "text-slate-600",
+    borderColor: "border-slate-400",
+    bg: "bg-slate-50",
+    headline: "Silver NFT! ✨🥈",
+  },
+  3: {
+    label: "Gold",
+    emoji: "🥇",
+    color: "text-yellow-600",
+    borderColor: "border-yellow-400",
+    bg: "bg-yellow-50",
+    headline: "GOLD NFT! 🥇🎉",
+  },
+} as const;
 
 interface WorkshopScreenProps {
   onBack: () => void;
@@ -19,13 +64,35 @@ export default function WorkshopScreen({
   chunRaw,
   onSuccess,
 }: WorkshopScreenProps) {
+  const suiClient = useSuiClient();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const [crafting, setCrafting] = useState(false);
-  const [craftResult, setCraftResult] = useState<{ nftName: string } | null>(
-    null,
-  );
+  const [craftResult, setCraftResult] = useState<CraftResultData | null>(null);
 
   const canCraft = chunRaw >= CRAFT_CHUN_COST && !!TREASURY_OBJECT_ID;
+
+  const parseCraftEvent = async (digest: string): Promise<CraftResultData> => {
+    const txBlock = await suiClient.getTransactionBlock({
+      digest,
+      options: { showEvents: true },
+    });
+    const event = txBlock.events?.find(
+      (e) => e.type === `${PACKAGE_ID}::craft::CraftResult`,
+    );
+    if (event?.parsedJson) {
+      const { tier, success, roll } = event.parsedJson as {
+        tier: number;
+        success: boolean;
+        roll: number;
+      };
+      return {
+        tier: Number(tier),
+        success: Boolean(success),
+        roll: Number(roll),
+      };
+    }
+    return { tier: 1, success: true, roll: 0 };
+  };
 
   const handleCraft = () => {
     if (!canCraft || crafting) return;
@@ -38,10 +105,27 @@ export default function WorkshopScreen({
     signAndExecute(
       { transaction: tx },
       {
-        onSuccess: (result) => {
+        onSuccess: async (result) => {
+          try {
+            const data = await parseCraftEvent(result.digest);
+            setCraftResult(data);
+            const cfg =
+              TIER_CONFIG[data.tier as keyof typeof TIER_CONFIG] ??
+              TIER_CONFIG[0];
+            if (data.success) {
+              toast.success(`${cfg.headline} (roll: ${data.roll})`, {
+                id: "craft",
+              });
+            } else {
+              toast.error(`${cfg.headline} (roll: ${data.roll})`, {
+                id: "craft",
+              });
+            }
+          } catch {
+            setCraftResult({ tier: 1, success: true, roll: 0 });
+            toast.success("Craft hoàn tất! NFT đã về ví 🎉", { id: "craft" });
+          }
           setCrafting(false);
-          setCraftResult({ nftName: `Cuộn Chun #${result.digest.slice(-4)}` });
-          toast.success("Craft thành công! NFT đã về ví 🎉", { id: "craft" });
           onSuccess?.();
         },
         onError: (err) => {
@@ -52,9 +136,12 @@ export default function WorkshopScreen({
     );
   };
 
-  const handleReset = () => {
-    setCraftResult(null);
-  };
+  const handleReset = () => setCraftResult(null);
+
+  const cfg = craftResult
+    ? (TIER_CONFIG[craftResult.tier as keyof typeof TIER_CONFIG] ??
+      TIER_CONFIG[0])
+    : null;
 
   return (
     <div className="min-h-screen bg-sunny-gradient">
@@ -78,30 +165,34 @@ export default function WorkshopScreen({
         </div>
 
         <AnimatePresence mode="wait">
-          {craftResult ? (
+          {craftResult && cfg ? (
             /* ── Result Screen ── */
             <motion.div
               key="result"
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="bg-white rounded-4xl shadow-2xl p-10 border-8 border-playful-green text-center"
+              className={`rounded-4xl shadow-2xl p-10 border-8 text-center ${cfg.bg} ${cfg.borderColor}`}
             >
               <motion.div
-                animate={{ rotate: [0, -10, 10, -10, 0], scale: [1, 1.2, 1] }}
-                transition={{ duration: 0.8 }}
-                className="text-8xl mb-6"
+                animate={{ rotate: [0, -15, 15, -15, 0], scale: [1, 1.3, 1] }}
+                transition={{ duration: 0.9 }}
+                className="text-9xl mb-6"
               >
-                🎊
+                {cfg.emoji}
               </motion.div>
-              <h2 className="font-display font-black text-4xl text-gray-900 mb-3">
-                Craft thành công!
+              <h2
+                className={`font-display font-black text-3xl mb-3 ${cfg.color}`}
+              >
+                {cfg.headline}
               </h2>
-              <p className="text-gray-600 font-semibold text-lg mb-2">
-                {craftResult.nftName}
+              <p className="text-gray-500 font-semibold mb-2">
+                Roll: {craftResult.roll} / 99
               </p>
               <p className="text-gray-500 mb-8">
-                Cuộn Chun NFT đã về ví của bạn
+                {craftResult.success
+                  ? "NFT đã về ví của bạn 🎉"
+                  : "Scrap đã về ví — thử lại lần sau!"}
               </p>
               <div className="flex gap-4">
                 <motion.button
