@@ -10,7 +10,6 @@ import InventoryScreen from "@/components/InventoryScreen";
 import TradeUpScreen from "@/components/TradeUpScreen";
 import MarketplaceScreen from "@/components/MarketplaceScreen";
 import { useSuiProfile } from "@/hooks/useSuiProfile";
-import { useOwnedNFTs } from "@/hooks/useOwnedNFTs";
 import { toast } from "sonner";
 
 type Screen =
@@ -31,10 +30,8 @@ export default function App() {
     hasProfile,
     createProfile,
     reportResult,
-    claimAchievement,
     refreshProfile,
   } = useSuiProfile();
-  const { badges } = useOwnedNFTs();
 
   const handleLogin = async () => {
     if (!account) {
@@ -62,10 +59,6 @@ export default function App() {
   const handleLogout = () => {
     setCurrentScreen("login");
     toast.success("Đã đăng xuất");
-  };
-
-  const handleClaimAchievement = (milestone: number) => {
-    claimAchievement(milestone);
   };
 
   useEffect(() => {
@@ -142,8 +135,7 @@ export default function App() {
             <AchievementScreen
               onBack={() => setCurrentScreen("dashboard")}
               maxStreak={profile.streak}
-              claimedAchievements={badges.map((b) => b.badge_type)}
-              onClaim={handleClaimAchievement}
+              profileId={profile.objectId}
             />
           </motion.div>
         )}
