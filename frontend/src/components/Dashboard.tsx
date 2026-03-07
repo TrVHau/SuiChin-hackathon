@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import Header from "./Header";
+import { useOwnedNFTs } from "@/hooks/useOwnedNFTs";
 
 interface DashboardProps {
   playerData: {
@@ -52,12 +53,17 @@ export default function Dashboard({
   onOpenMarketplace,
   onLogout,
 }: DashboardProps) {
+  const { cuonChuns } = useOwnedNFTs();
+  const bronze = cuonChuns.filter((n) => n.tier === 1).length;
+  const silver = cuonChuns.filter((n) => n.tier === 2).length;
+  const gold = cuonChuns.filter((n) => n.tier === 3).length;
+
   return (
     <div className="min-h-screen bg-sunny-gradient">
       <Header
-        tier1={0}
-        tier2={0}
-        tier3={0}
+        tier1={bronze}
+        tier2={silver}
+        tier3={gold}
         totalPoints={playerData.chun_raw}
         address={playerData.address}
         onLogout={onLogout}

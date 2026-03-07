@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Toaster } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import LoginScreen from "@/components/LoginScreen";
@@ -10,6 +10,7 @@ import InventoryScreen from "@/components/InventoryScreen";
 import TradeUpScreen from "@/components/TradeUpScreen";
 import MarketplaceScreen from "@/components/MarketplaceScreen";
 import { useSuiProfile } from "@/hooks/useSuiProfile";
+import { useOwnedNFTs } from "@/hooks/useOwnedNFTs";
 import { toast } from "sonner";
 
 type Screen =
@@ -33,6 +34,7 @@ export default function App() {
     claimAchievement,
     refreshProfile,
   } = useSuiProfile();
+  const { badges } = useOwnedNFTs();
 
   const handleLogin = async () => {
     if (!account) {
@@ -66,9 +68,11 @@ export default function App() {
     claimAchievement(milestone);
   };
 
-  if (!account && currentScreen !== "login") {
-    setCurrentScreen("login");
-  }
+  useEffect(() => {
+    if (!account && currentScreen !== "login") {
+      setCurrentScreen("login");
+    }
+  }, [account, currentScreen]);
 
   return (
     <>
@@ -138,7 +142,7 @@ export default function App() {
             <AchievementScreen
               onBack={() => setCurrentScreen("dashboard")}
               maxStreak={profile.streak}
-              claimedAchievements={[]}
+              claimedAchievements={badges.map((b) => b.badge_type)}
               onClaim={handleClaimAchievement}
             />
           </motion.div>
