@@ -25,6 +25,16 @@ interface DashboardProps {
   onOpenInventory: () => void;
   onOpenTradeUp: () => void;
   onOpenMarketplace: () => void;
+  onNavigate: (
+    screen:
+      | "dashboard"
+      | "session"
+      | "mint"
+      | "inventory"
+      | "tradeup"
+      | "marketplace"
+      | "achievements",
+  ) => void;
   onLogout: () => void;
 }
 
@@ -51,6 +61,7 @@ export default function Dashboard({
   onOpenInventory,
   onOpenTradeUp,
   onOpenMarketplace,
+  onNavigate,
   onLogout,
 }: DashboardProps) {
   const { cuonChuns } = useOwnedNFTs();
@@ -59,13 +70,15 @@ export default function Dashboard({
   const gold = cuonChuns.filter((n) => n.tier === 3).length;
 
   return (
-    <div className="min-h-screen bg-sunny-gradient">
+    <div className="min-h-screen bg-sunny-gradient pb-24 lg:pb-0">
       <Header
         tier1={bronze}
         tier2={silver}
         tier3={gold}
         totalPoints={playerData.chun_raw}
         address={playerData.address}
+        currentScreen="dashboard"
+        onNavigate={onNavigate}
         onLogout={onLogout}
       />
 

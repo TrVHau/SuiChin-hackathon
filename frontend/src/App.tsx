@@ -104,6 +104,7 @@ export default function App() {
               onOpenInventory={() => setCurrentScreen("inventory")}
               onOpenTradeUp={() => setCurrentScreen("tradeup")}
               onOpenMarketplace={() => setCurrentScreen("marketplace")}
+              onNavigate={(screen) => setCurrentScreen(screen)}
               onLogout={handleLogout}
             />
           </motion.div>
