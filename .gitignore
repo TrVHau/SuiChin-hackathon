@@ -26,7 +26,7 @@ build/
 *.local
 
 # Environment variables
-.env
+.env # removed from ignore to allow push
 .env.local
 .env.*.local
 
