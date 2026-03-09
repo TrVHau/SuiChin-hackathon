@@ -81,9 +81,10 @@ export function useSuiProfile() {
     }
   }, [account?.address, suiClient, setStoreProfile]);
 
-  const createProfile = () => {
+  const createProfile = (onSuccess?: () => void, onError?: () => void) => {
     if (!account?.address) {
       toast.error("Vui lòng kết nối ví");
+      onError?.();
       return;
     }
 
@@ -92,12 +93,15 @@ export function useSuiProfile() {
       { transaction: tx },
       {
         onSuccess: () => {
-          toast.success("Tạo profile thành công!");
-          setTimeout(() => loadProfile(), 2000);
+          setTimeout(async () => {
+            await loadProfile();
+            onSuccess?.();
+          }, 2000);
         },
         onError: (error) => {
           console.error("Create profile error:", error);
           toast.error("Tạo profile thất bại");
+          onError?.();
         },
       },
     );

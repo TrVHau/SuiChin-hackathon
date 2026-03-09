@@ -39,8 +39,6 @@ export default function App() {
       return;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
     if (hasProfile && profile) {
       toast.success("Chào mừng trở lại!");
       setCurrentScreen("dashboard");
@@ -48,11 +46,15 @@ export default function App() {
       toast.loading("Chưa có profile. Đang tạo mới...", {
         id: "createProfile",
       });
-      createProfile();
-      setTimeout(() => {
-        toast.success("Tạo profile thành công!", { id: "createProfile" });
-        setCurrentScreen("dashboard");
-      }, 4000);
+      createProfile(
+        () => {
+          toast.success("Tạo profile thành công!", { id: "createProfile" });
+          setCurrentScreen("dashboard");
+        },
+        () => {
+          toast.dismiss("createProfile");
+        },
+      );
     }
   };
 
