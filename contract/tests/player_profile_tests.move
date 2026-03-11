@@ -437,7 +437,7 @@ module suichin::player_profile_tests {
             assert!(player_profile::chun_raw(&winner) == 10, 0);
             // loser: staked_chun was 10, now 0
             assert!(player_profile::staked_chun(&loser) == 0, 1);
-            sui::test_utils::destroy(oracle);
+            std::unit_test::destroy(oracle);
             test_scenario::return_to_address(PLAYER, winner);
             test_scenario::return_to_address(OTHER, loser);
         };

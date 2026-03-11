@@ -346,6 +346,10 @@ module suichin::craft_tests {
             test_scenario::return_to_sender(&scenario, admin_cap);
         };
 
+        clock::destroy_for_testing(clock);
+        test_scenario::end(scenario);
+    }
+
     #[test]
     fun test_current_craft_cost_initial() {
         let mut scenario = test_scenario::begin(ADMIN);
