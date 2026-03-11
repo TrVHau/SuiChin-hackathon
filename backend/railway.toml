@@ -1,0 +1,10 @@
+# Deploy to Railway
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "npm run build && npm start"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3

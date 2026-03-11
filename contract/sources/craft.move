@@ -7,6 +7,7 @@
 ///   roll 92–97 → Silver  ( 6%)
 ///   roll 98–99 → Gold    ( 2%)
 ///
+/// Chi phí chun_raw tăng theo halving: cost = 10 × 2^(total_crafts / 1000), giới hạn 640.
 /// Pseudo-RNG seed = clock_ms XOR (epoch × 1_000_003) XOR addr_seed
 /// (Đủ cho hackathon demo. Production nên dùng sui::random VRF.)
 module suichin::craft {
@@ -21,8 +22,15 @@ module suichin::craft {
     use suichin::scrap;
 
     // ─── Constants ────────────────────────────────────────────────────────────
-    const CRAFT_FEE:           u64 = 100_000_000; // 0.1 SUI in MIST
-    const COST_CHUN_PER_CRAFT: u64 = 10;          // chun_raw cần để craft
+    const CRAFT_FEE:         u64 = 100_000_000; // 0.1 SUI in MIST
+    const COST_CHUN_BASE:    u64 = 10;           // chi phí gốc
+    const COST_CHUN_MAX:     u64 = 640;          // giới hạn tối đa
+    const HALVING_INTERVAL:  u64 = 1_000;        // số craft để tăng gấp đôi
+
+    // Số variant mỗi tier (Bronze=4, Silver=4, Gold=3)
+    const BRONZE_VARIANTS: u64 = 4;
+    const SILVER_VARIANTS: u64 = 4;
+    const GOLD_VARIANTS:   u64 = 3;
 
     // Phạm vi roll
     const ROLL_BRONZE_START: u64 = 80;
@@ -39,6 +47,7 @@ module suichin::craft {
     public struct Treasury has key {
         id: UID,
         balance: Balance<SUI>,
+        total_crafts: u64, // tổng số lần craft thành công NFT (dùng tính halving)
     }
 
     /// AdminCap cho phép rút tiền từ Treasury. Owned bởi deployer.
@@ -60,6 +69,7 @@ module suichin::craft {
         let treasury = Treasury {
             id: object::new(ctx),
             balance: balance::zero<SUI>(),
+            total_crafts: 0,
         };
         let admin_cap = AdminCap {
             id: object::new(ctx),
@@ -69,6 +79,25 @@ module suichin::craft {
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    /// Chi phí chun_raw hiện tại dựa trên halving.
+    /// cost = COST_CHUN_BASE × 2^(total_crafts / HALVING_INTERVAL), tối đa COST_CHUN_MAX.
+    public fun current_craft_cost(treasury: &Treasury): u64 {
+        let steps = treasury.total_crafts / HALVING_INTERVAL;
+        // Giới hạn: 2^6 = 64 → 10×64 = 640 = COST_CHUN_MAX
+        if (steps >= 6) {
+            COST_CHUN_MAX
+        } else {
+            // 2^steps — dùng vòng lặp đơn giản
+            let mut multiplier: u64 = 1;
+            let mut i = 0;
+            while (i < steps) {
+                multiplier = multiplier * 2;
+                i = i + 1;
+            };
+            COST_CHUN_BASE * multiplier
+        }
+    }
 
     /// Pseudo-RNG đơn giản cho hackathon demo.
     /// Seed = clock_ms XOR (epoch × 1_000_003) XOR (8 bytes đầu của địa chỉ)
@@ -115,7 +144,8 @@ module suichin::craft {
         assert!(payment_value >= CRAFT_FEE, E_INSUFFICIENT_PAYMENT);
 
         // Trừ chun_raw trước khi RNG (sẽ abort nếu không đủ chun)
-        player_profile::spend_chun(profile, COST_CHUN_PER_CRAFT);
+        let chun_cost = current_craft_cost(treasury);
+        player_profile::spend_chun(profile, chun_cost);
 
         // Tách đúng CRAFT_FEE vào Treasury, hoàn trả phần dư
         let fee_coin = coin::split(&mut payment, CRAFT_FEE, ctx);
@@ -126,8 +156,10 @@ module suichin::craft {
             coin::destroy_zero(payment);
         };
 
-        // RNG
+        // RNG — roll tier
         let roll = roll_rng(clock, ctx);
+        // roll2 dùng để chọn variant (seed thêm total_crafts để tách biệt)
+        let variant_seed = clock::timestamp_ms(clock) ^ treasury.total_crafts;
 
         if (roll < ROLL_BRONZE_START) {
             // 80% → Scrap
@@ -136,18 +168,24 @@ module suichin::craft {
             event::emit(CraftResult { crafter: sender, success: false, tier: 0, roll, fee_paid: CRAFT_FEE });
         } else if (roll < ROLL_SILVER_START) {
             // 12% → Bronze
-            let nft = cuon_chun::mint(1, ctx);
+            let variant = ((variant_seed % BRONZE_VARIANTS) + 1) as u8;
+            let nft = cuon_chun::mint(1, variant, ctx);
             transfer::public_transfer(nft, sender);
+            treasury.total_crafts = treasury.total_crafts + 1;
             event::emit(CraftResult { crafter: sender, success: true, tier: 1, roll, fee_paid: CRAFT_FEE });
         } else if (roll < ROLL_GOLD_START) {
             // 6% → Silver
-            let nft = cuon_chun::mint(2, ctx);
+            let variant = ((variant_seed % SILVER_VARIANTS) + 1) as u8;
+            let nft = cuon_chun::mint(2, variant, ctx);
             transfer::public_transfer(nft, sender);
+            treasury.total_crafts = treasury.total_crafts + 1;
             event::emit(CraftResult { crafter: sender, success: true, tier: 2, roll, fee_paid: CRAFT_FEE });
         } else {
             // 2% → Gold
-            let nft = cuon_chun::mint(3, ctx);
+            let variant = ((variant_seed % GOLD_VARIANTS) + 1) as u8;
+            let nft = cuon_chun::mint(3, variant, ctx);
             transfer::public_transfer(nft, sender);
+            treasury.total_crafts = treasury.total_crafts + 1;
             event::emit(CraftResult { crafter: sender, success: true, tier: 3, roll, fee_paid: CRAFT_FEE });
         };
     }
@@ -170,10 +208,19 @@ module suichin::craft {
         balance::value(&treasury.balance)
     }
 
+    public fun total_crafts(treasury: &Treasury): u64 {
+        treasury.total_crafts
+    }
+
     // ─── Test-only Helpers ───────────────────────────────────────────────────────────
 
     #[test_only]
     public fun test_init(ctx: &mut TxContext) {
         init(ctx)
+    }
+
+    #[test_only]
+    public fun set_total_crafts_for_testing(treasury: &mut Treasury, n: u64) {
+        treasury.total_crafts = n;
     }
 }

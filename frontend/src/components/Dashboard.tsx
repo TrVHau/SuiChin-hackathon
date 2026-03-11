@@ -7,10 +7,12 @@ import {
   ArrowUpCircle,
   ShoppingCart,
   Clock,
+  Swords,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import Header from "./Header";
+import FaucetPanel from "./FaucetPanel";
 import { useOwnedNFTs } from "@/hooks/useOwnedNFTs";
 import { COOLDOWN_MS } from "@/config/sui.config";
 
@@ -22,6 +24,9 @@ interface DashboardProps {
     streak: number;
     address: string;
     last_played_ms: number;
+    staked_chun?: number;
+    last_faucet_ms?: number;
+    objectId?: string;
   };
   onStartGame: () => void;
   onOpenMint: () => void;
@@ -29,6 +34,7 @@ interface DashboardProps {
   onOpenInventory: () => void;
   onOpenTradeUp: () => void;
   onOpenMarketplace: () => void;
+  onOpenPvP?: () => void;
   onNavigate: (
     screen:
       | "dashboard"
@@ -65,6 +71,7 @@ export default function Dashboard({
   onOpenInventory,
   onOpenTradeUp,
   onOpenMarketplace,
+  onOpenPvP,
   onNavigate,
   onLogout,
 }: DashboardProps) {
@@ -330,7 +337,7 @@ export default function Dashboard({
               onClick={onOpenMarketplace}
               whileHover={{ scale: 1.05, rotate: 2 }}
               whileTap={{ scale: 0.95 }}
-              className="bg-white border-8 border-playful-green rounded-4xl p-8 text-left shadow-2xl group relative overflow-hidden md:col-span-2"
+              className="bg-white border-8 border-playful-green rounded-4xl p-8 text-left shadow-2xl group relative overflow-hidden"
             >
               <div className="absolute top-4 right-4 text-6xl opacity-20 group-hover:scale-150 transition-transform">
                 🛒
@@ -347,8 +354,44 @@ export default function Dashboard({
                 </p>
               </div>
             </motion.button>
+
+            {/* PvP Online */}
+            {onOpenPvP && (
+              <motion.button
+                variants={item}
+                onClick={onOpenPvP}
+                whileHover={{ scale: 1.05, rotate: -2 }}
+                whileTap={{ scale: 0.95 }}
+                className="bg-white border-8 border-red-400 rounded-4xl p-8 text-left shadow-2xl group relative overflow-hidden md:col-span-2"
+              >
+                <div className="absolute top-4 right-4 text-6xl opacity-20 group-hover:scale-150 transition-transform">
+                  ⚔️
+                </div>
+                <div className="relative z-10">
+                  <div className="bg-red-500 text-white p-5 rounded-3xl mb-5 inline-block border-4 border-white shadow-lg">
+                    <Swords className="size-12" />
+                  </div>
+                  <h3 className="font-display font-black text-3xl text-gray-900 mb-3">
+                    PvP Online ⚔️
+                  </h3>
+                  <p className="text-gray-700 font-semibold text-lg">
+                    Tìm đối thủ thật — cược Chun, giải quyết on-chain
+                  </p>
+                </div>
+              </motion.button>
+            )}
           </div>
         </motion.div>
+
+        {/* Faucet Panel */}
+        {playerData.objectId && (
+          <div className="mt-8">
+            <FaucetPanel
+              profileId={playerData.objectId}
+              lastFaucetMs={playerData.last_faucet_ms ?? 0}
+            />
+          </div>
+        )}
       </main>
     </div>
   );

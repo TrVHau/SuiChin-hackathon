@@ -36,10 +36,31 @@ export const BADGE_TYPE = `${PACKAGE_ID}::${MODULES.ACHIEVEMENT}::AchievementBad
 export const PLAYER_PROFILE_TYPE = `${PACKAGE_ID}::${MODULES.PLAYER_PROFILE}::PlayerProfile`;
 
 // ─── Game Constants (khớp contract v2) ───────────────────────────────────────
-export const CRAFT_CHUN_COST = 10; // chun_raw cần để craft
+export const CRAFT_CHUN_COST = 10; // chun_raw cần để craft (base, before halving)
 export const CRAFT_FEE_MIST = 100_000_000n; // 0.1 SUI in MIST
 export const MAX_DELTA_CHUN = 20; // delta tối đa mỗi ván
 export const COOLDOWN_MS = 10_000; // cooldown giữa 2 lần report_result
+
+// ─── Faucet Constants (khớp contract) ────────────────────────────────────────
+export const FAUCET_COOLDOWN_MS = 7_200_000; // 2 giờ
+export const FAUCET_MAX_STACK = 10;           // tối đa chun stack được
+
+// ─── Halving ─────────────────────────────────────────────────────────────────
+export const HALVING_INTERVAL = 1_000;
+export const COST_CHUN_BASE = 10;
+export const COST_CHUN_MAX = 640;
+
+/** Compute chun cost given total_crafts counter (mirrors on-chain formula). */
+export function computeCraftCost(totalCrafts: number): number {
+  const steps = Math.floor(totalCrafts / HALVING_INTERVAL);
+  return steps >= 6 ? COST_CHUN_MAX : COST_CHUN_BASE * Math.pow(2, steps);
+}
+
+// ─── Backend ──────────────────────────────────────────────────────────────────
+export const BACKEND_WS_URL =
+  import.meta.env.VITE_BACKEND_WS_URL ?? 'ws://localhost:4000/ws';
+export const BACKEND_REST_URL =
+  import.meta.env.VITE_BACKEND_REST_URL ?? 'http://localhost:4000';
 
 export const ACHIEVEMENT_MILESTONES = {
   BEGINNER: 1,

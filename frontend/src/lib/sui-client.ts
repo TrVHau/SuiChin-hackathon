@@ -40,6 +40,26 @@ export function buildReportResultTx(
   return tx;
 }
 
+/** Claim faucet chun_raw. Cần Clock object. */
+export function buildClaimFaucetTx(profileId: string): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${PACKAGE_ID}::${MODULES.PLAYER_PROFILE}::claim_faucet`,
+    arguments: [tx.object(profileId), tx.object(CLOCK_OBJECT_ID)],
+  });
+  return tx;
+}
+
+/** Lock `amount` chun_raw vào staked_chun trước PvP match. */
+export function buildLockForMatchTx(profileId: string, amount: number): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${PACKAGE_ID}::${MODULES.PLAYER_PROFILE}::lock_for_match`,
+    arguments: [tx.object(profileId), tx.pure.u64(amount)],
+  });
+  return tx;
+}
+
 // ─── craft module ──────────────────────────────────────────────────────────────
 
 /**

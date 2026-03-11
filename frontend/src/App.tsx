@@ -9,6 +9,7 @@ import GameSession from "@/components/GameSession";
 import InventoryScreen from "@/components/InventoryScreen";
 import TradeUpScreen from "@/components/TradeUpScreen";
 import MarketplaceScreen from "@/components/MarketplaceScreen";
+import PvPScreen from "@/components/PvPScreen";
 import { useSuiProfile } from "@/hooks/useSuiProfile";
 import { toast } from "sonner";
 
@@ -20,7 +21,8 @@ type Screen =
   | "session"
   | "inventory"
   | "tradeup"
-  | "marketplace";
+  | "marketplace"
+  | "pvp";
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>("login");
@@ -100,6 +102,9 @@ export default function App() {
                 streak: profile.streak,
                 address: account?.address || "",
                 last_played_ms: profile.last_played_ms,
+                staked_chun: profile.staked_chun,
+                last_faucet_ms: profile.last_faucet_ms,
+                objectId: profile.objectId,
               }}
               onStartGame={() => setCurrentScreen("session")}
               onOpenMint={() => setCurrentScreen("workshop")}
@@ -107,6 +112,7 @@ export default function App() {
               onOpenInventory={() => setCurrentScreen("inventory")}
               onOpenTradeUp={() => setCurrentScreen("tradeup")}
               onOpenMarketplace={() => setCurrentScreen("marketplace")}
+              onOpenPvP={() => setCurrentScreen("pvp")}
               onNavigate={(screen) => setCurrentScreen(screen)}
               onLogout={handleLogout}
             />
@@ -205,6 +211,22 @@ export default function App() {
             exit={{ opacity: 0 }}
           >
             <MarketplaceScreen onBack={() => setCurrentScreen("dashboard")} />
+          </motion.div>
+        )}
+
+        {currentScreen === "pvp" && profile && (
+          <motion.div
+            key="pvp"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <PvPScreen
+              onBack={() => setCurrentScreen("dashboard")}
+              profileId={profile.objectId}
+              chunRaw={profile.chun_raw}
+              onSuccess={refreshProfile}
+            />
           </motion.div>
         )}
       </AnimatePresence>

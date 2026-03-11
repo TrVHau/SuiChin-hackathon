@@ -1,5 +1,6 @@
 /// Tests for suichin::player_profile module
-/// Covers: init_profile, report_result (win/lose/streak/cooldown/delta/owner checks)
+/// Covers: init_profile, report_result (win/lose/streak/cooldown/delta/owner checks),
+///         faucet (claim/stack/cooldown), PvP staking (lock/resolve/unlock)
 #[test_only]
 module suichin::player_profile_tests {
     use sui::test_scenario;
@@ -263,6 +264,201 @@ module suichin::player_profile_tests {
             let mut profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
             player_profile::set_chun_raw_for_testing(&mut profile, 50);
             assert!(player_profile::chun_raw(&profile) == 50, 0);
+            test_scenario::return_to_sender(&scenario, profile);
+        };
+        test_scenario::end(scenario);
+    }
+
+    // ─── Faucet Tests ─────────────────────────────────────────────────────────
+
+    #[test]
+    fun test_faucet_claim_full_stack() {
+        // last_faucet_ms = 0 → elapsed chưa giới hạn → pending = MAX_STACK (10)
+        let mut scenario = test_scenario::begin(PLAYER);
+        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+        // 100 cooldown cycles (7_200_000 * 100) → well above max stack
+        clock::set_for_testing(&mut clock, 720_000_001);
+        {
+            player_profile::init_profile(test_scenario::ctx(&mut scenario));
+        };
+        test_scenario::next_tx(&mut scenario, PLAYER);
+        {
+            let mut profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
+            assert!(player_profile::pending_faucet(&profile, &clock) == 10, 0);
+            player_profile::claim_faucet(&mut profile, &clock, test_scenario::ctx(&mut scenario));
+            assert!(player_profile::chun_raw(&profile) == 10, 1);
+            assert!(player_profile::last_faucet_ms(&profile) == 720_000_001, 2);
+            test_scenario::return_to_sender(&scenario, profile);
+        };
+        clock::destroy_for_testing(clock);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_faucet_claim_partial_stack() {
+        // Elapsed = 2 cooldown periods → pending = 2
+        let mut scenario = test_scenario::begin(PLAYER);
+        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+        clock::set_for_testing(&mut clock, 14_400_001); // 2 * 7_200_001 ms
+        {
+            player_profile::init_profile(test_scenario::ctx(&mut scenario));
+        };
+        test_scenario::next_tx(&mut scenario, PLAYER);
+        {
+            let mut profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
+            assert!(player_profile::pending_faucet(&profile, &clock) == 2, 0);
+            player_profile::claim_faucet(&mut profile, &clock, test_scenario::ctx(&mut scenario));
+            assert!(player_profile::chun_raw(&profile) == 2, 1);
+            test_scenario::return_to_sender(&scenario, profile);
+        };
+        clock::destroy_for_testing(clock);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure]
+    fun test_faucet_claim_too_soon() {
+        // Elapsed < 1 cooldown period → abort E_FAUCET_NOTHING_TO_CLAIM
+        let mut scenario = test_scenario::begin(PLAYER);
+        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+        clock::set_for_testing(&mut clock, 3_600_000); // only 1 hour elapsed
+        {
+            player_profile::init_profile(test_scenario::ctx(&mut scenario));
+        };
+        test_scenario::next_tx(&mut scenario, PLAYER);
+        {
+            let mut profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
+            // manually set last_faucet_ms so elapsed = 3_600_000 ms (< 7_200_000)
+            // We simulate by setting clock before profile creation was at 0
+            // last_faucet_ms is 0 and clock is 3_600_000 → elapsed = 3_600_000 < COOLDOWN → pending = 0
+            player_profile::claim_faucet(&mut profile, &clock, test_scenario::ctx(&mut scenario));
+            test_scenario::return_to_sender(&scenario, profile);
+        };
+        clock::destroy_for_testing(clock);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure]
+    fun test_faucet_claim_not_owner() {
+        let mut scenario = test_scenario::begin(PLAYER);
+        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+        clock::set_for_testing(&mut clock, 720_000_001);
+        {
+            player_profile::init_profile(test_scenario::ctx(&mut scenario));
+        };
+        test_scenario::next_tx(&mut scenario, OTHER);
+        {
+            let mut profile = test_scenario::take_from_address<PlayerProfile>(&scenario, PLAYER);
+            player_profile::claim_faucet(&mut profile, &clock, test_scenario::ctx(&mut scenario));
+            test_scenario::return_to_address(PLAYER, profile);
+        };
+        clock::destroy_for_testing(clock);
+        test_scenario::end(scenario);
+    }
+
+    // ─── PvP Staking Tests ────────────────────────────────────────────────────
+
+    #[test]
+    fun test_lock_for_match() {
+        let mut scenario = test_scenario::begin(PLAYER);
+        {
+            player_profile::init_profile(test_scenario::ctx(&mut scenario));
+        };
+        test_scenario::next_tx(&mut scenario, PLAYER);
+        {
+            let mut profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
+            player_profile::set_chun_raw_for_testing(&mut profile, 20);
+            player_profile::lock_for_match(&mut profile, 10, test_scenario::ctx(&mut scenario));
+            assert!(player_profile::chun_raw(&profile) == 10, 0);
+            assert!(player_profile::staked_chun(&profile) == 10, 1);
+            test_scenario::return_to_sender(&scenario, profile);
+        };
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure]
+    fun test_lock_for_match_insufficient() {
+        let mut scenario = test_scenario::begin(PLAYER);
+        {
+            player_profile::init_profile(test_scenario::ctx(&mut scenario));
+        };
+        test_scenario::next_tx(&mut scenario, PLAYER);
+        {
+            let mut profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
+            // chun_raw = 0, try to lock 5 → abort
+            player_profile::lock_for_match(&mut profile, 5, test_scenario::ctx(&mut scenario));
+            test_scenario::return_to_sender(&scenario, profile);
+        };
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_resolve_match() {
+        let mut scenario = test_scenario::begin(PLAYER);
+        {
+            // Create both profiles
+            player_profile::init_profile(test_scenario::ctx(&mut scenario));
+        };
+        test_scenario::next_tx(&mut scenario, OTHER);
+        {
+            player_profile::init_profile(test_scenario::ctx(&mut scenario));
+        };
+
+        // Fund + lock PLAYER (winner)
+        test_scenario::next_tx(&mut scenario, PLAYER);
+        {
+            let mut profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
+            player_profile::set_chun_raw_for_testing(&mut profile, 10);
+            player_profile::lock_for_match(&mut profile, 10, test_scenario::ctx(&mut scenario));
+            test_scenario::return_to_sender(&scenario, profile);
+        };
+
+        // Fund + lock OTHER (loser)
+        test_scenario::next_tx(&mut scenario, OTHER);
+        {
+            let mut profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
+            player_profile::set_chun_raw_for_testing(&mut profile, 10);
+            player_profile::lock_for_match(&mut profile, 10, test_scenario::ctx(&mut scenario));
+            test_scenario::return_to_sender(&scenario, profile);
+        };
+
+        // Oracle resolves: PLAYER wins 10 from OTHER
+        test_scenario::next_tx(&mut scenario, PLAYER);
+        {
+            let mut winner = test_scenario::take_from_address<PlayerProfile>(&scenario, PLAYER);
+            let mut loser  = test_scenario::take_from_address<PlayerProfile>(&scenario, OTHER);
+            let oracle = player_profile::create_match_oracle_for_testing(
+                test_scenario::ctx(&mut scenario)
+            );
+            player_profile::resolve_match(&mut winner, &mut loser, 10, &oracle);
+            // winner: chun_raw was 0 (all staked), now +10
+            assert!(player_profile::chun_raw(&winner) == 10, 0);
+            // loser: staked_chun was 10, now 0
+            assert!(player_profile::staked_chun(&loser) == 0, 1);
+            sui::test_utils::destroy(oracle);
+            test_scenario::return_to_address(PLAYER, winner);
+            test_scenario::return_to_address(OTHER, loser);
+        };
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_unlock_from_match() {
+        let mut scenario = test_scenario::begin(PLAYER);
+        {
+            player_profile::init_profile(test_scenario::ctx(&mut scenario));
+        };
+        test_scenario::next_tx(&mut scenario, PLAYER);
+        {
+            let mut profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
+            player_profile::set_chun_raw_for_testing(&mut profile, 20);
+            player_profile::lock_for_match(&mut profile, 10, test_scenario::ctx(&mut scenario));
+            // Simulate cancellation: package unlocks
+            player_profile::unlock_from_match(&mut profile, 10);
+            assert!(player_profile::chun_raw(&profile) == 20, 0);
+            assert!(player_profile::staked_chun(&profile) == 0, 1);
             test_scenario::return_to_sender(&scenario, profile);
         };
         test_scenario::end(scenario);

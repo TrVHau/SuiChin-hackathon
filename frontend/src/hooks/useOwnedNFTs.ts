@@ -6,7 +6,8 @@ import { useGameStore } from "@/stores/gameStore";
 
 export interface CuonChunNFT {
   objectId: string;
-  tier: number; // 1=Bronze, 2=Silver, 3=Gold
+  tier: number;     // 1=Bronze, 2=Silver, 3=Gold
+  variant: number;  // 1-based skin index
   name: string;
   image_url: string;
 }
@@ -78,6 +79,7 @@ export function useOwnedNFTs(): OwnedNFTs {
         return {
           objectId: obj.data.objectId,
           tier: Number(f.tier ?? 1),
+          variant: Number(f.variant ?? 1),
           name: String(f.name ?? ""),
           image_url: String(f.image_url ?? ""),
         };

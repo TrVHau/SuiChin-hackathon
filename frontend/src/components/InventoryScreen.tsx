@@ -68,6 +68,9 @@ function NFTCard({
       </p>
       <p className="text-xs font-bold text-gray-500 mb-2">
         {tier.emoji} {tier.label}
+        {nft.variant > 0 && (
+          <span className="ml-1 text-xs text-indigo-500">· v{nft.variant}</span>
+        )}
       </p>
       <div className="flex gap-1 mt-auto">
         {onList && (

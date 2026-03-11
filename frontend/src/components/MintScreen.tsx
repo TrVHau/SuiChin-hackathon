@@ -1,13 +1,14 @@
 import { ArrowLeft, Hammer, Sparkles } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useSuiClient, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
 import { buildCraftChunTx } from "@/lib/sui-client";
 import {
-  CRAFT_CHUN_COST,
   TREASURY_OBJECT_ID,
   PACKAGE_ID,
+  CRAFT_FEE_MIST,
+  computeCraftCost,
 } from "@/config/sui.config";
 
 // ── Confetti ──
@@ -106,8 +107,22 @@ export default function WorkshopScreen({
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const [crafting, setCrafting] = useState(false);
   const [craftResult, setCraftResult] = useState<CraftResultData | null>(null);
+  const [craftCost, setCraftCost] = useState<number>(10);
 
-  const canCraft = chunRaw >= CRAFT_CHUN_COST && !!TREASURY_OBJECT_ID;
+  // Fetch halving cost from Treasury
+  useEffect(() => {
+    if (!TREASURY_OBJECT_ID) return;
+    suiClient
+      .getObject({ id: TREASURY_OBJECT_ID, options: { showContent: true } })
+      .then((obj) => {
+        const fields = (obj.data?.content as { fields?: Record<string, unknown> })?.fields;
+        const total = Number(fields?.total_crafts ?? 0);
+        setCraftCost(computeCraftCost(total));
+      })
+      .catch(() => {/* keep default */});
+  }, [suiClient]);
+
+  const canCraft = chunRaw >= craftCost && !!TREASURY_OBJECT_ID;
 
   const parseCraftEvent = async (digest: string): Promise<CraftResultData> => {
     const txBlock = await suiClient.getTransactionBlock({
@@ -331,7 +346,7 @@ export default function WorkshopScreen({
                     <div className="text-center">
                       <div className="text-5xl mb-2">🔮</div>
                       <p className="font-black text-2xl text-playful-orange">
-                        {CRAFT_CHUN_COST}
+                        {craftCost}
                       </p>
                       <p className="text-sm text-gray-500 font-semibold">
                         Chun Raw
@@ -365,9 +380,9 @@ export default function WorkshopScreen({
                     className={`font-display font-black text-3xl ${canCraft ? "text-playful-green" : "text-red-500"}`}
                   >
                     {chunRaw}
-                    {!canCraft && chunRaw < CRAFT_CHUN_COST && (
+                    {!canCraft && chunRaw < craftCost && (
                       <span className="text-sm font-semibold text-red-400 ml-2">
-                        (cần {CRAFT_CHUN_COST - chunRaw} nữa)
+                        (cần {craftCost - chunRaw} nữa)
                       </span>
                     )}
                   </span>

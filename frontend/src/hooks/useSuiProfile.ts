@@ -25,6 +25,8 @@ export interface PlayerProfileData {
   losses: number;
   streak: number;
   last_played_ms: number;
+  staked_chun: number;
+  last_faucet_ms: number;
 }
 
 export function useSuiProfile() {
@@ -69,6 +71,8 @@ export function useSuiProfile() {
           losses: Number(fields.losses ?? 0),
           streak: Number(fields.streak ?? 0),
           last_played_ms: Number(fields.last_played_ms ?? 0),
+          staked_chun: Number(fields.staked_chun ?? 0),
+          last_faucet_ms: Number(fields.last_faucet_ms ?? 0),
         };
         setProfile(data);
         setStoreProfile(data);
