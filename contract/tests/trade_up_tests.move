@@ -20,7 +20,7 @@ module suichin::trade_up_tests {
         while (i < count) {
             vector::push_back(
                 &mut nfts,
-                cuon_chun::mint(tier, test_scenario::ctx(scenario)),
+                cuon_chun::mint(tier, 1u8, test_scenario::ctx(scenario)),
             );
             i = i + 1;
         };

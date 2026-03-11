@@ -23,7 +23,7 @@ module suichin::marketplace_tests {
         // Player mints an NFT
         test_scenario::next_tx(scenario, PLAYER);
         {
-            let nft = cuon_chun::mint(tier, test_scenario::ctx(scenario));
+            let nft = cuon_chun::mint(tier, 1u8, test_scenario::ctx(scenario));
             transfer::public_transfer(nft, PLAYER);
         };
 

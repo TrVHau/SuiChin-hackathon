@@ -88,7 +88,8 @@ module suichin::trade_up {
         let roll = roll_rng(clock, ctx);
         if (roll < BRONZE_TO_SILVER_RATE) {
             // 70% → Silver
-            let nft = cuon_chun::mint(2, ctx);
+            let variant = ((roll % 4) + 1) as u8;
+            let nft = cuon_chun::mint(2, variant, ctx);
             transfer::public_transfer(nft, sender);
             event::emit(TradeUpResult {
                 trader: sender,
@@ -131,7 +132,8 @@ module suichin::trade_up {
         let roll = roll_rng(clock, ctx);
         if (roll < SILVER_TO_GOLD_RATE) {
             // 55% → Gold
-            let nft = cuon_chun::mint(3, ctx);
+            let variant = ((roll % 3) + 1) as u8;
+            let nft = cuon_chun::mint(3, variant, ctx);
             transfer::public_transfer(nft, sender);
             event::emit(TradeUpResult {
                 trader: sender,
