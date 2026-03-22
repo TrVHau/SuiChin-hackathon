@@ -1,4 +1,4 @@
-﻿import { ArrowLeft, Hammer, Sparkles } from "lucide-react";
+import { ArrowLeft, Hammer, Sparkles } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -10,7 +10,7 @@ import {
   computeCraftCost,
 } from "@/config/sui.config";
 
-// â”€â”€ Confetti â”€â”€
+// ── Confetti ──
 const CONFETTI_COLORS = ["#FF6B6B","#FFE66D","#4ECDC4","#A78BFA","#34D399","#F472B6","#FCD34D","#60A5FA"];
 
 function Confetti() {
@@ -57,35 +57,35 @@ interface CraftResultData {
 const TIER_CONFIG = {
   0: {
     label: "Scrap",
-    emoji: "ðŸ’€",
+    emoji: "💀",
     color: "text-gray-500",
     borderColor: "border-gray-400",
     bg: "bg-gray-100",
-    headline: "Tháº¥t báº¡i â€” Nháº­n Scrap!",
+    headline: "Thất bại — Nhận Scrap!",
   },
   1: {
     label: "Bronze",
-    emoji: "ðŸ¥‰",
+    emoji: "🥉",
     color: "text-amber-700",
     borderColor: "border-amber-400",
     bg: "bg-amber-50",
-    headline: "Bronze NFT! ðŸ¥‰",
+    headline: "Bronze NFT! 🥉",
   },
   2: {
     label: "Silver",
-    emoji: "ðŸ¥ˆ",
+    emoji: "🥈",
     color: "text-slate-600",
     borderColor: "border-slate-400",
     bg: "bg-slate-50",
-    headline: "Silver NFT! âœ¨ðŸ¥ˆ",
+    headline: "Silver NFT! ✨🥈",
   },
   3: {
     label: "Gold",
-    emoji: "ðŸ¥‡",
+    emoji: "🥇",
     color: "text-yellow-600",
     borderColor: "border-yellow-400",
     bg: "bg-yellow-50",
-    headline: "GOLD NFT! ðŸ¥‡ðŸŽ‰",
+    headline: "GOLD NFT! 🥇🎉",
   },
 } as const;
 
@@ -107,6 +107,11 @@ export default function WorkshopScreen({
   const [crafting, setCrafting] = useState(false);
   const [craftResult, setCraftResult] = useState<CraftResultData | null>(null);
   const [craftCost, setCraftCost] = useState<number>(10);
+  const [displayChunRaw, setDisplayChunRaw] = useState<number>(chunRaw);
+
+  useEffect(() => {
+    setDisplayChunRaw(chunRaw);
+  }, [chunRaw]);
 
   // Fetch halving cost from Treasury
   useEffect(() => {
@@ -121,13 +126,20 @@ export default function WorkshopScreen({
       .catch(() => {/* keep default */});
   }, [suiClient]);
 
-  const canCraft = chunRaw >= craftCost && !!TREASURY_OBJECT_ID;
+  const canCraft = displayChunRaw >= craftCost && !!TREASURY_OBJECT_ID;
 
   const parseCraftEvent = async (digest: string): Promise<CraftResultData> => {
     const txBlock = await suiClient.getTransactionBlock({
       digest,
-      options: { showEvents: true },
+      options: { showEvents: true, showEffects: true, showObjectChanges: true },
     });
+
+    const status = (txBlock.effects as { status?: { status?: string; error?: string } } | undefined)
+      ?.status;
+    if (status?.status === "failure") {
+      throw new Error(status.error ?? "Transaction failed");
+    }
+
     const event = txBlock.events?.find(
       (e) => e.type === `${PACKAGE_ID}::craft::CraftResult`,
     );
@@ -143,7 +155,37 @@ export default function WorkshopScreen({
         roll: Number(roll),
       };
     }
-    return { tier: 1, success: true, roll: 0 };
+
+    const createdObjects = (txBlock.objectChanges ?? []).filter(
+      (change) => change.type === "created",
+    );
+
+    const createdScrap = createdObjects.find((change) =>
+      String(change.objectType ?? "").includes("::scrap::Scrap"),
+    );
+    if (createdScrap) {
+      return { tier: 0, success: false, roll: -1 };
+    }
+
+    const createdNft = createdObjects.find((change) =>
+      String(change.objectType ?? "").includes("::cuon_chun::CuonChunNFT"),
+    );
+    if (createdNft) {
+      const createdObjectId = "objectId" in createdNft ? String(createdNft.objectId) : "";
+      if (createdObjectId) {
+        const nftObj = await suiClient.getObject({
+          id: createdObjectId,
+          options: { showContent: true },
+        });
+        const fields = (nftObj.data?.content as { fields?: Record<string, unknown> } | undefined)
+          ?.fields;
+        const tier = Number(fields?.tier ?? 1);
+        return { tier, success: true, roll: -1 };
+      }
+      return { tier: 1, success: true, roll: -1 };
+    }
+
+    throw new Error("Khong doc duoc ket qua craft tren chain");
   };
 
   const readLiveCraftState = async (): Promise<{ liveChun: number; liveCost: number }> => {
@@ -167,6 +209,7 @@ export default function WorkshopScreen({
 
     try {
       const { liveChun, liveCost } = await readLiveCraftState();
+      setDisplayChunRaw(liveChun);
       setCraftCost(liveCost);
       if (liveChun < liveCost) {
         toast.error(`Khong du Chun Raw. Can ${liveCost}, hien co ${liveChun}.`);
@@ -189,21 +232,39 @@ export default function WorkshopScreen({
           try {
             const data = await parseCraftEvent(result.digest);
             setCraftResult(data);
+            try {
+              const { liveChun, liveCost } = await readLiveCraftState();
+              setDisplayChunRaw(liveChun);
+              setCraftCost(liveCost);
+            } catch {
+              // Keep existing UI state if post-craft read fails.
+            }
             const cfg =
               TIER_CONFIG[data.tier as keyof typeof TIER_CONFIG] ??
               TIER_CONFIG[0];
+            const rollText = data.roll >= 0 ? ` (roll: ${data.roll})` : "";
             if (data.success) {
-              toast.success(`${cfg.headline} (roll: ${data.roll})`, {
+              toast.success(`${cfg.headline}${rollText}`, {
                 id: "craft",
               });
             } else {
-              toast.error(`${cfg.headline} (roll: ${data.roll})`, {
+              toast.error(`${cfg.headline}${rollText}`, {
                 id: "craft",
               });
             }
-          } catch {
-            setCraftResult({ tier: 1, success: true, roll: 0 });
-            toast.success("Craft hoan tat! NFT da ve vi", { id: "craft" });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : "Unknown error";
+            toast.error(`Craft that bai: ${message}`, { id: "craft" });
+            try {
+              const { liveChun, liveCost } = await readLiveCraftState();
+              setDisplayChunRaw(liveChun);
+              setCraftCost(liveCost);
+            } catch {
+              // Ignore extra read errors here.
+            }
+            onSuccess?.();
+            setCrafting(false);
+            return;
           }
           setCrafting(false);
           onSuccess?.();
@@ -246,7 +307,7 @@ export default function WorkshopScreen({
             <ArrowLeft className="size-7 text-playful-purple" />
           </motion.button>
           <div className="flex items-center gap-3">
-            <span className="text-5xl">âš’ï¸</span>
+            <span className="text-5xl">⚒️</span>
             <h1 className="font-display font-black text-4xl text-gray-900">
               Workshop
             </h1>
@@ -255,7 +316,7 @@ export default function WorkshopScreen({
 
         <AnimatePresence mode="wait">
           {craftResult && cfg ? (
-            /* â”€â”€ Result Screen â”€â”€ */
+            /* ── Result Screen ── */
             <motion.div
               key="result"
               initial={{ scale: 0.8, opacity: 0 }}
@@ -277,12 +338,12 @@ export default function WorkshopScreen({
                 {cfg.headline}
               </h2>
               <p className="text-gray-500 font-semibold mb-2">
-                Roll: {craftResult.roll} / 99
+                {craftResult.roll >= 0 ? `Roll: ${craftResult.roll} / 99` : "Ket qua da xac nhan on-chain"}
               </p>
               <p className="text-gray-500 mb-8">
                 {craftResult.success
-                  ? "NFT Ä‘Ã£ vá» vÃ­ cá»§a báº¡n ðŸŽ‰"
-                  : "Scrap Ä‘Ã£ vá» vÃ­ â€” thá»­ láº¡i láº§n sau!"}
+                  ? "NFT đã về ví của bạn 🎉"
+                  : "Scrap đã về ví — thử lại lần sau!"}
               </p>
               <div className="flex gap-4">
                 <motion.button
@@ -292,7 +353,7 @@ export default function WorkshopScreen({
                   className="flex-1 btn-playful bg-playful-purple text-white border-4 border-white text-xl"
                 >
                   <Hammer className="size-6" />
-                  Craft tiáº¿p
+                  Craft tiếp
                 </motion.button>
                 <motion.button
                   onClick={onBack}
@@ -300,12 +361,12 @@ export default function WorkshopScreen({
                   whileTap={{ scale: 0.95 }}
                   className="flex-1 btn-playful bg-white text-gray-800 border-4 border-gray-300 text-xl"
                 >
-                  Vá» Dashboard
+                  Về Dashboard
                 </motion.button>
               </div>
             </motion.div>
           ) : crafting ? (
-            /* â”€â”€ Forging Animation â”€â”€ */
+            /* ── Forging Animation ── */
             <motion.div
               key="forging"
               initial={{ opacity: 0, scale: 0.9 }}
@@ -327,7 +388,7 @@ export default function WorkshopScreen({
                   }}
                   className="text-9xl select-none"
                 >
-                  âš’ï¸
+                  ⚒️
                 </motion.div>
                 <motion.div
                   animate={{ scale: [1, 2.2, 1], opacity: [0.25, 0.05, 0.25] }}
@@ -340,13 +401,13 @@ export default function WorkshopScreen({
                 transition={{ duration: 1.4, repeat: Infinity }}
                 className="text-5xl mb-4"
               >
-                ðŸ®
+                🏮
               </motion.div>
               <h2 className="font-display font-black text-3xl text-playful-purple mb-2">
-                Äang rÃ¨n NFT...
+                Đang rèn NFT...
               </h2>
               <p className="text-gray-500 font-semibold mb-6">
-                Chá» blockchain xÃ¡c nháº­n â›“ï¸
+                Chờ blockchain xác nhận ⛓️
               </p>
               <div className="flex justify-center gap-2">
                 {[0, 0.25, 0.5].map((delay, i) => (
@@ -360,7 +421,7 @@ export default function WorkshopScreen({
               </div>
             </motion.div>
           ) : (
-            /* â”€â”€ Craft Form â”€â”€ */
+            /* ── Craft Form ── */
             <motion.div
               key="form"
               initial={{ opacity: 0, y: 20 }}
@@ -370,17 +431,17 @@ export default function WorkshopScreen({
               {/* Info card */}
               <div className="bg-white rounded-4xl shadow-2xl p-8 border-8 border-playful-purple mb-6">
                 <h2 className="font-display font-black text-2xl text-gray-900 mb-6">
-                  Craft Cuá»™n Chun NFT
+                  Craft Cuộn Chun NFT
                 </h2>
 
                 {/* Recipe */}
                 <div className="bg-sunny-50 border-4 border-sunny-300 rounded-3xl p-6 mb-6">
                   <h3 className="font-bold text-gray-700 uppercase text-sm mb-4">
-                    NguyÃªn liá»‡u
+                    Nguyên liệu
                   </h3>
                   <div className="flex items-center justify-around">
                     <div className="text-center">
-                      <div className="text-5xl mb-2">ðŸ”®</div>
+                      <div className="text-5xl mb-2">🔮</div>
                       <p className="font-black text-2xl text-playful-orange">
                         {craftCost}
                       </p>
@@ -390,15 +451,15 @@ export default function WorkshopScreen({
                     </div>
                     <div className="text-3xl text-gray-400">+</div>
                     <div className="text-center">
-                      <div className="text-5xl mb-2">ðŸ’§</div>
+                      <div className="text-5xl mb-2">💧</div>
                       <p className="font-black text-2xl text-playful-blue">
                         0.1
                       </p>
                       <p className="text-sm text-gray-500 font-semibold">SUI</p>
                     </div>
-                    <div className="text-3xl text-gray-400">â†’</div>
+                    <div className="text-3xl text-gray-400">→</div>
                     <div className="text-center">
-                      <div className="text-5xl mb-2">ðŸ®</div>
+                      <div className="text-5xl mb-2">🏮</div>
                       <p className="font-black text-2xl text-playful-purple">
                         1
                       </p>
@@ -410,15 +471,15 @@ export default function WorkshopScreen({
                 {/* Current balance */}
                 <div className="flex items-center justify-between bg-gray-50 border-4 border-gray-200 rounded-3xl p-5 mb-6">
                   <span className="font-bold text-gray-700">
-                    Chun Raw hiá»‡n cÃ³:
+                    Chun Raw hiện có:
                   </span>
                   <span
                     className={`font-display font-black text-3xl ${canCraft ? "text-playful-green" : "text-red-500"}`}
                   >
-                    {chunRaw}
-                    {!canCraft && chunRaw < craftCost && (
+                    {displayChunRaw}
+                    {!canCraft && displayChunRaw < craftCost && (
                       <span className="text-sm font-semibold text-red-400 ml-2">
-                        (cáº§n {craftCost - chunRaw} ná»¯a)
+                        (cần {craftCost - displayChunRaw} nữa)
                       </span>
                     )}
                   </span>
@@ -427,7 +488,7 @@ export default function WorkshopScreen({
                 {!TREASURY_OBJECT_ID && (
                   <div className="bg-yellow-50 border-4 border-yellow-400 rounded-3xl p-4 mb-4">
                     <p className="text-yellow-800 font-bold text-sm">
-                      âš ï¸ VITE_TREASURY_OBJECT_ID chÆ°a Ä‘Æ°á»£c cáº¥u hÃ¬nh trong .env
+                      ⚠️ VITE_TREASURY_OBJECT_ID chưa được cấu hình trong .env
                     </p>
                   </div>
                 )}
@@ -447,7 +508,7 @@ export default function WorkshopScreen({
                   {crafting ? (
                     <>
                       <div className="size-6 border-4 border-white/40 border-t-white rounded-full animate-spin" />
-                      Äang craft...
+                      Đang craft...
                     </>
                   ) : (
                     <>
@@ -461,15 +522,15 @@ export default function WorkshopScreen({
               {/* Description */}
               <div className="bg-white/70 rounded-3xl p-6 border-4 border-white">
                 <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                  <span>ðŸ“–</span> Cuá»™n Chun NFT lÃ  gÃ¬?
+                  <span>📖</span> Cuộn Chun NFT là gì?
                 </h3>
                 <ul className="space-y-2 text-gray-600 font-semibold text-sm">
                   <li>
-                    â€¢ NFT on-chain Ä‘Æ°á»£c mint tá»« Chun Raw kiáº¿m qua gameplay
+                    • NFT on-chain được mint từ Chun Raw kiếm qua gameplay
                   </li>
-                  <li>â€¢ CÃ³ thá»ƒ giao dá»‹ch trÃªn Marketplace</li>
-                  <li>â€¢ DÃ¹ng Ä‘á»ƒ Trade-up lÃªn tier cao hÆ¡n</li>
-                  <li>â€¢ Má»—i NFT lÃ  unique, cÃ³ tier: Bronze / Silver / Gold</li>
+                  <li>• Có thể giao dịch trên Marketplace</li>
+                  <li>• Dùng để Trade-up lên tier cao hơn</li>
+                  <li>• Mỗi NFT là unique, có tier: Bronze / Silver / Gold</li>
                 </ul>
               </div>
             </motion.div>

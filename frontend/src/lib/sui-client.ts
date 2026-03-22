@@ -44,10 +44,11 @@ export function buildReportResultTx(
 export function buildClaimFaucetTx(
   profileId: string,
   functionName: string = "claim_faucet",
+  moduleName: string = MODULES.PLAYER_PROFILE,
 ): Transaction {
   const tx = new Transaction();
   tx.moveCall({
-    target: `${PACKAGE_ID}::${MODULES.PLAYER_PROFILE}::${functionName}`,
+    target: `${PACKAGE_ID}::${moduleName}::${functionName}`,
     arguments: [tx.object(profileId), tx.object(CLOCK_OBJECT_ID)],
   });
   return tx;
