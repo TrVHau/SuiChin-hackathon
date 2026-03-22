@@ -1,174 +1,272 @@
-import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { toast } from 'sonner';
-import { buildLockForMatchTx } from '@/lib/sui-client';
-import { BACKEND_WS_URL } from '@/config/sui.config';
-import type { ServerMessage } from '../../../backend/src/types';
+import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { io, type Socket } from "socket.io-client";
+import { BACKEND_WS_URL } from "@/config/sui.config";
+
+type MatchResult = "WIN" | "LOSE" | "DRAW" | "FORFEIT";
+
+interface QueueJoinAck {
+  ok: boolean;
+  result?: {
+    matched: boolean;
+    roomId?: string;
+    opponentWallet?: string;
+    challengeId?: string;
+  };
+  error?: string;
+}
+
+interface SubmitResultAck {
+  ok: boolean;
+  result?: {
+    totalSubmissions: number;
+  };
+  finalized?: {
+    winnerWallet: string | null;
+    txDigest: string | null;
+  };
+  error?: string;
+}
+
+interface MatchStartEvent {
+  roomId: string;
+  players: string[];
+  challengeId: string;
+}
+
+interface MatchFinalizedEvent {
+  challengeId: string;
+  winnerWallet: string | null;
+  txDigest: string | null;
+}
 
 export type PvPStatus =
-  | 'idle'
-  | 'connecting'
-  | 'waiting'
-  | 'matched'
-  | 'locking'
-  | 'playing'
-  | 'resolved'
-  | 'error';
+  | "idle"
+  | "connecting"
+  | "waiting"
+  | "matched"
+  | "playing"
+  | "submitting"
+  | "resolved"
+  | "error";
 
 export interface PvPState {
   status: PvPStatus;
   roomId: string | null;
+  challengeId: string | null;
   opponent: string | null;
   wager: number;
   round: number;
-  scores: [number, number]; // [mine, opponent]
+  scores: [number, number];
   resultTx: string | null;
   winner: string | null;
+  submittedResult: MatchResult | null;
 }
 
 const INITIAL_STATE: PvPState = {
-  status: 'idle',
+  status: "idle",
   roomId: null,
+  challengeId: null,
   opponent: null,
   wager: 0,
   round: 1,
   scores: [0, 0],
   resultTx: null,
   winner: null,
+  submittedResult: null,
 };
 
-export function usePvP(profileId: string | undefined) {
+export function usePvP(_profileId: string | undefined) {
   const account = useCurrentAccount();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
-  const wsRef = useRef<WebSocket | null>(null);
-
+  const socketRef = useRef<Socket | null>(null);
   const [pvp, setPvP] = useState<PvPState>(INITIAL_STATE);
 
-  const send = useCallback((msg: object) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(msg));
-    }
+  const safeDisconnect = useCallback(() => {
+    const socket = socketRef.current;
+    if (!socket) return;
+    socket.removeAllListeners();
+    socket.disconnect();
+    socketRef.current = null;
   }, []);
 
-  const handleMessage = useCallback(
-    (raw: string) => {
-      let msg: ServerMessage;
-      try {
-        msg = JSON.parse(raw) as ServerMessage;
-      } catch {
-        return;
-      }
+  const setMatchedFromEvent = useCallback(
+    (event: MatchStartEvent) => {
+      const myWallet = account?.address ?? "";
+      const opponentWallet = event.players.find((wallet) => wallet !== myWallet) ?? null;
 
-      switch (msg.type) {
-        case 'waiting':
-          setPvP(s => ({ ...s, status: 'waiting' }));
-          break;
+      setPvP((prev) => ({
+        ...prev,
+        status: "matched",
+        roomId: event.roomId,
+        challengeId: event.challengeId,
+        opponent: opponentWallet,
+      }));
 
-        case 'match_found':
-          setPvP(s => ({
-            ...s,
-            status: 'matched',
-            roomId: msg.roomId,
-            opponent: msg.opponent,
-            wager: msg.wager,
-          }));
-          toast.success(`Tìm thấy đối thủ! Đang lock ${msg.wager} Chun...`);
-          // Auto-lock on-chain
-          if (profileId) {
-            signAndExecute(
-              { transaction: buildLockForMatchTx(profileId, msg.wager) },
-              {
-                onSuccess: (result) => {
-                  setPvP(s => ({ ...s, status: 'locking' }));
-                  send({
-                    type: 'lock_confirmed',
-                    address: account?.address,
-                    roomId: msg.roomId,
-                    txDigest: result.digest,
-                  });
-                },
-                onError: (err) => {
-                  toast.error(`Lock thất bại: ${err.message}`);
-                  setPvP(s => ({ ...s, status: 'error' }));
-                },
-              },
-            );
-          }
-          break;
-
-        case 'round_start':
-          setPvP(s => ({ ...s, status: 'playing', round: msg.round }));
-          break;
-
-        case 'match_result':
-          setPvP(s => ({
-            ...s,
-            status: 'resolved',
-            winner: msg.winner,
-            resultTx: msg.txDigest,
-          }));
-          if (msg.winner === account?.address) {
-            toast.success('Bạn thắng! 🏆');
-          } else {
-            toast.error('Bạn thua! 💀');
-          }
-          break;
-
-        case 'error':
-          toast.error(`[PvP] ${msg.message}`);
-          setPvP(s => ({ ...s, status: 'error' }));
-          break;
-      }
+      toast.success("Da tim thay doi thu. Bat dau tran!");
+      setTimeout(() => {
+        setPvP((prev) => (prev.status === "matched" ? { ...prev, status: "playing" } : prev));
+      }, 700);
     },
-    [account, profileId, send, signAndExecute],
+    [account?.address],
   );
 
   const joinQueue = useCallback(
     (wager: number) => {
       if (!account?.address) {
-        toast.error('Vui lòng kết nối ví');
+        toast.error("Vui long ket noi vi");
         return;
       }
-      if (pvp.status !== 'idle' && pvp.status !== 'error') return;
 
-      const ws = new WebSocket(BACKEND_WS_URL);
-      wsRef.current = ws;
-      setPvP({ ...INITIAL_STATE, status: 'connecting', wager });
+      if (pvp.status !== "idle" && pvp.status !== "error") {
+        return;
+      }
 
-      ws.onopen = () => {
-        send({ type: 'join_queue', address: account.address, wager });
-      };
-      ws.onmessage = (e: MessageEvent<string>) => handleMessage(e.data);
-      ws.onerror = () => {
-        toast.error('Không kết nối được Backend');
-        setPvP(s => ({ ...s, status: 'error' }));
-      };
-      ws.onclose = () => {
-        if (pvp.status === 'playing') {
-          toast.info('Kết nối bị ngắt');
+      safeDisconnect();
+      setPvP({
+        ...INITIAL_STATE,
+        status: "connecting",
+        wager,
+      });
+
+      const socket = io(BACKEND_WS_URL, {
+        auth: { walletAddress: account.address },
+        transports: ["websocket"],
+      });
+      socketRef.current = socket;
+
+      socket.on("connect", () => {
+        socket.emit("queue.join", (ack: QueueJoinAck) => {
+          if (!ack.ok) {
+            toast.error(ack.error ?? "queue.join failed");
+            setPvP((prev) => ({ ...prev, status: "error" }));
+            return;
+          }
+
+          if (!ack.result?.matched) {
+            setPvP((prev) => ({ ...prev, status: "waiting" }));
+            return;
+          }
+
+          if (
+            ack.result.roomId &&
+            ack.result.challengeId &&
+            ack.result.opponentWallet
+          ) {
+            setMatchedFromEvent({
+              roomId: ack.result.roomId,
+              challengeId: ack.result.challengeId,
+              players: [account.address, ack.result.opponentWallet],
+            });
+          }
+        });
+      });
+
+      socket.on("match.start", (event: MatchStartEvent) => {
+        setMatchedFromEvent(event);
+      });
+
+      socket.on("match.result.finalized", (event: MatchFinalizedEvent) => {
+        setPvP((prev) => {
+          if (prev.challengeId !== event.challengeId) return prev;
+
+          return {
+            ...prev,
+            status: "resolved",
+            winner: event.winnerWallet,
+            resultTx: event.txDigest,
+          };
+        });
+
+        if (event.winnerWallet === account.address) {
+          toast.success("Ban thang!");
+        } else if (!event.winnerWallet) {
+          toast.info("Tran dau hoa");
+        } else {
+          toast.error("Ban thua");
         }
-      };
+      });
+
+      socket.on("connect_error", () => {
+        toast.error("Khong ket noi duoc backend");
+        setPvP((prev) => ({ ...prev, status: "error" }));
+      });
+
+      socket.on("disconnect", () => {
+        setPvP((prev) => {
+          if (prev.status === "resolved" || prev.status === "idle") {
+            return prev;
+          }
+          return { ...prev, status: "error" };
+        });
+      });
     },
-    [account, pvp.status, send, handleMessage],
+    [account, pvp.status, safeDisconnect, setMatchedFromEvent],
   );
 
   const leaveQueue = useCallback(() => {
-    if (account?.address) send({ type: 'leave_queue', address: account.address });
-    wsRef.current?.close();
-    setPvP(INITIAL_STATE);
-  }, [account, send]);
+    const socket = socketRef.current;
+    if (socket && socket.connected) {
+      socket.emit("queue.leave", () => undefined);
+    }
 
-  /** Report round result to backend (called after game engine decides winner). */
+    safeDisconnect();
+    setPvP(INITIAL_STATE);
+  }, [safeDisconnect]);
+
   const reportRound = useCallback(
     (winnerId: string) => {
-      if (!pvp.roomId) return;
-      send({ type: 'round_result', roomId: pvp.roomId, winnerId });
+      const socket = socketRef.current;
+      if (!socket || !account?.address) return;
+      if (!pvp.challengeId) return;
+      if (pvp.submittedResult) return;
+
+      const result: MatchResult = winnerId === account.address ? "WIN" : "LOSE";
+      const challengeId = pvp.challengeId;
+
+      setPvP((prev) => ({
+        ...prev,
+        status: "submitting",
+        submittedResult: result,
+        scores:
+          result === "WIN"
+            ? [prev.scores[0] + 1, prev.scores[1]]
+            : [prev.scores[0], prev.scores[1] + 1],
+      }));
+
+      socket.emit(
+        "match.result.submit",
+        { challengeId, result },
+        (ack: SubmitResultAck) => {
+          if (!ack.ok) {
+            toast.error(ack.error ?? "Gui ket qua that bai");
+            setPvP((prev) => ({ ...prev, status: "error" }));
+            return;
+          }
+
+          if (ack.finalized) {
+            setPvP((prev) => ({
+              ...prev,
+              status: "resolved",
+              winner: ack.finalized?.winnerWallet ?? null,
+              resultTx: ack.finalized?.txDigest ?? null,
+            }));
+            return;
+          }
+
+          setPvP((prev) => ({ ...prev, status: "matched" }));
+          toast.info("Da gui ket qua, dang cho doi thu...");
+        },
+      );
     },
-    [pvp.roomId, send],
+    [account, pvp.challengeId, pvp.submittedResult],
   );
 
-  // Clean up on unmount
-  useEffect(() => () => void wsRef.current?.close(), []);
+  useEffect(() => {
+    return () => {
+      safeDisconnect();
+    };
+  }, [safeDisconnect]);
 
   return { pvp, joinQueue, leaveQueue, reportRound };
 }

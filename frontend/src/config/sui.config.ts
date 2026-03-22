@@ -58,9 +58,9 @@ export function computeCraftCost(totalCrafts: number): number {
 
 // ─── Backend ──────────────────────────────────────────────────────────────────
 export const BACKEND_WS_URL =
-  import.meta.env.VITE_BACKEND_WS_URL ?? 'ws://localhost:4000/ws';
+  import.meta.env.VITE_BACKEND_WS_URL ?? "http://localhost:4000/multiplayer";
 export const BACKEND_REST_URL =
-  import.meta.env.VITE_BACKEND_REST_URL ?? 'http://localhost:4000';
+  import.meta.env.VITE_BACKEND_REST_URL ?? "http://localhost:4000";
 
 export const ACHIEVEMENT_MILESTONES = {
   BEGINNER: 1,

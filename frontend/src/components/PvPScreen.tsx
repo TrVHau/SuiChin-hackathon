@@ -1,8 +1,8 @@
-import { ArrowLeft, Swords, Trophy, Loader2 } from 'lucide-react';
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { useCurrentAccount } from '@mysten/dapp-kit';
-import { usePvP } from '@/hooks/usePvP';
+import { ArrowLeft, Loader2, Swords, Trophy } from "lucide-react";
+import { useState } from "react";
+import { motion } from "framer-motion";
+import { useCurrentAccount } from "@mysten/dapp-kit";
+import { usePvP } from "@/hooks/usePvP";
 
 const WAGER_OPTIONS = [1, 5, 10, 20, 50];
 
@@ -45,7 +45,7 @@ export default function PvPScreen({ onBack, profileId, chunRaw, onSuccess }: PvP
         </div>
 
         {/* Idle / wager selection */}
-        {(pvp.status === 'idle' || pvp.status === 'error') && (
+        {(pvp.status === "idle" || pvp.status === "error") && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -85,7 +85,7 @@ export default function PvPScreen({ onBack, profileId, chunRaw, onSuccess }: PvP
         )}
 
         {/* Searching */}
-        {(pvp.status === 'connecting' || pvp.status === 'waiting') && (
+        {(pvp.status === "connecting" || pvp.status === "waiting") && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -106,7 +106,7 @@ export default function PvPScreen({ onBack, profileId, chunRaw, onSuccess }: PvP
         )}
 
         {/* Matched / locking */}
-        {(pvp.status === 'matched' || pvp.status === 'locking') && (
+        {(pvp.status === "matched" || pvp.status === "submitting") && (
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -117,13 +117,17 @@ export default function PvPScreen({ onBack, profileId, chunRaw, onSuccess }: PvP
             <p className="text-gray-500 break-all text-sm mb-4">{pvp.opponent}</p>
             <div className="flex items-center justify-center gap-2">
               <Loader2 className="size-5 animate-spin text-green-500" />
-              <span className="font-semibold text-green-600">Đang lock on-chain...</span>
+              <span className="font-semibold text-green-600">
+                {pvp.status === "submitting"
+                  ? "Đã gửi kết quả, chờ đối thủ..."
+                  : "Đang vào trận..."}
+              </span>
             </div>
           </motion.div>
         )}
 
         {/* Playing */}
-        {pvp.status === 'playing' && (
+        {pvp.status === "playing" && (
           <motion.div
             key={`round-${pvp.round}`}
             initial={{ opacity: 0, y: 20 }}
@@ -150,6 +154,7 @@ export default function PvPScreen({ onBack, profileId, chunRaw, onSuccess }: PvP
                 onClick={() => reportRound(account?.address ?? '')}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
+                disabled={Boolean(pvp.submittedResult)}
                 className="flex-1 py-3 rounded-2xl font-black text-white bg-green-500 hover:bg-green-600"
               >
                 Tôi thắng ✅
@@ -158,16 +163,22 @@ export default function PvPScreen({ onBack, profileId, chunRaw, onSuccess }: PvP
                 onClick={() => reportRound(pvp.opponent ?? '')}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
+                disabled={Boolean(pvp.submittedResult)}
                 className="flex-1 py-3 rounded-2xl font-black text-white bg-red-400 hover:bg-red-500"
               >
                 Tôi thua ❌
               </motion.button>
             </div>
+            {pvp.submittedResult && (
+              <p className="text-xs text-gray-500 mt-3">
+                Đã gửi kết quả của bạn, đang chờ backend finalize...
+              </p>
+            )}
           </motion.div>
         )}
 
         {/* Resolved */}
-        {pvp.status === 'resolved' && (
+        {pvp.status === "resolved" && (
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -175,7 +186,11 @@ export default function PvPScreen({ onBack, profileId, chunRaw, onSuccess }: PvP
           >
             <Trophy className="size-16 text-yellow-500 mx-auto mb-4" />
             <p className="font-black text-3xl text-gray-900 mb-2">
-              {isMe(pvp.winner ?? '') ? 'Bạn thắng! 🏆' : 'Bạn thua 💀'}
+              {!pvp.winner
+                ? "Hòa trận"
+                : isMe(pvp.winner ?? "")
+                  ? "Bạn thắng! 🏆"
+                  : "Bạn thua 💀"}
             </p>
             {pvp.resultTx && (
               <p className="text-xs text-gray-400 break-all mb-6">
