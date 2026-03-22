@@ -1,4 +1,4 @@
-# Đặc Tả Handoff Contract Multiplayer (Cho Member Làm Contract)
+﻿# Đặc Tả Handoff Contract Multiplayer (Cho Member Làm Contract)
 
 ## 1. Mục tiêu
 Tài liệu này mô tả chính xác phạm vi phía contract cần có cho backend multiplayer mới.
@@ -8,21 +8,56 @@ Tài liệu này mô tả chính xác phạm vi phía contract cần có cho bac
 Nguồn tham chiếu: `aidlc-docs/inception/elaboration-multiplayer-requirements-questions.md`
 
 Các quyết định đã khóa:
-- Mode bắt buộc: 1v1 realtime, async challenge, tournament.
+- Mode bắt buộc: 1v1 realtime, async challenge.
+- Không triển khai tournament/create giải trong scope hiện tại.
 - Cách tìm đối thủ: random, invite theo address, open challenge.
 - Mô hình backend: hybrid (realtime off-chain + finalize/reward on-chain).
 - Staking: tùy chọn theo từng challenge (phải hỗ trợ cả stake và non-stake).
 - UI: Multiplayer là tab top-level.
 
+## 2.1 Cơ chế gameplay và thắng thua (bắt buộc mô tả trong contract)
+Phần này là nguồn tham chiếu để implement logic trạng thái và payout.
+
+### A. Realtime 1v1
+1. Hai người vào cùng một challenge/match.
+2. Backend realtime xác định kết quả ván và gửi verdict.
+3. Contract nhận submit/finalize theo verdict backend.
+
+Quy tắc thắng thua:
+- `WIN`: người thắng nhận reward/payout theo mode stake.
+- `LOSE`: người thua không nhận payout.
+- `FORFEIT`: nếu một bên timeout/không submit trong thời gian cho phép thì xử thua.
+- `DRAW` (tùy bật): nếu backend kết luận hòa thì refund theo chính sách draw.
+
+### B. Async challenge
+1. Challenger tạo challenge, opponent vào chơi sau.
+2. Mỗi bên có một cửa sổ thời gian để submit kết quả.
+3. Khi đủ điều kiện, oracle/backend finalize trên chain.
+
+Quy tắc thắng thua:
+- So sánh theo tiêu chí backend chốt (ví dụ score/time/round result).
+- Nếu một bên không submit trước hạn: bên đó thua theo `FORFEIT`.
+- Nếu cả hai không submit trước hạn: challenge `EXPIRED`, hoàn tiền theo rule.
+
+### C. Quy tắc payout stake (mode stake = true)
+Quy tắc đề xuất để implement rõ trong contract:
+1. Cả hai bên nạp stake bằng nhau.
+2. Kết quả `WIN/LOSE`: winner nhận toàn bộ pot (hoặc trừ protocol fee nếu có).
+3. Kết quả `DRAW`: hoàn stake cho cả hai bên theo policy.
+4. `CANCEL/EXPIRE`: refund an toàn theo trạng thái vòng đời.
+
+### D. Quy tắc chốt tranh chấp
+Contract không tự verify gameplay frame-by-frame.
+Nguồn xác thực cuối cùng là oracle/backend signer đã được cấp quyền finalize.
+
 ## 3. Phạm vi contract
 Module mới cần có:
 1. `duel_v2.move`
-2. `tournament.move`
 
 Tái sử dụng các module kinh tế/profile hiện có nếu phù hợp (`player_profile`, NFT modules).
 Không ép migrate các feature craft/trade-up không liên quan trong phase này.
 
-## 4. Module bắt buộc A: `duel_v2.move`
+## 4. Module bắt buộc: `duel_v2.move`
 
 ### 4.1 Trách nhiệm chính
 - Tạo/quản lý duel challenge.
@@ -47,7 +82,7 @@ Không ép migrate các feature craft/trade-up không liên quan trong phase nà
 - `stake_enabled: bool`
 - `stake_mist: u64`
 - `status: u8` (0 open, 1 accepted, 2 active, 3 submitted, 4 finalized, 5 cancelled, 6 expired)
-- `challenger_result: option<u8>` (0 thua, 1 thắng, optional)
+- `challenger_result: option<u8>` (0 thua, 1 thắng, 2 hòa, 3 forfeit)
 - `opponent_result: option<u8>`
 - `winner: option<address>`
 - `created_at_ms: u64`
@@ -102,48 +137,7 @@ Không ép migrate các feature craft/trade-up không liên quan trong phase nà
 - Check ownership ở cấp object cho mọi action theo address.
 - Finalize chỉ qua oracle với validate cap/authority rõ ràng.
 
-## 5. Module bắt buộc B: `tournament.move`
-
-### 5.1 Trách nhiệm chính
-- Tạo tournament season/instance.
-- Đăng ký người chơi (có hoặc không entry fee).
-- Đóng đăng ký và chốt bracket.
-- Ghi nhận tiến trình match.
-- Finalize thứ hạng và payout.
-
-### 5.2 Gợi ý object
-1. `TournamentConfig` (shared):
-- admin/oracle config
-- fee settings
-- max participants defaults
-
-2. `Tournament` (shared):
-- `id: UID`
-- `status: u8` (0 registration, 1 seeded, 2 running, 3 completed, 4 cancelled)
-- `entry_fee_mist: u64`
-- `prize_pool: Balance<SUI>`
-- `max_participants: u64`
-- `registered_count: u64`
-- `start_at_ms: u64`
-- `end_at_ms: u64`
-
-3. `TournamentMatch` / bracket storage:
-- match id
-- round index
-- player A/B
-- winner (optional)
-- completion marker
-
-### 5.3 Entry function bắt buộc
-1. `create_tournament(...)` (admin only)
-2. `register_tournament(...)` (player; có/không có fee)
-3. `close_registration_and_seed(...)` (admin/oracle)
-4. `report_match_result(...)` (oracle authority)
-5. `finalize_tournament(...)` (oracle/admin authority)
-6. `claim_prize(...)` (nếu payout theo kiểu pull-based)
-7. `cancel_tournament(...)` + refunds (admin, theo pre-start rules)
-
-## 6. Event contract (bắt buộc để backend index)
+## 5. Event contract (bắt buộc để backend index)
 Phải emit event cho mọi state transition chính:
 - `ChallengeCreated`
 - `ChallengeAccepted`
@@ -153,22 +147,14 @@ Phải emit event cho mọi state transition chính:
 - `ChallengeFinalized`
 - `StakeRefunded`
 - `StakePaidOut`
-- `TournamentCreated`
-- `TournamentRegistered`
-- `TournamentSeeded`
-- `TournamentMatchResult`
-- `TournamentFinalized`
-- `TournamentPrizePaid`
 
-Event fields phải có ID ổn định (`challenge_id` / `tournament_id`), participant addresses, timestamp, status.
+Event fields phải có ID ổn định (`challenge_id`), participant addresses, timestamp, status.
 
-## 7. Contract backend cần nhận sau deploy
+## 6. Contract backend cần nhận sau deploy
 Sau khi deploy, contract owner phải bàn giao cho backend team:
 1. `PACKAGE_ID`
 2. Shared object IDs:
 - `DuelConfig` ID
-- `TournamentConfig` ID
-- Các `Tournament` ID đang active (nếu pre-create)
 3. Chi tiết oracle authority:
 - mô hình cap/object ownership
 - policy account dùng để ký
@@ -176,7 +162,7 @@ Sau khi deploy, contract owner phải bàn giao cho backend team:
 5. Danh sách ABI/function signature bản cuối (copy-paste ready)
 6. Error code map (numeric code -> meaning)
 
-## 8. Security requirements (blocking)
+## 7. Security requirements (blocking)
 Áp dụng cho thiết kế contract trong scope này:
 - Authorization: deny-by-default cho hành động đặc quyền.
 - Input bounds: validate mode/status/enums/amount ranges.
@@ -185,7 +171,7 @@ Sau khi deploy, contract owner phải bàn giao cho backend team:
 - Không hardcode secrets.
 - Emit event đủ để audit các transition quan trọng.
 
-## 9. Test matrix tối thiểu (deliverable của contract owner)
+## 8. Test matrix tối thiểu (deliverable của contract owner)
 `duel_v2.move`:
 1. Tạo invite challenge (stake/no-stake).
 2. Accept invite với caller đúng/sai.
@@ -198,16 +184,9 @@ Sau khi deploy, contract owner phải bàn giao cho backend team:
 9. Refund đúng khi cancel/expire.
 10. Payout đúng (winner nhận số tiền kỳ vọng).
 
-`tournament.move`:
-1. Registration flow và giới hạn.
-2. Seed + lock bracket.
-3. Report match result và progression.
-4. Finalize + payout distribution.
-5. Cancel/refund flow.
-
-## 10. Definition of Done (phía contract)
+## 9. Definition of Done (phía contract)
 Hoàn thành khi đáp ứng đủ:
-1. Implement xong `duel_v2.move`, `tournament.move`.
+1. Implement xong `duel_v2.move`.
 2. Unit test pass.
 3. Deploy lên network mục tiêu hoàn tất.
 4. Bàn giao IDs + ABI + error map + event catalog.
