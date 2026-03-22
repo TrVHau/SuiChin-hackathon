@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { Toaster } from "sonner";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Toaster, toast } from "sonner";
 import LoginScreen from "@/components/LoginScreen";
 import Dashboard from "@/components/Dashboard";
 import MintScreen from "@/components/MintScreen";
@@ -11,7 +11,6 @@ import TradeUpScreen from "@/components/TradeUpScreen";
 import MarketplaceScreen from "@/components/MarketplaceScreen";
 import PvPScreen from "@/components/PvPScreen";
 import { useSuiProfile } from "@/hooks/useSuiProfile";
-import { toast } from "sonner";
 
 type Screen =
   | "login"
@@ -29,6 +28,7 @@ export default function App() {
   const {
     account,
     profile,
+    loading,
     hasProfile,
     createProfile,
     reportResult,
@@ -37,32 +37,39 @@ export default function App() {
 
   const handleLogin = async () => {
     if (!account) {
-      toast.error("Vui lòng kết nối ví trước");
+      toast.error("Vui long ket noi vi truoc");
+      return;
+    }
+
+    if (loading) {
+      toast.info("Dang dong bo profile on-chain, thu lai sau 1-2 giay");
       return;
     }
 
     if (hasProfile && profile) {
-      toast.success("Chào mừng trở lại!");
+      toast.success("Chao mung tro lai");
       setCurrentScreen("dashboard");
-    } else {
-      toast.loading("Chưa có profile. Đang tạo mới...", {
-        id: "createProfile",
-      });
-      createProfile(
-        () => {
-          toast.success("Tạo profile thành công!", { id: "createProfile" });
-          setCurrentScreen("dashboard");
-        },
-        () => {
-          toast.dismiss("createProfile");
-        },
-      );
+      return;
     }
+
+    toast.loading("Dang kiem tra profile cu...", { id: "createProfile" });
+    await refreshProfile();
+
+    // createProfile now has a strict on-chain re-check to avoid duplicates.
+    await createProfile(
+      () => {
+        toast.success("Dang nhap thanh cong", { id: "createProfile" });
+        setCurrentScreen("dashboard");
+      },
+      () => {
+        toast.dismiss("createProfile");
+      },
+    );
   };
 
   const handleLogout = () => {
     setCurrentScreen("login");
-    toast.success("Đã đăng xuất");
+    toast.success("Da dang xuat");
   };
 
   useEffect(() => {
@@ -113,6 +120,7 @@ export default function App() {
               onOpenTradeUp={() => setCurrentScreen("tradeup")}
               onOpenMarketplace={() => setCurrentScreen("marketplace")}
               onOpenPvP={() => setCurrentScreen("pvp")}
+              onRefreshProfile={refreshProfile}
               onNavigate={(screen) => setCurrentScreen(screen)}
               onLogout={handleLogout}
             />

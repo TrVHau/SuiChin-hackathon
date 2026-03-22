@@ -1,4 +1,4 @@
-import { ArrowLeft, Hammer, Sparkles } from "lucide-react";
+﻿import { ArrowLeft, Hammer, Sparkles } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -7,11 +7,10 @@ import { buildCraftChunTx } from "@/lib/sui-client";
 import {
   TREASURY_OBJECT_ID,
   PACKAGE_ID,
-  CRAFT_FEE_MIST,
   computeCraftCost,
 } from "@/config/sui.config";
 
-// ── Confetti ──
+// â”€â”€ Confetti â”€â”€
 const CONFETTI_COLORS = ["#FF6B6B","#FFE66D","#4ECDC4","#A78BFA","#34D399","#F472B6","#FCD34D","#60A5FA"];
 
 function Confetti() {
@@ -58,35 +57,35 @@ interface CraftResultData {
 const TIER_CONFIG = {
   0: {
     label: "Scrap",
-    emoji: "💀",
+    emoji: "ðŸ’€",
     color: "text-gray-500",
     borderColor: "border-gray-400",
     bg: "bg-gray-100",
-    headline: "Thất bại — Nhận Scrap!",
+    headline: "Tháº¥t báº¡i â€” Nháº­n Scrap!",
   },
   1: {
     label: "Bronze",
-    emoji: "🥉",
+    emoji: "ðŸ¥‰",
     color: "text-amber-700",
     borderColor: "border-amber-400",
     bg: "bg-amber-50",
-    headline: "Bronze NFT! 🥉",
+    headline: "Bronze NFT! ðŸ¥‰",
   },
   2: {
     label: "Silver",
-    emoji: "🥈",
+    emoji: "ðŸ¥ˆ",
     color: "text-slate-600",
     borderColor: "border-slate-400",
     bg: "bg-slate-50",
-    headline: "Silver NFT! ✨🥈",
+    headline: "Silver NFT! âœ¨ðŸ¥ˆ",
   },
   3: {
     label: "Gold",
-    emoji: "🥇",
+    emoji: "ðŸ¥‡",
     color: "text-yellow-600",
     borderColor: "border-yellow-400",
     bg: "bg-yellow-50",
-    headline: "GOLD NFT! 🥇🎉",
+    headline: "GOLD NFT! ðŸ¥‡ðŸŽ‰",
   },
 } as const;
 
@@ -147,11 +146,39 @@ export default function WorkshopScreen({
     return { tier: 1, success: true, roll: 0 };
   };
 
-  const handleCraft = () => {
+  const readLiveCraftState = async (): Promise<{ liveChun: number; liveCost: number }> => {
+    const [profileObj, treasuryObj] = await Promise.all([
+      suiClient.getObject({ id: profileId, options: { showContent: true } }),
+      suiClient.getObject({ id: TREASURY_OBJECT_ID, options: { showContent: true } }),
+    ]);
+
+    const profileFields = (profileObj.data?.content as { fields?: Record<string, unknown> })?.fields;
+    const treasuryFields = (treasuryObj.data?.content as { fields?: Record<string, unknown> })?.fields;
+
+    const liveChun = Number(profileFields?.chun_raw ?? 0);
+    const totalCrafts = Number(treasuryFields?.total_crafts ?? 0);
+    const liveCost = computeCraftCost(totalCrafts);
+
+    return { liveChun, liveCost };
+  };
+
+  const handleCraft = async () => {
     if (!canCraft || crafting) return;
 
+    try {
+      const { liveChun, liveCost } = await readLiveCraftState();
+      setCraftCost(liveCost);
+      if (liveChun < liveCost) {
+        toast.error(`Khong du Chun Raw. Can ${liveCost}, hien co ${liveChun}.`);
+        return;
+      }
+    } catch {
+      toast.error("Khong doc duoc trang thai on-chain truoc khi craft.");
+      return;
+    }
+
     setCrafting(true);
-    toast.loading("Đang craft Cuộn Chun NFT...", { id: "craft" });
+    toast.loading("Dang craft Cuon Chun NFT...", { id: "craft" });
 
     const tx = buildCraftChunTx(profileId, TREASURY_OBJECT_ID);
 
@@ -176,14 +203,23 @@ export default function WorkshopScreen({
             }
           } catch {
             setCraftResult({ tier: 1, success: true, roll: 0 });
-            toast.success("Craft hoàn tất! NFT đã về ví 🎉", { id: "craft" });
+            toast.success("Craft hoan tat! NFT da ve vi", { id: "craft" });
           }
           setCrafting(false);
           onSuccess?.();
         },
         onError: (err) => {
           setCrafting(false);
-          toast.error(`Craft thất bại: ${err.message}`, { id: "craft" });
+          const message = String(err?.message ?? "");
+          if (message.includes("103")) {
+            toast.error("Craft that bai: Khong du Chun Raw (Abort 103)", { id: "craft" });
+            return;
+          }
+          if (message.includes("500")) {
+            toast.error("Craft that bai: Khong du 0.1 SUI phi craft", { id: "craft" });
+            return;
+          }
+          toast.error(`Craft that bai: ${message}`, { id: "craft" });
         },
       },
     );
@@ -210,7 +246,7 @@ export default function WorkshopScreen({
             <ArrowLeft className="size-7 text-playful-purple" />
           </motion.button>
           <div className="flex items-center gap-3">
-            <span className="text-5xl">⚒️</span>
+            <span className="text-5xl">âš’ï¸</span>
             <h1 className="font-display font-black text-4xl text-gray-900">
               Workshop
             </h1>
@@ -219,7 +255,7 @@ export default function WorkshopScreen({
 
         <AnimatePresence mode="wait">
           {craftResult && cfg ? (
-            /* ── Result Screen ── */
+            /* â”€â”€ Result Screen â”€â”€ */
             <motion.div
               key="result"
               initial={{ scale: 0.8, opacity: 0 }}
@@ -245,8 +281,8 @@ export default function WorkshopScreen({
               </p>
               <p className="text-gray-500 mb-8">
                 {craftResult.success
-                  ? "NFT đã về ví của bạn 🎉"
-                  : "Scrap đã về ví — thử lại lần sau!"}
+                  ? "NFT Ä‘Ã£ vá» vÃ­ cá»§a báº¡n ðŸŽ‰"
+                  : "Scrap Ä‘Ã£ vá» vÃ­ â€” thá»­ láº¡i láº§n sau!"}
               </p>
               <div className="flex gap-4">
                 <motion.button
@@ -256,7 +292,7 @@ export default function WorkshopScreen({
                   className="flex-1 btn-playful bg-playful-purple text-white border-4 border-white text-xl"
                 >
                   <Hammer className="size-6" />
-                  Craft tiếp
+                  Craft tiáº¿p
                 </motion.button>
                 <motion.button
                   onClick={onBack}
@@ -264,12 +300,12 @@ export default function WorkshopScreen({
                   whileTap={{ scale: 0.95 }}
                   className="flex-1 btn-playful bg-white text-gray-800 border-4 border-gray-300 text-xl"
                 >
-                  Về Dashboard
+                  Vá» Dashboard
                 </motion.button>
               </div>
             </motion.div>
           ) : crafting ? (
-            /* ── Forging Animation ── */
+            /* â”€â”€ Forging Animation â”€â”€ */
             <motion.div
               key="forging"
               initial={{ opacity: 0, scale: 0.9 }}
@@ -291,7 +327,7 @@ export default function WorkshopScreen({
                   }}
                   className="text-9xl select-none"
                 >
-                  ⚒️
+                  âš’ï¸
                 </motion.div>
                 <motion.div
                   animate={{ scale: [1, 2.2, 1], opacity: [0.25, 0.05, 0.25] }}
@@ -304,13 +340,13 @@ export default function WorkshopScreen({
                 transition={{ duration: 1.4, repeat: Infinity }}
                 className="text-5xl mb-4"
               >
-                🏮
+                ðŸ®
               </motion.div>
               <h2 className="font-display font-black text-3xl text-playful-purple mb-2">
-                Đang rèn NFT...
+                Äang rÃ¨n NFT...
               </h2>
               <p className="text-gray-500 font-semibold mb-6">
-                Chờ blockchain xác nhận ⛓️
+                Chá» blockchain xÃ¡c nháº­n â›“ï¸
               </p>
               <div className="flex justify-center gap-2">
                 {[0, 0.25, 0.5].map((delay, i) => (
@@ -324,7 +360,7 @@ export default function WorkshopScreen({
               </div>
             </motion.div>
           ) : (
-            /* ── Craft Form ── */
+            /* â”€â”€ Craft Form â”€â”€ */
             <motion.div
               key="form"
               initial={{ opacity: 0, y: 20 }}
@@ -334,17 +370,17 @@ export default function WorkshopScreen({
               {/* Info card */}
               <div className="bg-white rounded-4xl shadow-2xl p-8 border-8 border-playful-purple mb-6">
                 <h2 className="font-display font-black text-2xl text-gray-900 mb-6">
-                  Craft Cuộn Chun NFT
+                  Craft Cuá»™n Chun NFT
                 </h2>
 
                 {/* Recipe */}
                 <div className="bg-sunny-50 border-4 border-sunny-300 rounded-3xl p-6 mb-6">
                   <h3 className="font-bold text-gray-700 uppercase text-sm mb-4">
-                    Nguyên liệu
+                    NguyÃªn liá»‡u
                   </h3>
                   <div className="flex items-center justify-around">
                     <div className="text-center">
-                      <div className="text-5xl mb-2">🔮</div>
+                      <div className="text-5xl mb-2">ðŸ”®</div>
                       <p className="font-black text-2xl text-playful-orange">
                         {craftCost}
                       </p>
@@ -354,15 +390,15 @@ export default function WorkshopScreen({
                     </div>
                     <div className="text-3xl text-gray-400">+</div>
                     <div className="text-center">
-                      <div className="text-5xl mb-2">💧</div>
+                      <div className="text-5xl mb-2">ðŸ’§</div>
                       <p className="font-black text-2xl text-playful-blue">
                         0.1
                       </p>
                       <p className="text-sm text-gray-500 font-semibold">SUI</p>
                     </div>
-                    <div className="text-3xl text-gray-400">→</div>
+                    <div className="text-3xl text-gray-400">â†’</div>
                     <div className="text-center">
-                      <div className="text-5xl mb-2">🏮</div>
+                      <div className="text-5xl mb-2">ðŸ®</div>
                       <p className="font-black text-2xl text-playful-purple">
                         1
                       </p>
@@ -374,7 +410,7 @@ export default function WorkshopScreen({
                 {/* Current balance */}
                 <div className="flex items-center justify-between bg-gray-50 border-4 border-gray-200 rounded-3xl p-5 mb-6">
                   <span className="font-bold text-gray-700">
-                    Chun Raw hiện có:
+                    Chun Raw hiá»‡n cÃ³:
                   </span>
                   <span
                     className={`font-display font-black text-3xl ${canCraft ? "text-playful-green" : "text-red-500"}`}
@@ -382,7 +418,7 @@ export default function WorkshopScreen({
                     {chunRaw}
                     {!canCraft && chunRaw < craftCost && (
                       <span className="text-sm font-semibold text-red-400 ml-2">
-                        (cần {craftCost - chunRaw} nữa)
+                        (cáº§n {craftCost - chunRaw} ná»¯a)
                       </span>
                     )}
                   </span>
@@ -391,7 +427,7 @@ export default function WorkshopScreen({
                 {!TREASURY_OBJECT_ID && (
                   <div className="bg-yellow-50 border-4 border-yellow-400 rounded-3xl p-4 mb-4">
                     <p className="text-yellow-800 font-bold text-sm">
-                      ⚠️ VITE_TREASURY_OBJECT_ID chưa được cấu hình trong .env
+                      âš ï¸ VITE_TREASURY_OBJECT_ID chÆ°a Ä‘Æ°á»£c cáº¥u hÃ¬nh trong .env
                     </p>
                   </div>
                 )}
@@ -411,7 +447,7 @@ export default function WorkshopScreen({
                   {crafting ? (
                     <>
                       <div className="size-6 border-4 border-white/40 border-t-white rounded-full animate-spin" />
-                      Đang craft...
+                      Äang craft...
                     </>
                   ) : (
                     <>
@@ -425,15 +461,15 @@ export default function WorkshopScreen({
               {/* Description */}
               <div className="bg-white/70 rounded-3xl p-6 border-4 border-white">
                 <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                  <span>📖</span> Cuộn Chun NFT là gì?
+                  <span>ðŸ“–</span> Cuá»™n Chun NFT lÃ  gÃ¬?
                 </h3>
                 <ul className="space-y-2 text-gray-600 font-semibold text-sm">
                   <li>
-                    • NFT on-chain được mint từ Chun Raw kiếm qua gameplay
+                    â€¢ NFT on-chain Ä‘Æ°á»£c mint tá»« Chun Raw kiáº¿m qua gameplay
                   </li>
-                  <li>• Có thể giao dịch trên Marketplace</li>
-                  <li>• Dùng để Trade-up lên tier cao hơn</li>
-                  <li>• Mỗi NFT là unique, có tier: Bronze / Silver / Gold</li>
+                  <li>â€¢ CÃ³ thá»ƒ giao dá»‹ch trÃªn Marketplace</li>
+                  <li>â€¢ DÃ¹ng Ä‘á»ƒ Trade-up lÃªn tier cao hÆ¡n</li>
+                  <li>â€¢ Má»—i NFT lÃ  unique, cÃ³ tier: Bronze / Silver / Gold</li>
                 </ul>
               </div>
             </motion.div>
@@ -443,3 +479,4 @@ export default function WorkshopScreen({
     </div>
   );
 }
+
