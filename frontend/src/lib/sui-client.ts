@@ -1,4 +1,4 @@
-import { Transaction } from "@mysten/sui/transactions";
+﻿import { Transaction } from "@mysten/sui/transactions";
 import {
   PACKAGE_ID,
   MODULES,
@@ -6,9 +6,9 @@ import {
   CRAFT_FEE_MIST,
 } from "@/config/sui.config";
 
-// ─── player_profile module ────────────────────────────────────────────────────
+// â”€â”€â”€ player_profile module â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-/** Tạo PlayerProfile cho sender. Gọi 1 lần khi connect ví lần đầu. */
+/** Táº¡o PlayerProfile cho sender. Gá»i 1 láº§n khi connect vÃ­ láº§n Ä‘áº§u. */
 export function buildInitProfileTx(): Transaction {
   const tx = new Transaction();
   tx.moveCall({
@@ -18,8 +18,8 @@ export function buildInitProfileTx(): Transaction {
 }
 
 /**
- * Cập nhật chun_raw + stats sau mỗi ván.
- * - Thắng: delta = min(1 + streak, 20), isWin = true
+ * Cáº­p nháº­t chun_raw + stats sau má»—i vÃ¡n.
+ * - Tháº¯ng: delta = min(1 + streak, 20), isWin = true
  * - Thua:  delta = 1, isWin = false
  */
 export function buildReportResultTx(
@@ -40,17 +40,20 @@ export function buildReportResultTx(
   return tx;
 }
 
-/** Claim faucet chun_raw. Cần Clock object. */
-export function buildClaimFaucetTx(profileId: string): Transaction {
+/** Claim faucet chun_raw. Cáº§n Clock object. */
+export function buildClaimFaucetTx(
+  profileId: string,
+  functionName: string = "claim_faucet",
+): Transaction {
   const tx = new Transaction();
   tx.moveCall({
-    target: `${PACKAGE_ID}::${MODULES.PLAYER_PROFILE}::claim_faucet`,
+    target: `${PACKAGE_ID}::${MODULES.PLAYER_PROFILE}::${functionName}`,
     arguments: [tx.object(profileId), tx.object(CLOCK_OBJECT_ID)],
   });
   return tx;
 }
 
-/** Lock `amount` chun_raw vào staked_chun trước PvP match. */
+/** Lock `amount` chun_raw vÃ o staked_chun trÆ°á»›c PvP match. */
 export function buildLockForMatchTx(profileId: string, amount: number): Transaction {
   const tx = new Transaction();
   tx.moveCall({
@@ -60,12 +63,12 @@ export function buildLockForMatchTx(profileId: string, amount: number): Transact
   return tx;
 }
 
-// ─── craft module ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ craft module â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
- * Craft một CuonChunNFT.
- * Yêu cầu: profile.chun_raw >= 10 và ví có đủ SUI.
- * Tự split 0.1 SUI (100_000_000 MIST) từ gas coin để trả phí.
+ * Craft má»™t CuonChunNFT.
+ * YÃªu cáº§u: profile.chun_raw >= 10 vÃ  vÃ­ cÃ³ Ä‘á»§ SUI.
+ * Tá»± split 0.1 SUI (100_000_000 MIST) tá»« gas coin Ä‘á»ƒ tráº£ phÃ­.
  */
 export function buildCraftChunTx(
   profileId: string,
@@ -85,11 +88,11 @@ export function buildCraftChunTx(
   return tx;
 }
 
-// ─── trade_up module ───────────────────────────────────────────────────────────
+// â”€â”€â”€ trade_up module â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
- * Trade-up 8 Bronze NFT → Silver (70%) hoặc Scrap (30%).
- * Tất cả input NFT bị burn bất kể kết quả.
+ * Trade-up 8 Bronze NFT â†’ Silver (70%) hoáº·c Scrap (30%).
+ * Táº¥t cáº£ input NFT bá»‹ burn báº¥t ká»ƒ káº¿t quáº£.
  */
 export function buildTradeUpBronzeToSilverTx(nftIds: string[]): Transaction {
   const tx = new Transaction();
@@ -104,8 +107,8 @@ export function buildTradeUpBronzeToSilverTx(nftIds: string[]): Transaction {
 }
 
 /**
- * Trade-up 6 Silver NFT → Gold (55%) hoặc Scrap (45%).
- * Tất cả input NFT bị burn bất kể kết quả.
+ * Trade-up 6 Silver NFT â†’ Gold (55%) hoáº·c Scrap (45%).
+ * Táº¥t cáº£ input NFT bá»‹ burn báº¥t ká»ƒ káº¿t quáº£.
  */
 export function buildTradeUpSilverToGoldTx(nftIds: string[]): Transaction {
   const tx = new Transaction();
@@ -119,11 +122,11 @@ export function buildTradeUpSilverToGoldTx(nftIds: string[]): Transaction {
   return tx;
 }
 
-// ─── marketplace module ────────────────────────────────────────────────────────
+// â”€â”€â”€ marketplace module â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
- * List một CuonChunNFT lên Market.
- * NFT sẽ bị lock vào Market object cho đến khi buy hoặc cancel.
+ * List má»™t CuonChunNFT lÃªn Market.
+ * NFT sáº½ bá»‹ lock vÃ o Market object cho Ä‘áº¿n khi buy hoáº·c cancel.
  */
 export function buildListNFTTx(
   marketId: string,
@@ -144,8 +147,8 @@ export function buildListNFTTx(
 }
 
 /**
- * Mua một NFT đang được list.
- * Tự split đúng số SUI theo giá listing từ gas coin.
+ * Mua má»™t NFT Ä‘ang Ä‘Æ°á»£c list.
+ * Tá»± split Ä‘Ãºng sá»‘ SUI theo giÃ¡ listing tá»« gas coin.
  */
 export function buildBuyNFTTx(
   marketId: string,
@@ -162,8 +165,8 @@ export function buildBuyNFTTx(
 }
 
 /**
- * Hủy listing — chỉ seller mới gọi được.
- * NFT sẽ được trả về seller.
+ * Há»§y listing â€” chá»‰ seller má»›i gá»i Ä‘Æ°á»£c.
+ * NFT sáº½ Ä‘Æ°á»£c tráº£ vá» seller.
  */
 export function buildCancelListingTx(
   marketId: string,
@@ -177,11 +180,11 @@ export function buildCancelListingTx(
   return tx;
 }
 
-// ─── achievement module ────────────────────────────────────────────────────────
+// â”€â”€â”€ achievement module â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
- * Claim Achievement Badge khi streak đạt milestone {1, 5, 18, 36, 67}.
- * Badge là Soulbound — không thể chuyển nhượng sau khi claim.
+ * Claim Achievement Badge khi streak Ä‘áº¡t milestone {1, 5, 18, 36, 67}.
+ * Badge lÃ  Soulbound â€” khÃ´ng thá»ƒ chuyá»ƒn nhÆ°á»£ng sau khi claim.
  */
 export function buildClaimBadgeTx(
   profileId: string,
@@ -198,3 +201,4 @@ export function buildClaimBadgeTx(
   });
   return tx;
 }
+
