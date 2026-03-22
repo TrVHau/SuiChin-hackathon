@@ -7,7 +7,7 @@
 .aidlc-rule-details/
 .copilot/
 aidlc-docs/
-
+AGENTS.md
 # Move build outputs
 contract/build/
 
