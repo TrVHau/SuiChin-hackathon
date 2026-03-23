@@ -3,7 +3,7 @@ import {
   useSignAndExecuteTransaction,
   useSuiClient,
 } from "@mysten/dapp-kit";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { buildClaimFaucetTx } from "@/lib/sui-client";
 import {
@@ -30,6 +30,9 @@ export function useFaucet(profileId: string | undefined) {
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const [claiming, setClaiming] = useState(false);
   const [resolvedTarget, setResolvedTarget] = useState<FaucetCallTarget | null>(null);
+  const [faucetSupport, setFaucetSupport] = useState<"unknown" | "supported" | "unsupported">(
+    "unknown",
+  );
 
   const pendingFaucet = useCallback((lastFaucetMs: number): number => {
     const now = Date.now();
@@ -62,6 +65,7 @@ export function useFaucet(profileId: string | undefined) {
           functionName: found,
         };
         setResolvedTarget(target);
+        setFaucetSupport("supported");
         return target;
       }
     } catch {
@@ -79,6 +83,7 @@ export function useFaucet(profileId: string | undefined) {
         if (found) {
           const target = { moduleName, functionName: found };
           setResolvedTarget(target);
+          setFaucetSupport("supported");
           return target;
         }
       }
@@ -86,8 +91,17 @@ export function useFaucet(profileId: string | undefined) {
       // Keep null; handled by caller with clear toast.
     }
 
+    setFaucetSupport("unsupported");
     return null;
   }, [resolvedTarget, suiClient]);
+
+  useEffect(() => {
+    if (!account?.address || !profileId || resolvedTarget) return;
+
+    resolveFaucetTarget().catch(() => {
+      // Keep unknown state on transient RPC errors.
+    });
+  }, [account?.address, profileId, resolveFaucetTarget, resolvedTarget]);
 
   const claimFaucet = useCallback(
     async (lastFaucetMs: number, onSuccess?: () => void) => {
@@ -155,5 +169,5 @@ export function useFaucet(profileId: string | undefined) {
     ],
   );
 
-  return { claimFaucet, pendingFaucet, claiming };
+  return { claimFaucet, pendingFaucet, claiming, faucetSupport };
 }
