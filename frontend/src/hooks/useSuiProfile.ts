@@ -3,17 +3,17 @@ import {
   useSignAndExecuteTransaction,
   useSuiClient,
 } from "@mysten/dapp-kit";
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
+  buildClaimBadgeTx,
   buildInitProfileTx,
   buildReportResultTx,
-  buildClaimBadgeTx,
 } from "@/lib/sui-client";
 import {
-  PLAYER_PROFILE_TYPE,
-  MAX_DELTA_CHUN,
   ACHIEVEMENT_MILESTONES,
+  MAX_DELTA_CHUN,
+  PLAYER_PROFILE_TYPE,
 } from "@/config/sui.config";
 import { useGameStore } from "@/stores/gameStore";
 
@@ -29,6 +29,26 @@ export interface PlayerProfileData {
   last_faucet_ms: number;
 }
 
+function pickBestProfile(profiles: PlayerProfileData[]): PlayerProfileData {
+  const sorted = [...profiles].sort((a, b) => {
+    const byLastPlayed = b.last_played_ms - a.last_played_ms;
+    if (byLastPlayed !== 0) return byLastPlayed;
+
+    const byGames = b.wins + b.losses - (a.wins + a.losses);
+    if (byGames !== 0) return byGames;
+
+    const byChun = b.chun_raw - a.chun_raw;
+    if (byChun !== 0) return byChun;
+
+    const byStake = b.staked_chun - a.staked_chun;
+    if (byStake !== 0) return byStake;
+
+    return a.objectId.localeCompare(b.objectId);
+  });
+
+  return sorted[0];
+}
+
 export function useSuiProfile() {
   const account = useCurrentAccount();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
@@ -39,33 +59,22 @@ export function useSuiProfile() {
   const [loading, setLoading] = useState(false);
   const [hasProfile, setHasProfile] = useState(false);
 
-  const loadProfile = useCallback(async () => {
-    if (!account?.address) return;
-
-    setLoading(true);
-    try {
+  const fetchProfiles = useCallback(
+    async (owner: string): Promise<PlayerProfileData[]> => {
       const objects = await suiClient.getOwnedObjects({
-        owner: account.address,
+        owner,
         filter: { StructType: PLAYER_PROFILE_TYPE },
         options: { showContent: true, showType: true },
       });
 
-      if (objects.data.length === 0) {
-        setHasProfile(false);
-        setProfile(null);
-        setStoreProfile(null);
-        return;
-      }
-
-      const profileObj = objects.data[0];
-      setHasProfile(true);
-
-      const content = profileObj.data?.content;
-      if (content && "fields" in content && profileObj.data) {
+      const parsed: PlayerProfileData[] = [];
+      for (const item of objects.data) {
+        const content = item.data?.content;
+        if (!item.data || !content || !("fields" in content)) continue;
         const fields = content.fields as Record<string, unknown>;
-        const data: PlayerProfileData = {
-          objectId: profileObj.data.objectId,
-          owner: account.address,
+        parsed.push({
+          objectId: item.data.objectId,
+          owner,
           chun_raw: Number(fields.chun_raw ?? 0),
           wins: Number(fields.wins ?? 0),
           losses: Number(fields.losses ?? 0),
@@ -73,23 +82,65 @@ export function useSuiProfile() {
           last_played_ms: Number(fields.last_played_ms ?? 0),
           staked_chun: Number(fields.staked_chun ?? 0),
           last_faucet_ms: Number(fields.last_faucet_ms ?? 0),
-        };
-        setProfile(data);
-        setStoreProfile(data);
+        });
       }
+
+      return parsed;
+    },
+    [suiClient],
+  );
+
+  const loadProfile = useCallback(async () => {
+    if (!account?.address) return;
+
+    setLoading(true);
+    try {
+      const profiles = await fetchProfiles(account.address);
+
+      if (profiles.length === 0) {
+        setHasProfile(false);
+        setProfile(null);
+        setStoreProfile(null);
+        return;
+      }
+
+      const selected = pickBestProfile(profiles);
+      setHasProfile(true);
+      setProfile(selected);
+      setStoreProfile(selected);
     } catch (error) {
       console.error("Error loading profile:", error);
-      toast.error("Không thể tải profile");
+      toast.error("Khong the tai profile");
     } finally {
       setLoading(false);
     }
-  }, [account?.address, suiClient, setStoreProfile]);
+  }, [account?.address, fetchProfiles, setStoreProfile]);
 
-  const createProfile = (onSuccess?: () => void, onError?: () => void) => {
+  const createProfile = async (onSuccess?: () => void, onError?: () => void) => {
     if (!account?.address) {
-      toast.error("Vui lòng kết nối ví");
+      toast.error("Vui long ket noi vi");
       onError?.();
       return;
+    }
+
+    setLoading(true);
+    try {
+      // Guard against duplicate creation: check on-chain one more time right before init.
+      const existing = await fetchProfiles(account.address);
+      if (existing.length > 0) {
+        const selected = pickBestProfile(existing);
+        setHasProfile(true);
+        setProfile(selected);
+        setStoreProfile(selected);
+        toast.info("Da tim thay profile cu, khong tao moi.");
+        onSuccess?.();
+        return;
+      }
+    } catch (error) {
+      console.error("Pre-create profile check failed:", error);
+      // Continue to create if check fails unexpectedly.
+    } finally {
+      setLoading(false);
     }
 
     const tx = buildInitProfileTx();
@@ -100,57 +151,52 @@ export function useSuiProfile() {
           setTimeout(async () => {
             await loadProfile();
             onSuccess?.();
-          }, 2000);
+          }, 1500);
         },
         onError: (error) => {
           console.error("Create profile error:", error);
-          toast.error("Tạo profile thất bại");
+          toast.error("Tao profile that bai");
           onError?.();
         },
       },
     );
   };
 
-  /**
-   * Gọi sau mỗi ván kết thúc.
-   * - Thắng: delta = min(1 + streak, MAX_DELTA_CHUN), isWin = true
-   * - Thua:  delta = 1, isWin = false
-   */
   const reportResult = (
     isWin: boolean,
     onSuccess?: () => void,
     onError?: () => void,
   ) => {
     if (!profile) {
-      toast.error("Không tìm thấy profile");
+      toast.error("Khong tim thay profile");
       return;
     }
 
     const delta = isWin ? Math.min(1 + profile.streak, MAX_DELTA_CHUN) : 1;
-
     const tx = buildReportResultTx(profile.objectId, delta, isWin);
+
     signAndExecute(
       { transaction: tx },
       {
-        onSuccess: (_result) => {
+        onSuccess: () => {
           const msg = isWin
-            ? `+${delta} chun 🔥 Streak: ${profile.streak + 1}`
-            : `-1 chun 😢 Streak reset`;
+            ? `+${delta} Chun, Streak: ${profile.streak + 1}`
+            : "-1 Chun, Streak reset";
           toast.success(msg);
           setTimeout(() => {
             loadProfile();
             onSuccess?.();
-          }, 1500);
+          }, 1200);
         },
         onError: (error) => {
           console.error("Report result error:", error);
-          const errMsg = error.message || "";
+          const errMsg = String(error?.message ?? "");
           if (errMsg.includes("101")) {
-            toast.error("Cooldown chưa hết! Chờ 10 giây giữa các ván.");
+            toast.error("Cooldown chua het, cho them 10 giay");
           } else if (errMsg.includes("102")) {
-            toast.error("Delta quá lớn (tối đa 20).");
+            toast.error("Delta qua lon (toi da 20)");
           } else {
-            toast.error("Lưu kết quả thất bại");
+            toast.error("Luu ket qua that bai");
           }
           onError?.();
         },
@@ -160,7 +206,7 @@ export function useSuiProfile() {
 
   const claimAchievement = (badgeType: number) => {
     if (!profile) {
-      toast.error("Không tìm thấy profile");
+      toast.error("Khong tim thay profile");
       return;
     }
 
@@ -172,14 +218,12 @@ export function useSuiProfile() {
           const milestoneName = Object.entries(ACHIEVEMENT_MILESTONES).find(
             ([, v]) => v === badgeType,
           )?.[0];
-          toast.success(
-            `Claim badge ${milestoneName ?? badgeType} thành công! 🏆`,
-          );
-          setTimeout(() => loadProfile(), 2000);
+          toast.success(`Claim badge ${milestoneName ?? badgeType} thanh cong`);
+          setTimeout(() => loadProfile(), 1200);
         },
         onError: (error) => {
           console.error("Claim badge error:", error);
-          toast.error("Claim badge thất bại");
+          toast.error("Claim badge that bai");
         },
       },
     );
@@ -191,8 +235,9 @@ export function useSuiProfile() {
     } else {
       setProfile(null);
       setHasProfile(false);
+      setStoreProfile(null);
     }
-  }, [account?.address]);
+  }, [account?.address, loadProfile, setStoreProfile]);
 
   return {
     account,

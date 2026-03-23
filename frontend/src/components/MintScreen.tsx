@@ -7,7 +7,6 @@ import { buildCraftChunTx } from "@/lib/sui-client";
 import {
   TREASURY_OBJECT_ID,
   PACKAGE_ID,
-  CRAFT_FEE_MIST,
   computeCraftCost,
 } from "@/config/sui.config";
 
@@ -108,6 +107,11 @@ export default function WorkshopScreen({
   const [crafting, setCrafting] = useState(false);
   const [craftResult, setCraftResult] = useState<CraftResultData | null>(null);
   const [craftCost, setCraftCost] = useState<number>(10);
+  const [displayChunRaw, setDisplayChunRaw] = useState<number>(chunRaw);
+
+  useEffect(() => {
+    setDisplayChunRaw(chunRaw);
+  }, [chunRaw]);
 
   // Fetch halving cost from Treasury
   useEffect(() => {
@@ -122,13 +126,20 @@ export default function WorkshopScreen({
       .catch(() => {/* keep default */});
   }, [suiClient]);
 
-  const canCraft = chunRaw >= craftCost && !!TREASURY_OBJECT_ID;
+  const canCraft = displayChunRaw >= craftCost && !!TREASURY_OBJECT_ID;
 
   const parseCraftEvent = async (digest: string): Promise<CraftResultData> => {
     const txBlock = await suiClient.getTransactionBlock({
       digest,
-      options: { showEvents: true },
+      options: { showEvents: true, showEffects: true, showObjectChanges: true },
     });
+
+    const status = (txBlock.effects as { status?: { status?: string; error?: string } } | undefined)
+      ?.status;
+    if (status?.status === "failure") {
+      throw new Error(status.error ?? "Transaction failed");
+    }
+
     const event = txBlock.events?.find(
       (e) => e.type === `${PACKAGE_ID}::craft::CraftResult`,
     );
@@ -144,14 +155,73 @@ export default function WorkshopScreen({
         roll: Number(roll),
       };
     }
-    return { tier: 1, success: true, roll: 0 };
+
+    const createdObjects = (txBlock.objectChanges ?? []).filter(
+      (change) => change.type === "created",
+    );
+
+    const createdScrap = createdObjects.find((change) =>
+      String(change.objectType ?? "").includes("::scrap::Scrap"),
+    );
+    if (createdScrap) {
+      return { tier: 0, success: false, roll: -1 };
+    }
+
+    const createdNft = createdObjects.find((change) =>
+      String(change.objectType ?? "").includes("::cuon_chun::CuonChunNFT"),
+    );
+    if (createdNft) {
+      const createdObjectId = "objectId" in createdNft ? String(createdNft.objectId) : "";
+      if (createdObjectId) {
+        const nftObj = await suiClient.getObject({
+          id: createdObjectId,
+          options: { showContent: true },
+        });
+        const fields = (nftObj.data?.content as { fields?: Record<string, unknown> } | undefined)
+          ?.fields;
+        const tier = Number(fields?.tier ?? 1);
+        return { tier, success: true, roll: -1 };
+      }
+      return { tier: 1, success: true, roll: -1 };
+    }
+
+    throw new Error("Khong doc duoc ket qua craft tren chain");
   };
 
-  const handleCraft = () => {
+  const readLiveCraftState = async (): Promise<{ liveChun: number; liveCost: number }> => {
+    const [profileObj, treasuryObj] = await Promise.all([
+      suiClient.getObject({ id: profileId, options: { showContent: true } }),
+      suiClient.getObject({ id: TREASURY_OBJECT_ID, options: { showContent: true } }),
+    ]);
+
+    const profileFields = (profileObj.data?.content as { fields?: Record<string, unknown> })?.fields;
+    const treasuryFields = (treasuryObj.data?.content as { fields?: Record<string, unknown> })?.fields;
+
+    const liveChun = Number(profileFields?.chun_raw ?? 0);
+    const totalCrafts = Number(treasuryFields?.total_crafts ?? 0);
+    const liveCost = computeCraftCost(totalCrafts);
+
+    return { liveChun, liveCost };
+  };
+
+  const handleCraft = async () => {
     if (!canCraft || crafting) return;
 
+    try {
+      const { liveChun, liveCost } = await readLiveCraftState();
+      setDisplayChunRaw(liveChun);
+      setCraftCost(liveCost);
+      if (liveChun < liveCost) {
+        toast.error(`Khong du Chun Raw. Can ${liveCost}, hien co ${liveChun}.`);
+        return;
+      }
+    } catch {
+      toast.error("Khong doc duoc trang thai on-chain truoc khi craft.");
+      return;
+    }
+
     setCrafting(true);
-    toast.loading("Đang craft Cuộn Chun NFT...", { id: "craft" });
+    toast.loading("Dang craft Cuon Chun NFT...", { id: "craft" });
 
     const tx = buildCraftChunTx(profileId, TREASURY_OBJECT_ID);
 
@@ -162,28 +232,55 @@ export default function WorkshopScreen({
           try {
             const data = await parseCraftEvent(result.digest);
             setCraftResult(data);
+            try {
+              const { liveChun, liveCost } = await readLiveCraftState();
+              setDisplayChunRaw(liveChun);
+              setCraftCost(liveCost);
+            } catch {
+              // Keep existing UI state if post-craft read fails.
+            }
             const cfg =
               TIER_CONFIG[data.tier as keyof typeof TIER_CONFIG] ??
               TIER_CONFIG[0];
+            const rollText = data.roll >= 0 ? ` (roll: ${data.roll})` : "";
             if (data.success) {
-              toast.success(`${cfg.headline} (roll: ${data.roll})`, {
+              toast.success(`${cfg.headline}${rollText}`, {
                 id: "craft",
               });
             } else {
-              toast.error(`${cfg.headline} (roll: ${data.roll})`, {
+              toast.error(`${cfg.headline}${rollText}`, {
                 id: "craft",
               });
             }
-          } catch {
-            setCraftResult({ tier: 1, success: true, roll: 0 });
-            toast.success("Craft hoàn tất! NFT đã về ví 🎉", { id: "craft" });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : "Unknown error";
+            toast.error(`Craft that bai: ${message}`, { id: "craft" });
+            try {
+              const { liveChun, liveCost } = await readLiveCraftState();
+              setDisplayChunRaw(liveChun);
+              setCraftCost(liveCost);
+            } catch {
+              // Ignore extra read errors here.
+            }
+            onSuccess?.();
+            setCrafting(false);
+            return;
           }
           setCrafting(false);
           onSuccess?.();
         },
         onError: (err) => {
           setCrafting(false);
-          toast.error(`Craft thất bại: ${err.message}`, { id: "craft" });
+          const message = String(err?.message ?? "");
+          if (message.includes("103")) {
+            toast.error("Craft that bai: Khong du Chun Raw (Abort 103)", { id: "craft" });
+            return;
+          }
+          if (message.includes("500")) {
+            toast.error("Craft that bai: Khong du 0.1 SUI phi craft", { id: "craft" });
+            return;
+          }
+          toast.error(`Craft that bai: ${message}`, { id: "craft" });
         },
       },
     );
@@ -241,7 +338,7 @@ export default function WorkshopScreen({
                 {cfg.headline}
               </h2>
               <p className="text-gray-500 font-semibold mb-2">
-                Roll: {craftResult.roll} / 99
+                {craftResult.roll >= 0 ? `Roll: ${craftResult.roll} / 99` : "Ket qua da xac nhan on-chain"}
               </p>
               <p className="text-gray-500 mb-8">
                 {craftResult.success
@@ -379,10 +476,10 @@ export default function WorkshopScreen({
                   <span
                     className={`font-display font-black text-3xl ${canCraft ? "text-playful-green" : "text-red-500"}`}
                   >
-                    {chunRaw}
-                    {!canCraft && chunRaw < craftCost && (
+                    {displayChunRaw}
+                    {!canCraft && displayChunRaw < craftCost && (
                       <span className="text-sm font-semibold text-red-400 ml-2">
-                        (cần {craftCost - chunRaw} nữa)
+                        (cần {craftCost - displayChunRaw} nữa)
                       </span>
                     )}
                   </span>
@@ -443,3 +540,4 @@ export default function WorkshopScreen({
     </div>
   );
 }
+

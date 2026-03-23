@@ -35,6 +35,7 @@ interface DashboardProps {
   onOpenTradeUp: () => void;
   onOpenMarketplace: () => void;
   onOpenPvP?: () => void;
+  onRefreshProfile?: () => void;
   onNavigate: (
     screen:
       | "dashboard"
@@ -72,6 +73,7 @@ export default function Dashboard({
   onOpenTradeUp,
   onOpenMarketplace,
   onOpenPvP,
+  onRefreshProfile,
   onNavigate,
   onLogout,
 }: DashboardProps) {
@@ -389,6 +391,7 @@ export default function Dashboard({
             <FaucetPanel
               profileId={playerData.objectId}
               lastFaucetMs={playerData.last_faucet_ms ?? 0}
+              onSuccess={onRefreshProfile}
             />
           </div>
         )}

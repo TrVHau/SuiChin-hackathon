@@ -10,7 +10,7 @@ interface FaucetPanelProps {
 }
 
 export default function FaucetPanel({ profileId, lastFaucetMs, onSuccess }: FaucetPanelProps) {
-  const { claimFaucet, pendingFaucet, claiming } = useFaucet(profileId);
+  const { claimFaucet, pendingFaucet, claiming, faucetSupport } = useFaucet(profileId);
   const pending = pendingFaucet(lastFaucetMs);
 
   const nextMs = lastFaucetMs + FAUCET_COOLDOWN_MS;
@@ -36,7 +36,11 @@ export default function FaucetPanel({ profileId, lastFaucetMs, onSuccess }: Fauc
         />
       </div>
 
-      {pending > 0 ? (
+      {faucetSupport === "unsupported" ? (
+        <p className="text-center text-sm text-amber-700 font-semibold">
+          Faucet khong duoc ho tro tren package hien tai.
+        </p>
+      ) : pending > 0 ? (
         <motion.button
           onClick={() => claimFaucet(lastFaucetMs, onSuccess)}
           disabled={claiming}
