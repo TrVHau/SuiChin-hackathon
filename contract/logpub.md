@@ -1,4 +1,8 @@
 dau@DESKTOP-DAU2K5:/mnt/c/code/blockchain/SuiChin-hackathon/contract$ sui client test-publish --build-env testnet
+[warning] CLI's protocol version is 114, but the active network's protocol version is 119.
+Consider installing the latest version of the CLI - https://docs.sui.io/guides/developer/getting-started/sui-install
+
+If publishing/upgrading returns a dependency verification error, then install the latest CLI version.
 INCLUDING DEPENDENCY MoveStdlib
 INCLUDING DEPENDENCY Sui
 BUILDING suichin
@@ -38,7 +42,7 @@ warning[W10007]: issue with attribute value
 194 │ #[allow(lint(self_transfer))]
 │ ^^^^^^^^^^^^^ Unknown warning filter 'lint(self_transfer)'
 
-Transaction Digest: 8AP4hMhCgNwZLMomRzRniaF9mvqw7aBq9SFsYTcFSCho
+Transaction Digest: 7bosHaCyC2TWe6MCmK9KJcQch17y7h9NWJeiP9GvGeY9
 ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ Transaction Data │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
@@ -48,9 +52,9 @@ Transaction Digest: 8AP4hMhCgNwZLMomRzRniaF9mvqw7aBq9SFsYTcFSCho
 │ Gas Price: 1000 MIST │
 │ Gas Payment: │
 │ ┌── │
-│ │ ID: 0x74a902976cdef6e2c9a7860a5a95db898417686904428cea856e184fc9ffefd5 │
+│ │ ID: 0xf36f0e3b880e8bf562fa387798d843123b31c2eca4162ec9acdc298e4f4d5766 │
 │ │ Version: 3 │
-│ │ Digest: 6ho2E8iH7CwDZ8NCoFYGtC9Jqcm8fSfHpQxSboBMZX4q │
+│ │ Digest: 5NKHUAHX55ZGZXwoSLJ5C6o5xBNHuKm5dQJoZMFE9Lt9 │
 │ └── │
 │ │
 │ Transaction Kind: Programmable │
@@ -78,78 +82,78 @@ Transaction Digest: 8AP4hMhCgNwZLMomRzRniaF9mvqw7aBq9SFsYTcFSCho
 │ ╰─────────────────────────────────────────────────────────────────────────╯ │
 │ │
 │ Signatures: │
-│ TlFSqK8uxC/Beh/VK1Laj5H+LDTHMhs4OC+DebF5khNHLsYBlOSu8n7o5JpOQmFp6VtrnZEXvCYHYPJW47/SCg== │
+│ I3jY/tokFBdyUnovYyRMW7A47GKGYiTZFORGIMDAn1kMKal+DzgU7d1TNKO4m3gLtKRhKC/rhb4JvGqYY7kNBw== │
 │ │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ Transaction Effects │
 ├───────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Digest: 8AP4hMhCgNwZLMomRzRniaF9mvqw7aBq9SFsYTcFSCho │
+│ Digest: 7bosHaCyC2TWe6MCmK9KJcQch17y7h9NWJeiP9GvGeY9 │
 │ Status: Success │
-│ Executed Epoch: 32 │
+│ Executed Epoch: 8 │
 │ │
 │ Created Objects: │
 │ ┌── │
-│ │ ID: 0x2774970297daeb94868351b85f444a2c4ed9f369731cdeab45fe8a3c6c9b275e │
-│ │ Owner: Shared( 4 ) │
-│ │ Version: 4 │
-│ │ Digest: BDmCJbCn8MHM1bXwPtvEHnxqmhUe4pT5cxyGdeam4UQV │
-│ └── │
-│ ┌── │
-│ │ ID: 0x37f5889788fe0d838e08ab4eed13c5bd5005dec1860cd5764b52e6498daeb809 │
-│ │ Owner: Shared( 4 ) │
-│ │ Version: 4 │
-│ │ Digest: awYPvEAPVZKnQvd4nodbFaP8esQHHtmiMxfjkBpTLW6 │
-│ └── │
-│ ┌── │
-│ │ ID: 0x3b83c74ddd580763bd76e79b05a9d94b245d41d6a66604684fc78d83f055dc86 │
-│ │ Owner: Account Address ( 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 ) │
-│ │ Version: 4 │
-│ │ Digest: DLgi2in87LpKWJiLrDVsCz2rojyWcQiibrewifTsXsnq │
-│ └── │
-│ ┌── │
-│ │ ID: 0x50cda73460073262f1cbf202475f84a78fa074d09e656cd828141e12200746b5 │
-│ │ Owner: Account Address ( 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 ) │
-│ │ Version: 4 │
-│ │ Digest: 8qTF5B63pKheLbHjYgEigWJBVzU76wNzrDwHW3Y1MeNF │
-│ └── │
-│ ┌── │
-│ │ ID: 0x59115debba94b7130a90c0a05ea8b8ffde6d7c2d9cf23e939627f5a6327c72b1 │
-│ │ Owner: Account Address ( 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 ) │
-│ │ Version: 4 │
-│ │ Digest: 7Vmz5oH8mz6TPuriHCzHs1sNDcnKG1bRJ8M8WLQbYfEa │
-│ └── │
-│ ┌── │
-│ │ ID: 0x6645d4801f7f225d0464069f7d4ecc15fe285af4b58b3c6de84bf4b2600bf9ce │
-│ │ Owner: Account Address ( 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 ) │
-│ │ Version: 4 │
-│ │ Digest: H2emtQYNWu2cM8rFwTVKK4qsgSrvcKgFT3Kg1uCAoLR8 │
-│ └── │
-│ ┌── │
-│ │ ID: 0x7fbd53eaa0da91fbeeb75228225ae9ed7e11a1e128c3e5eed378b902c2d5589f │
+│ │ ID: 0x07d3079c4715d16b119517112e3dba807d64ca10bcb1399617be2c8e49194421 │
 │ │ Owner: Immutable │
 │ │ Version: 1 │
-│ │ Digest: Bpmjoi8FE41o36Akz6uNBNVWtev4394uK23gfTUKHc3e │
+│ │ Digest: 4UbhFWcKE17ronJ6yXQu9QRdjWj5dG3zmhmCqy9UAKjT │
 │ └── │
 │ ┌── │
-│ │ ID: 0xa723ee12b211122f3decb61eba8f415524972420d3d02d3937a5ba4983d9a9b7 │
+│ │ ID: 0x47edd8dbc68b8e34b07b69fa92855f8f9810fa7c62512fed1b8f47c62036b192 │
 │ │ Owner: Account Address ( 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 ) │
 │ │ Version: 4 │
-│ │ Digest: FFNCVz1CeDRWYFS3fQsXr8jKTvyp429qnc8kACBsm2qu │
+│ │ Digest: 84JBbAF1odXsLJJzmT7R7J6EFBYLYXGZD8WABFMhnqPq │
+│ └── │
+│ ┌── │
+│ │ ID: 0x4db24dff5c160f3b5c12a6d327eb056497c16595e8a743799475275819ef47c7 │
+│ │ Owner: Shared( 4 ) │
+│ │ Version: 4 │
+│ │ Digest: EPdmychS5hkz2cjGB3tH2ayZTuaFpbA8jpJwwhbteG7L │
+│ └── │
+│ ┌── │
+│ │ ID: 0x66080cdbb270dae915946fbeaae55536817d960189562739f8e64aaa37e02929 │
+│ │ Owner: Account Address ( 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 ) │
+│ │ Version: 4 │
+│ │ Digest: APLTpt5DHCgrUns9NRaRp46eoULrZPGZUM74jHVGHdvK │
+│ └── │
+│ ┌── │
+│ │ ID: 0x69e70f50646d376c917644032bc402988e05d146fea47590c92bba15f96562c5 │
+│ │ Owner: Account Address ( 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 ) │
+│ │ Version: 4 │
+│ │ Digest: FCcQtjniwEyUnwBPrdqMytfNnYKVtBr2DruY5fF7nQ93 │
+│ └── │
+│ ┌── │
+│ │ ID: 0x9f6a73cb5a73d487cb0b2c5172e3a0fc03f471e846f8957e60e6fe0567f557e9 │
+│ │ Owner: Account Address ( 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 ) │
+│ │ Version: 4 │
+│ │ Digest: FCJyrXfJtomMfL52gr7ZrRcGHnKvFL23fuLa2x3212Jo │
+│ └── │
+│ ┌── │
+│ │ ID: 0xcbec9cf2a3a00c39617aeb0c9344d683c8d6844eeb3d21911dc06b86f87626aa │
+│ │ Owner: Account Address ( 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 ) │
+│ │ Version: 4 │
+│ │ Digest: 6R9LYMJxVM1nmJdzA6mfR1hKqinhn88gxYbDfUqjmU9k │
+│ └── │
+│ ┌── │
+│ │ ID: 0xdc26537b0191e0ec43b8defec2fcb5a031961c83566cf8b4ecb8fd548c355fbd │
+│ │ Owner: Shared( 4 ) │
+│ │ Version: 4 │
+│ │ Digest: A388vx7GA9mn4kZGdTEB3K9CRbDmpr7RoC2SqwH3oe7M │
 │ └── │
 │ Mutated Objects: │
 │ ┌── │
-│ │ ID: 0x74a902976cdef6e2c9a7860a5a95db898417686904428cea856e184fc9ffefd5 │
+│ │ ID: 0xf36f0e3b880e8bf562fa387798d843123b31c2eca4162ec9acdc298e4f4d5766 │
 │ │ Owner: Account Address ( 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 ) │
 │ │ Version: 4 │
-│ │ Digest: 6dSVFjiemCurUTBA2f2Ma3b3vYCzvTWjayRcrfFXD7G6 │
+│ │ Digest: 9cTMEy9X5YmMgFkxYy9vdTuAwLoLn7QdaPwNbjb3rTVX │
 │ └── │
 │ Gas Object: │
 │ ┌── │
-│ │ ID: 0x74a902976cdef6e2c9a7860a5a95db898417686904428cea856e184fc9ffefd5 │
+│ │ ID: 0xf36f0e3b880e8bf562fa387798d843123b31c2eca4162ec9acdc298e4f4d5766 │
 │ │ Owner: Account Address ( 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 ) │
 │ │ Version: 4 │
-│ │ Digest: 6dSVFjiemCurUTBA2f2Ma3b3vYCzvTWjayRcrfFXD7G6 │
+│ │ Digest: 9cTMEy9X5YmMgFkxYy9vdTuAwLoLn7QdaPwNbjb3rTVX │
 │ └── │
 │ Gas Cost Summary: │
 │ Storage Cost: 123629200 MIST │
@@ -158,116 +162,134 @@ Transaction Digest: 8AP4hMhCgNwZLMomRzRniaF9mvqw7aBq9SFsYTcFSCho
 │ Non-refundable Storage Fee: 9880 MIST │
 │ │
 │ Transaction Dependencies: │
-│ AE5JSYAHBZV6anUMRuMG4Qk2SeMc5Qy8TtfJBnrG87z5 │
-│ DRPNPAgkf7qnqYsm5eB4TTCMTzLcW6prwjhXNfPTZyok │
+│ 2aTLvAKHFSxg4C6xp4yCkgZuTAYTEui5TfJsXegGnAvu │
+│ 43TKHR26QUXcPnwQTEzntRc4d4vzE95qxKVkjGibJkAh │
 ╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ Transaction Block Events │
-├────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+├───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ ┌── │
-│ │ EventID: 8AP4hMhCgNwZLMomRzRniaF9mvqw7aBq9SFsYTcFSCho:0 │
-│ │ PackageID: 0x7fbd53eaa0da91fbeeb75228225ae9ed7e11a1e128c3e5eed378b902c2d5589f │
+│ │ EventID: 7bosHaCyC2TWe6MCmK9KJcQch17y7h9NWJeiP9GvGeY9:0 │
+│ │ PackageID: 0x07d3079c4715d16b119517112e3dba807d64ca10bcb1399617be2c8e49194421 │
 │ │ Transaction Module: cuon_chun │
 │ │ Sender: 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 │
-│ │ EventType: 0x2::display::DisplayCreated<0x7fbd53eaa0da91fbeeb75228225ae9ed7e11a1e128c3e5eed378b902c2d5589f::cuon_chun::CuonChunNFT> │
-│ │ Timestamp: 1773192318369 │
+│ │ EventType: 0x2::display::DisplayCreated<0x7d3079c4715d16b119517112e3dba807d64ca10bcb1399617be2c8e49194421::cuon_chun::CuonChunNFT> │
+│ │ Timestamp: 1774318020862 │
 │ └── │
 │ │ ParsedJSON: │
-│ │ ┌──┐ │
-│ │ │ │ │
-│ │ └──┘ │
+│ │ ┌────┬────────────────────────────────────────────────────────────────────┐ │
+│ │ │ id │ 0x69e70f50646d376c917644032bc402988e05d146fea47590c92bba15f96562c5 │ │
+│ │ └────┴────────────────────────────────────────────────────────────────────┘ │
 │ └── │
 │ ┌── │
-│ │ EventID: 8AP4hMhCgNwZLMomRzRniaF9mvqw7aBq9SFsYTcFSCho:1 │
-│ │ PackageID: 0x7fbd53eaa0da91fbeeb75228225ae9ed7e11a1e128c3e5eed378b902c2d5589f │
+│ │ EventID: 7bosHaCyC2TWe6MCmK9KJcQch17y7h9NWJeiP9GvGeY9:1 │
+│ │ PackageID: 0x07d3079c4715d16b119517112e3dba807d64ca10bcb1399617be2c8e49194421 │
 │ │ Transaction Module: cuon_chun │
 │ │ Sender: 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 │
-│ │ EventType: 0x2::display::VersionUpdated<0x7fbd53eaa0da91fbeeb75228225ae9ed7e11a1e128c3e5eed378b902c2d5589f::cuon_chun::CuonChunNFT> │
-│ │ Timestamp: 1773192318369 │
+│ │ EventType: 0x2::display::VersionUpdated<0x7d3079c4715d16b119517112e3dba807d64ca10bcb1399617be2c8e49194421::cuon_chun::CuonChunNFT> │
+│ │ Timestamp: 1774318020862 │
 │ └── │
 │ │ ParsedJSON: │
-│ │ ┌──┐ │
-│ │ │ │ │
-│ │ └──┘ │
+│ │ ┌─────────┬──────────┬───────┬─────────────────────────────────────────────────┐ │
+│ │ │ fields │ contents │ key │ name │ │
+│ │ │ │ ├───────┼─────────────────────────────────────────────────┤ │
+│ │ │ │ │ value │ {name} │ │
+│ │ │ │ ├───────┼─────────────────────────────────────────────────┤ │
+│ │ │ │ │ key │ image_url │ │
+│ │ │ │ ├───────┼─────────────────────────────────────────────────┤ │
+│ │ │ │ │ value │ {image_url} │ │
+│ │ │ │ ├───────┼─────────────────────────────────────────────────┤ │
+│ │ │ │ │ key │ description │ │
+│ │ │ │ ├───────┼─────────────────────────────────────────────────┤ │
+│ │ │ │ │ value │ Cuon Chun SuiChin - Tier: {tier} │ │
+│ │ │ │ ├───────┼─────────────────────────────────────────────────┤ │
+│ │ │ │ │ key │ project_url │ │
+│ │ │ │ ├───────┼─────────────────────────────────────────────────┤ │
+│ │ │ │ │ value │ https://github.com/TrVHau/SuiChin-hackathon │ │
+│ │ ├─────────┼──────────┴───────┴─────────────────────────────────────────────────┤ │
+│ │ │ id │ 0x69e70f50646d376c917644032bc402988e05d146fea47590c92bba15f96562c5 │ │
+│ │ ├─────────┼────────────────────────────────────────────────────────────────────┤ │
+│ │ │ version │ 1.0 │ │
+│ │ └─────────┴────────────────────────────────────────────────────────────────────┘ │
 │ └── │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ Object Changes │
-├───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ Created Objects: │
 │ ┌── │
-│ │ ObjectID: 0x2774970297daeb94868351b85f444a2c4ed9f369731cdeab45fe8a3c6c9b275e │
+│ │ ObjectID: 0x47edd8dbc68b8e34b07b69fa92855f8f9810fa7c62512fed1b8f47c62036b192 │
+│ │ Sender: 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 │
+│ │ Owner: Account Address ( 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 ) │
+│ │ ObjectType: 0x7d3079c4715d16b119517112e3dba807d64ca10bcb1399617be2c8e49194421::craft::AdminCap │
+│ │ Version: 4 │
+│ │ Digest: 84JBbAF1odXsLJJzmT7R7J6EFBYLYXGZD8WABFMhnqPq │
+│ └── │
+│ ┌── │
+│ │ ObjectID: 0x4db24dff5c160f3b5c12a6d327eb056497c16595e8a743799475275819ef47c7 │
 │ │ Sender: 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 │
 │ │ Owner: Shared( 4 ) │
-│ │ ObjectType: 0x7fbd53eaa0da91fbeeb75228225ae9ed7e11a1e128c3e5eed378b902c2d5589f::craft::Treasury │
+│ │ ObjectType: 0x7d3079c4715d16b119517112e3dba807d64ca10bcb1399617be2c8e49194421::marketplace::Market │
 │ │ Version: 4 │
-│ │ Digest: BDmCJbCn8MHM1bXwPtvEHnxqmhUe4pT5cxyGdeam4UQV │
+│ │ Digest: EPdmychS5hkz2cjGB3tH2ayZTuaFpbA8jpJwwhbteG7L │
 │ └── │
 │ ┌── │
-│ │ ObjectID: 0x37f5889788fe0d838e08ab4eed13c5bd5005dec1860cd5764b52e6498daeb809 │
-│ │ Sender: 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 │
-│ │ Owner: Shared( 4 ) │
-│ │ ObjectType: 0x7fbd53eaa0da91fbeeb75228225ae9ed7e11a1e128c3e5eed378b902c2d5589f::marketplace::Market │
-│ │ Version: 4 │
-│ │ Digest: awYPvEAPVZKnQvd4nodbFaP8esQHHtmiMxfjkBpTLW6 │
-│ └── │
-│ ┌── │
-│ │ ObjectID: 0x3b83c74ddd580763bd76e79b05a9d94b245d41d6a66604684fc78d83f055dc86 │
-│ │ Sender: 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 │
-│ │ Owner: Account Address ( 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 ) │
-│ │ ObjectType: 0x7fbd53eaa0da91fbeeb75228225ae9ed7e11a1e128c3e5eed378b902c2d5589f::craft::AdminCap │
-│ │ Version: 4 │
-│ │ Digest: DLgi2in87LpKWJiLrDVsCz2rojyWcQiibrewifTsXsnq │
-│ └── │
-│ ┌── │
-│ │ ObjectID: 0x50cda73460073262f1cbf202475f84a78fa074d09e656cd828141e12200746b5 │
-│ │ Sender: 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 │
-│ │ Owner: Account Address ( 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 ) │
-│ │ ObjectType: 0x2::display::Display<0x7fbd53eaa0da91fbeeb75228225ae9ed7e11a1e128c3e5eed378b902c2d5589f::cuon_chun::CuonChunNFT> │
-│ │ Version: 4 │
-│ │ Digest: 8qTF5B63pKheLbHjYgEigWJBVzU76wNzrDwHW3Y1MeNF │
-│ └── │
-│ ┌── │
-│ │ ObjectID: 0x59115debba94b7130a90c0a05ea8b8ffde6d7c2d9cf23e939627f5a6327c72b1 │
-│ │ Sender: 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 │
-│ │ Owner: Account Address ( 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 ) │
-│ │ ObjectType: 0x2::package::Publisher │
-│ │ Version: 4 │
-│ │ Digest: 7Vmz5oH8mz6TPuriHCzHs1sNDcnKG1bRJ8M8WLQbYfEa │
-│ └── │
-│ ┌── │
-│ │ ObjectID: 0x6645d4801f7f225d0464069f7d4ecc15fe285af4b58b3c6de84bf4b2600bf9ce │
+│ │ ObjectID: 0x66080cdbb270dae915946fbeaae55536817d960189562739f8e64aaa37e02929 │
 │ │ Sender: 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 │
 │ │ Owner: Account Address ( 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 ) │
 │ │ ObjectType: 0x2::package::UpgradeCap │
 │ │ Version: 4 │
-│ │ Digest: H2emtQYNWu2cM8rFwTVKK4qsgSrvcKgFT3Kg1uCAoLR8 │
+│ │ Digest: APLTpt5DHCgrUns9NRaRp46eoULrZPGZUM74jHVGHdvK │
 │ └── │
 │ ┌── │
-│ │ ObjectID: 0xa723ee12b211122f3decb61eba8f415524972420d3d02d3937a5ba4983d9a9b7 │
+│ │ ObjectID: 0x69e70f50646d376c917644032bc402988e05d146fea47590c92bba15f96562c5 │
 │ │ Sender: 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 │
 │ │ Owner: Account Address ( 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 ) │
-│ │ ObjectType: 0x7fbd53eaa0da91fbeeb75228225ae9ed7e11a1e128c3e5eed378b902c2d5589f::player_profile::MatchOracle │
+│ │ ObjectType: 0x2::display::Display<0x7d3079c4715d16b119517112e3dba807d64ca10bcb1399617be2c8e49194421::cuon_chun::CuonChunNFT> │
 │ │ Version: 4 │
-│ │ Digest: FFNCVz1CeDRWYFS3fQsXr8jKTvyp429qnc8kACBsm2qu │
+│ │ Digest: FCcQtjniwEyUnwBPrdqMytfNnYKVtBr2DruY5fF7nQ93 │
+│ └── │
+│ ┌── │
+│ │ ObjectID: 0x9f6a73cb5a73d487cb0b2c5172e3a0fc03f471e846f8957e60e6fe0567f557e9 │
+│ │ Sender: 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 │
+│ │ Owner: Account Address ( 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 ) │
+│ │ ObjectType: 0x7d3079c4715d16b119517112e3dba807d64ca10bcb1399617be2c8e49194421::player_profile::MatchOracle │
+│ │ Version: 4 │
+│ │ Digest: FCJyrXfJtomMfL52gr7ZrRcGHnKvFL23fuLa2x3212Jo │
+│ └── │
+│ ┌── │
+│ │ ObjectID: 0xcbec9cf2a3a00c39617aeb0c9344d683c8d6844eeb3d21911dc06b86f87626aa │
+│ │ Sender: 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 │
+│ │ Owner: Account Address ( 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 ) │
+│ │ ObjectType: 0x2::package::Publisher │
+│ │ Version: 4 │
+│ │ Digest: 6R9LYMJxVM1nmJdzA6mfR1hKqinhn88gxYbDfUqjmU9k │
+│ └── │
+│ ┌── │
+│ │ ObjectID: 0xdc26537b0191e0ec43b8defec2fcb5a031961c83566cf8b4ecb8fd548c355fbd │
+│ │ Sender: 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 │
+│ │ Owner: Shared( 4 ) │
+│ │ ObjectType: 0x7d3079c4715d16b119517112e3dba807d64ca10bcb1399617be2c8e49194421::craft::Treasury │
+│ │ Version: 4 │
+│ │ Digest: A388vx7GA9mn4kZGdTEB3K9CRbDmpr7RoC2SqwH3oe7M │
 │ └── │
 │ Mutated Objects: │
 │ ┌── │
-│ │ ObjectID: 0x74a902976cdef6e2c9a7860a5a95db898417686904428cea856e184fc9ffefd5 │
+│ │ ObjectID: 0xf36f0e3b880e8bf562fa387798d843123b31c2eca4162ec9acdc298e4f4d5766 │
 │ │ Sender: 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 │
 │ │ Owner: Account Address ( 0xb7c3fff63ddde0174d510c5a03ffa2085e940536e2ff8806cb3475f4f6fd6027 ) │
 │ │ ObjectType: 0x2::coin::Coin<0x2::sui::SUI> │
 │ │ Version: 4 │
-│ │ Digest: 6dSVFjiemCurUTBA2f2Ma3b3vYCzvTWjayRcrfFXD7G6 │
+│ │ Digest: 9cTMEy9X5YmMgFkxYy9vdTuAwLoLn7QdaPwNbjb3rTVX │
 │ └── │
 │ Published Objects: │
 │ ┌── │
-│ │ PackageID: 0x7fbd53eaa0da91fbeeb75228225ae9ed7e11a1e128c3e5eed378b902c2d5589f │
+│ │ PackageID: 0x07d3079c4715d16b119517112e3dba807d64ca10bcb1399617be2c8e49194421 │
 │ │ Version: 1 │
-│ │ Digest: Bpmjoi8FE41o36Akz6uNBNVWtev4394uK23gfTUKHc3e │
+│ │ Digest: 4UbhFWcKE17ronJ6yXQu9QRdjWj5dG3zmhmCqy9UAKjT │
 │ │ Modules: achievement, craft, cuon_chun, marketplace, player_profile, scrap, trade_up │
 │ └── │
-╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ Balance Changes │
 ├───────────────────────────────────────────────────────────────────────────────────────────────────┤

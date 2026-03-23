@@ -3,13 +3,13 @@
 # this file should not be committed to source control
 
 build-env = "testnet"
-chain-id = "826b0c22"
+chain-id = "e9eed8f1"
 
 [[published]]
 source = { local = "/mnt/c/code/blockchain/SuiChin-hackathon/contract" }
-published-at = "0x7fbd53eaa0da91fbeeb75228225ae9ed7e11a1e128c3e5eed378b902c2d5589f"
-original-id = "0x7fbd53eaa0da91fbeeb75228225ae9ed7e11a1e128c3e5eed378b902c2d5589f"
+published-at = "0x07d3079c4715d16b119517112e3dba807d64ca10bcb1399617be2c8e49194421"
+original-id = "0x07d3079c4715d16b119517112e3dba807d64ca10bcb1399617be2c8e49194421"
 version = 1
 toolchain-version = "1.67.0"
 build-config = { flavor = "sui", edition = "2024" }
-upgrade-capability = "0x6645d4801f7f225d0464069f7d4ecc15fe285af4b58b3c6de84bf4b2600bf9ce"
+upgrade-capability = "0x66080cdbb270dae915946fbeaae55536817d960189562739f8e64aaa37e02929"
