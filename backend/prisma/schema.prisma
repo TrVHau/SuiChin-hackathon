@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MatchMode {
+  REALTIME
+  ASYNC
+}
+
+enum ChallengeStatus {
+  OPEN
+  ACCEPTED
+  ACTIVE
+  SUBMITTED
+  FINALIZED
+  CANCELLED
+  EXPIRED
+}
+
+enum MatchResult {
+  WIN
+  LOSE
+  DRAW
+  FORFEIT
+}
+
+model Challenge {
+  id              String          @id
+  mode            MatchMode
+  status          ChallengeStatus
+  challengerWallet String
+  opponentWallet  String?
+  stakeEnabled    Boolean         @default(false)
+  stakeAmount     Int             @default(0)
+  winnerWallet    String?
+  createdAt       DateTime        @default(now())
+  expiresAt       DateTime
+
+  results         ChallengeResult[]
+
+  @@index([status])
+  @@index([challengerWallet])
+  @@index([opponentWallet])
+}
+
+model ChallengeResult {
+  id            String      @id
+  challengeId   String
+  walletAddress String
+  result        MatchResult
+  submittedAt   DateTime    @default(now())
+
+  challenge     Challenge   @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, walletAddress])
+  @@index([challengeId])
+}

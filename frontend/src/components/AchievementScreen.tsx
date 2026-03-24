@@ -1,12 +1,14 @@
 import { ArrowLeft, Trophy, Lock } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { useOwnedNFTs } from "@/hooks/useOwnedNFTs";
+import { useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import { buildClaimBadgeTx } from "@/lib/sui-client";
 
 interface AchievementScreenProps {
   onBack: () => void;
   maxStreak: number;
-  claimedAchievements: number[];
-  onClaim: (milestone: number) => void;
+  profileId: string;
 }
 
 const ACHIEVEMENTS = [
@@ -45,14 +47,29 @@ const ACHIEVEMENTS = [
 export default function AchievementScreen({
   onBack,
   maxStreak,
-  claimedAchievements,
-  onClaim,
+  profileId,
 }: AchievementScreenProps) {
-  const handleClaim = async (milestone: number) => {
-    toast.loading("Đang claim achievement...", { id: "achievement" });
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    onClaim(milestone);
-    toast.success("Claim thành công!", { id: "achievement" });
+  const { badges, refetch: refetchBadges } = useOwnedNFTs();
+  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const claimedMilestones = badges.map((b) => b.badge_type);
+
+  const handleClaim = (milestone: number) => {
+    toast.loading("Đang claim achievement...", { id: `claim-${milestone}` });
+    const tx = buildClaimBadgeTx(profileId, milestone);
+    signAndExecute(
+      { transaction: tx },
+      {
+        onSuccess: () => {
+          toast.success(`Claim thành công! 🏆`, { id: `claim-${milestone}` });
+          refetchBadges();
+        },
+        onError: (err) => {
+          toast.error(`Claim thất bại: ${err.message}`, {
+            id: `claim-${milestone}`,
+          });
+        },
+      },
+    );
   };
 
   return (
@@ -96,7 +113,9 @@ export default function AchievementScreen({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {ACHIEVEMENTS.map((achievement, index) => {
               const isUnlocked = maxStreak >= achievement.milestone;
-              const isClaimed = claimedAchievements.includes(achievement.milestone);
+              const isClaimed = claimedMilestones.includes(
+                achievement.milestone,
+              );
               const canClaim = isUnlocked && !isClaimed;
 
               return (

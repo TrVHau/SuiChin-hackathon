@@ -1,88 +1,305 @@
-import { ArrowLeft, Minus, Plus, Sparkles } from 'lucide-react';
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { toast } from 'sonner';
+import { ArrowLeft, Hammer, Sparkles } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
+import { useSuiClient, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import { buildCraftChunTx } from "@/lib/sui-client";
+import {
+  TREASURY_OBJECT_ID,
+  PACKAGE_ID,
+  computeCraftCost,
+} from "@/config/sui.config";
 
-interface MintScreenProps {
-  onBack: () => void;
-  playerData: {
-    tier1: number;
-    tier2: number;
-    tier3: number;
-  };
-  onMint: (useTier1: number, useTier2: number, useTier3: number) => void; 
+// ── Confetti ──
+const CONFETTI_COLORS = ["#FF6B6B","#FFE66D","#4ECDC4","#A78BFA","#34D399","#F472B6","#FCD34D","#60A5FA"];
+
+function Confetti() {
+  const pieces = useMemo(
+    () =>
+      Array.from({ length: 30 }, (_, i) => ({
+        id: i,
+        x: (Math.random() - 0.5) * 700,
+        y: -(Math.random() * 600 + 100),
+        rotate: Math.random() * 720 - 360,
+        color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+        size: Math.random() * 10 + 6,
+        delay: Math.random() * 0.3,
+      })),
+    [],
+  );
+  return (
+    <div className="fixed inset-0 pointer-events-none overflow-hidden z-50 flex items-center justify-center">
+      {pieces.map((p) => (
+        <motion.div
+          key={p.id}
+          initial={{ x: 0, y: 0, opacity: 1, scale: 1, rotate: 0 }}
+          animate={{ x: p.x, y: p.y, opacity: 0, scale: 0.4, rotate: p.rotate }}
+          transition={{ duration: 1.4, ease: "easeOut", delay: p.delay }}
+          style={{
+            position: "absolute",
+            width: p.size,
+            height: p.size,
+            borderRadius: "2px",
+            background: p.color,
+          }}
+        />
+      ))}
+    </div>
+  );
 }
 
-export default function MintScreen({ onBack, playerData, onMint }: MintScreenProps) {
-  const [useTier1, setUseTier1] = useState(0);
-  const [useTier2, setUseTier2] = useState(0);
-  const [useTier3, setUseTier3] = useState(0);
-  const [minting, setMinting] = useState(false);
-  const [mintResult, setMintResult] = useState<{ tier: number; emoji: string } | null>(null);
+interface CraftResultData {
+  tier: number; // 0=Scrap, 1=Bronze, 2=Silver, 3=Gold
+  success: boolean;
+  roll: number;
+}
 
-  const totalPoints = useTier1 * 1 + useTier2 * 2 + useTier3 * 3;
-  const canMint = totalPoints >= 10;
+const TIER_CONFIG = {
+  0: {
+    label: "Scrap",
+    emoji: "💀",
+    color: "text-gray-500",
+    borderColor: "border-gray-400",
+    bg: "bg-gray-100",
+    headline: "Thất bại — Nhận Scrap!",
+  },
+  1: {
+    label: "Bronze",
+    emoji: "🥉",
+    color: "text-amber-700",
+    borderColor: "border-amber-400",
+    bg: "bg-amber-50",
+    headline: "Bronze NFT! 🥉",
+  },
+  2: {
+    label: "Silver",
+    emoji: "🥈",
+    color: "text-slate-600",
+    borderColor: "border-slate-400",
+    bg: "bg-slate-50",
+    headline: "Silver NFT! ✨🥈",
+  },
+  3: {
+    label: "Gold",
+    emoji: "🥇",
+    color: "text-yellow-600",
+    borderColor: "border-yellow-400",
+    bg: "bg-yellow-50",
+    headline: "GOLD NFT! 🥇🎉",
+  },
+} as const;
 
-  const getTierEmoji = (tier: number) => {
-    if (tier === 1) return '🥉';
-    if (tier === 2) return '🥈';
-    return '🥇';
+interface WorkshopScreenProps {
+  onBack: () => void;
+  profileId: string;
+  chunRaw: number;
+  onSuccess?: () => void;
+}
+
+export default function WorkshopScreen({
+  onBack,
+  profileId,
+  chunRaw,
+  onSuccess,
+}: WorkshopScreenProps) {
+  const suiClient = useSuiClient();
+  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const [crafting, setCrafting] = useState(false);
+  const [craftResult, setCraftResult] = useState<CraftResultData | null>(null);
+  const [craftCost, setCraftCost] = useState<number>(10);
+  const [displayChunRaw, setDisplayChunRaw] = useState<number>(chunRaw);
+
+  useEffect(() => {
+    setDisplayChunRaw(chunRaw);
+  }, [chunRaw]);
+
+  // Fetch halving cost from Treasury
+  useEffect(() => {
+    if (!TREASURY_OBJECT_ID) return;
+    suiClient
+      .getObject({ id: TREASURY_OBJECT_ID, options: { showContent: true } })
+      .then((obj) => {
+        const fields = (obj.data?.content as { fields?: Record<string, unknown> })?.fields;
+        const total = Number(fields?.total_crafts ?? 0);
+        setCraftCost(computeCraftCost(total));
+      })
+      .catch(() => {/* keep default */});
+  }, [suiClient]);
+
+  const canCraft = displayChunRaw >= craftCost && !!TREASURY_OBJECT_ID;
+
+  const parseCraftEvent = async (digest: string): Promise<CraftResultData> => {
+    const txBlock = await suiClient.getTransactionBlock({
+      digest,
+      options: { showEvents: true, showEffects: true, showObjectChanges: true },
+    });
+
+    const status = (txBlock.effects as { status?: { status?: string; error?: string } } | undefined)
+      ?.status;
+    if (status?.status === "failure") {
+      throw new Error(status.error ?? "Transaction failed");
+    }
+
+    const event = txBlock.events?.find(
+      (e) => e.type === `${PACKAGE_ID}::craft::CraftResult`,
+    );
+    if (event?.parsedJson) {
+      const { tier, success, roll } = event.parsedJson as {
+        tier: number;
+        success: boolean;
+        roll: number;
+      };
+      return {
+        tier: Number(tier),
+        success: Boolean(success),
+        roll: Number(roll),
+      };
+    }
+
+    const createdObjects = (txBlock.objectChanges ?? []).filter(
+      (change) => change.type === "created",
+    );
+
+    const createdScrap = createdObjects.find((change) =>
+      String(change.objectType ?? "").includes("::scrap::Scrap"),
+    );
+    if (createdScrap) {
+      return { tier: 0, success: false, roll: -1 };
+    }
+
+    const createdNft = createdObjects.find((change) =>
+      String(change.objectType ?? "").includes("::cuon_chun::CuonChunNFT"),
+    );
+    if (createdNft) {
+      const createdObjectId = "objectId" in createdNft ? String(createdNft.objectId) : "";
+      if (createdObjectId) {
+        const nftObj = await suiClient.getObject({
+          id: createdObjectId,
+          options: { showContent: true },
+        });
+        const fields = (nftObj.data?.content as { fields?: Record<string, unknown> } | undefined)
+          ?.fields;
+        const tier = Number(fields?.tier ?? 1);
+        return { tier, success: true, roll: -1 };
+      }
+      return { tier: 1, success: true, roll: -1 };
+    }
+
+    throw new Error("Khong doc duoc ket qua craft tren chain");
   };
 
-  const getTierProbability = (points: number) => {
-    if (points >= 30) return { tier1: 50, tier2: 35, tier3: 15 };
-    if (points >= 20) return { tier1: 60, tier2: 30, tier3: 10 };
-    return { tier1: 75, tier2: 20, tier3: 5 };
+  const readLiveCraftState = async (): Promise<{ liveChun: number; liveCost: number }> => {
+    const [profileObj, treasuryObj] = await Promise.all([
+      suiClient.getObject({ id: profileId, options: { showContent: true } }),
+      suiClient.getObject({ id: TREASURY_OBJECT_ID, options: { showContent: true } }),
+    ]);
+
+    const profileFields = (profileObj.data?.content as { fields?: Record<string, unknown> })?.fields;
+    const treasuryFields = (treasuryObj.data?.content as { fields?: Record<string, unknown> })?.fields;
+
+    const liveChun = Number(profileFields?.chun_raw ?? 0);
+    const totalCrafts = Number(treasuryFields?.total_crafts ?? 0);
+    const liveCost = computeCraftCost(totalCrafts);
+
+    return { liveChun, liveCost };
   };
 
-  const prob = getTierProbability(totalPoints);
+  const handleCraft = async () => {
+    if (!canCraft || crafting) return;
 
-  const handleMint = async () => {
-    if (!canMint) return;
+    try {
+      const { liveChun, liveCost } = await readLiveCraftState();
+      setDisplayChunRaw(liveChun);
+      setCraftCost(liveCost);
+      if (liveChun < liveCost) {
+        toast.error(`Khong du Chun Raw. Can ${liveCost}, hien co ${liveChun}.`);
+        return;
+      }
+    } catch {
+      toast.error("Khong doc duoc trang thai on-chain truoc khi craft.");
+      return;
+    }
 
-    setMinting(true);
-    toast.loading('Đang mint NFT từ blockchain...', { id: 'mint' });
+    setCrafting(true);
+    toast.loading("Dang craft Cuon Chun NFT...", { id: "craft" });
 
-    onMint(useTier1, useTier2, useTier3);
-    
-    setMinting(false);
-    
-    setTimeout(() => {
-      const rand = Math.random() * 100;
-      let resultTier = 1;
-      if (rand < prob.tier3) resultTier = 3;
-      else if (rand < prob.tier3 + prob.tier2) resultTier = 2;
-      
-      setMintResult({ tier: resultTier, emoji: getTierEmoji(resultTier) });
-    }, 1000);
+    const tx = buildCraftChunTx(profileId, TREASURY_OBJECT_ID);
+
+    signAndExecute(
+      { transaction: tx },
+      {
+        onSuccess: async (result) => {
+          try {
+            const data = await parseCraftEvent(result.digest);
+            setCraftResult(data);
+            try {
+              const { liveChun, liveCost } = await readLiveCraftState();
+              setDisplayChunRaw(liveChun);
+              setCraftCost(liveCost);
+            } catch {
+              // Keep existing UI state if post-craft read fails.
+            }
+            const cfg =
+              TIER_CONFIG[data.tier as keyof typeof TIER_CONFIG] ??
+              TIER_CONFIG[0];
+            const rollText = data.roll >= 0 ? ` (roll: ${data.roll})` : "";
+            if (data.success) {
+              toast.success(`${cfg.headline}${rollText}`, {
+                id: "craft",
+              });
+            } else {
+              toast.error(`${cfg.headline}${rollText}`, {
+                id: "craft",
+              });
+            }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : "Unknown error";
+            toast.error(`Craft that bai: ${message}`, { id: "craft" });
+            try {
+              const { liveChun, liveCost } = await readLiveCraftState();
+              setDisplayChunRaw(liveChun);
+              setCraftCost(liveCost);
+            } catch {
+              // Ignore extra read errors here.
+            }
+            onSuccess?.();
+            setCrafting(false);
+            return;
+          }
+          setCrafting(false);
+          onSuccess?.();
+        },
+        onError: (err) => {
+          setCrafting(false);
+          const message = String(err?.message ?? "");
+          if (message.includes("103")) {
+            toast.error("Craft that bai: Khong du Chun Raw (Abort 103)", { id: "craft" });
+            return;
+          }
+          if (message.includes("500")) {
+            toast.error("Craft that bai: Khong du 0.1 SUI phi craft", { id: "craft" });
+            return;
+          }
+          toast.error(`Craft that bai: ${message}`, { id: "craft" });
+        },
+      },
+    );
   };
 
-  const handleClose = () => {
-    setUseTier1(0);
-    setUseTier2(0);
-    setUseTier3(0);
-    setMintResult(null);
-    onBack();
-  };
+  const handleReset = () => setCraftResult(null);
 
-  const increment = (tier: number) => {
-    if (tier === 1 && useTier1 < playerData.tier1) setUseTier1(useTier1 + 1);
-    if (tier === 2 && useTier2 < playerData.tier2) setUseTier2(useTier2 + 1);
-    if (tier === 3 && useTier3 < playerData.tier3) setUseTier3(useTier3 + 1);
-  };
-
-  const decrement = (tier: number) => {
-    if (tier === 1 && useTier1 > 0) setUseTier1(useTier1 - 1);
-    if (tier === 2 && useTier2 > 0) setUseTier2(useTier2 - 1);
-    if (tier === 3 && useTier3 > 0) setUseTier3(useTier3 - 1);
-  };
+  const cfg = craftResult
+    ? (TIER_CONFIG[craftResult.tier as keyof typeof TIER_CONFIG] ??
+      TIER_CONFIG[0])
+    : null;
 
   return (
     <div className="min-h-screen bg-sunny-gradient">
-      <div className="max-w-6xl mx-auto px-6 py-10">
+      <div className="max-w-2xl mx-auto px-6 py-10">
+        {/* Header */}
         <div className="flex items-center gap-6 mb-8">
           <motion.button
-            onClick={handleClose}
+            onClick={onBack}
             whileHover={{ scale: 1.1, rotate: -5 }}
             whileTap={{ scale: 0.9 }}
             className="bg-white p-5 rounded-full shadow-2xl border-4 border-playful-purple"
@@ -90,250 +307,232 @@ export default function MintScreen({ onBack, playerData, onMint }: MintScreenPro
             <ArrowLeft className="size-7 text-playful-purple" />
           </motion.button>
           <div className="flex items-center gap-3">
-            <span className="text-5xl">🎨</span>
-            <h1 className="font-display font-black text-4xl text-gray-900">Mint Cuộn Chun NFT</h1>
+            <span className="text-5xl">⚒️</span>
+            <h1 className="font-display font-black text-4xl text-gray-900">
+              Workshop
+            </h1>
           </div>
         </div>
 
         <AnimatePresence mode="wait">
-          {!mintResult ? (
+          {craftResult && cfg ? (
+            /* ── Result Screen ── */
             <motion.div
-              key="mint"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+              key="result"
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="grid grid-cols-1 lg:grid-cols-2 gap-8"
+              className={`rounded-4xl shadow-2xl p-10 border-8 text-center ${cfg.bg} ${cfg.borderColor}`}
             >
-              {/* Left: Select Chuns */}
-              <div className="bg-white rounded-4xl shadow-2xl p-8 border-8 border-playful-blue">
-                <h3 className="font-display font-black text-2xl text-gray-900 mb-6">Chọn Chun để đổi điểm</h3>
-
-                <div className="space-y-5 mb-8">
-                  {/* Tier 1 */}
-                  <div className="bg-chun-tier1/20 rounded-3xl p-5 border-4 border-chun-tier1/40">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <span className="text-4xl">🥉</span>
-                        <div>
-                          <p className="font-display font-black text-lg text-gray-900">Tier 1</p>
-                          <p className="text-sm text-gray-600 font-semibold">1 điểm • Có {playerData.tier1}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <motion.button
-                          onClick={() => decrement(1)}
-                          disabled={useTier1 === 0}
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          className="bg-white p-3 rounded-full hover:bg-gray-100 transition-colors disabled:opacity-50 border-2 border-gray-300"
-                        >
-                          <Minus className="size-5 text-gray-700" />
-                        </motion.button>
-                        <span className="font-display font-black text-2xl text-gray-900 w-12 text-center">
-                          {useTier1}
-                        </span>
-                        <motion.button
-                          onClick={() => increment(1)}
-                          disabled={useTier1 >= playerData.tier1}
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          className="bg-white p-3 rounded-full hover:bg-gray-100 transition-colors disabled:opacity-50 border-2 border-gray-300"
-                        >
-                          <Plus className="size-5 text-gray-700" />
-                        </motion.button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Tier 2 */}
-                  <div className="bg-chun-tier2/20 rounded-3xl p-5 border-4 border-chun-tier2/40">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <span className="text-4xl">🥈</span>
-                        <div>
-                          <p className="font-display font-black text-lg text-gray-900">Tier 2</p>
-                          <p className="text-sm text-gray-600 font-semibold">2 điểm • Có {playerData.tier2}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <motion.button
-                          onClick={() => decrement(2)}
-                          disabled={useTier2 === 0}
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          className="bg-white p-3 rounded-full hover:bg-gray-100 transition-colors disabled:opacity-50 border-2 border-gray-300"
-                        >
-                          <Minus className="size-5 text-gray-700" />
-                        </motion.button>
-                        <span className="font-display font-black text-2xl text-gray-900 w-12 text-center">
-                          {useTier2}
-                        </span>
-                        <motion.button
-                          onClick={() => increment(2)}
-                          disabled={useTier2 >= playerData.tier2}
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          className="bg-white p-3 rounded-full hover:bg-gray-100 transition-colors disabled:opacity-50 border-2 border-gray-300"
-                        >
-                          <Plus className="size-5 text-gray-700" />
-                        </motion.button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Tier 3 */}
-                  <div className="bg-chun-tier3/20 rounded-3xl p-5 border-4 border-chun-tier3/40">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <span className="text-4xl">🥇</span>
-                        <div>
-                          <p className="font-display font-black text-lg text-gray-900">Tier 3</p>
-                          <p className="text-sm text-gray-600 font-semibold">3 điểm • Có {playerData.tier3}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <motion.button
-                          onClick={() => decrement(3)}
-                          disabled={useTier3 === 0}
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          className="bg-white p-3 rounded-full hover:bg-gray-100 transition-colors disabled:opacity-50 border-2 border-gray-300"
-                        >
-                          <Minus className="size-5 text-gray-700" />
-                        </motion.button>
-                        <span className="font-display font-black text-2xl text-gray-900 w-12 text-center">
-                          {useTier3}
-                        </span>
-                        <motion.button
-                          onClick={() => increment(3)}
-                          disabled={useTier3 >= playerData.tier3}
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          className="bg-white p-3 rounded-full hover:bg-gray-100 transition-colors disabled:opacity-50 border-2 border-gray-300"
-                        >
-                          <Plus className="size-5 text-gray-700" />
-                        </motion.button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Total Points */}
-                <div className="bg-gradient-to-r from-playful-purple to-playful-pink rounded-3xl p-6 border-4 border-white shadow-xl">
-                  <div className="flex items-center justify-between">
-                    <p className="font-display font-black text-2xl text-white">Tổng điểm</p>
-                    <p className="font-display font-black text-5xl text-white">{totalPoints}</p>
-                  </div>
-                  <p className="text-sm text-white/90 mt-2 font-semibold">
-                    {canMint ? '✓ Đủ điểm để mint!' : '⚠️ Cần tối thiểu 10 điểm'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Right: Probability & Mint */}
-              <div className="bg-white rounded-4xl shadow-2xl p-8 border-8 border-playful-purple">
-                <h3 className="font-display font-black text-2xl text-gray-900 mb-6">Xác suất nhận NFT</h3>
-
-                <div className="space-y-4 mb-8">
-                  <div className="bg-chun-tier1/20 rounded-3xl p-5 border-4 border-chun-tier1/40">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="text-4xl">🥉</span>
-                        <p className="font-display font-black text-lg text-gray-900">Cuộn Chun Đồng</p>
-                      </div>
-                      <p className="font-display font-black text-3xl text-chun-tier1">{prob.tier1}%</p>
-                    </div>
-                  </div>
-
-                  <div className="bg-chun-tier2/20 rounded-3xl p-5 border-4 border-chun-tier2/40">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="text-4xl">🥈</span>
-                        <p className="font-display font-black text-lg text-gray-900">Cuộn Chun Bạc</p>
-                      </div>
-                      <p className="font-display font-black text-3xl text-chun-tier2">{prob.tier2}%</p>
-                    </div>
-                  </div>
-
-                  <div className="bg-chun-tier3/20 rounded-3xl p-5 border-4 border-chun-tier3/40">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="text-4xl">🥇</span>
-                        <p className="font-display font-black text-lg text-gray-900">Cuộn Chun Vàng</p>
-                      </div>
-                      <p className="font-display font-black text-3xl text-chun-tier3">{prob.tier3}%</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-sunny-100 rounded-3xl p-6 mb-6 border-4 border-sunny-300">
-                  <p className="text-sm text-gray-700 font-bold mb-2">💡 Mẹo:</p>
-                  <ul className="text-sm text-gray-600 space-y-1 font-semibold">
-                    <li>• 10-19 điểm: 75%/20%/5%</li>
-                    <li>• 20-29 điểm: 60%/30%/10%</li>
-                    <li>• 30+ điểm: 50%/35%/15%</li>
-                  </ul>
-                </div>
-
+              {craftResult.tier >= 2 && <Confetti />}
+              <motion.div
+                animate={{ rotate: [0, -15, 15, -15, 0], scale: [1, 1.3, 1] }}
+                transition={{ duration: 0.9 }}
+                className="text-9xl mb-6"
+              >
+                {cfg.emoji}
+              </motion.div>
+              <h2
+                className={`font-display font-black text-3xl mb-3 ${cfg.color}`}
+              >
+                {cfg.headline}
+              </h2>
+              <p className="text-gray-500 font-semibold mb-2">
+                {craftResult.roll >= 0 ? `Roll: ${craftResult.roll} / 99` : "Ket qua da xac nhan on-chain"}
+              </p>
+              <p className="text-gray-500 mb-8">
+                {craftResult.success
+                  ? "NFT đã về ví của bạn 🎉"
+                  : "Scrap đã về ví — thử lại lần sau!"}
+              </p>
+              <div className="flex gap-4">
                 <motion.button
-                  onClick={handleMint}
-                  disabled={!canMint || minting}
-                  whileHover={canMint && !minting ? { scale: 1.05 } : {}}
-                  whileTap={canMint && !minting ? { scale: 0.95 } : {}}
-                  className={`w-full h-24 rounded-full font-display font-black text-3xl shadow-2xl transition-all flex items-center justify-center gap-4 border-4 ${
-                    canMint && !minting
-                      ? 'bg-gradient-to-r from-playful-purple to-playful-blue text-white border-white'
-                      : 'bg-gray-300 text-gray-500 border-gray-400 cursor-not-allowed'
-                  }`}
+                  onClick={handleReset}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="flex-1 btn-playful bg-playful-purple text-white border-4 border-white text-xl"
                 >
-                  {minting ? (
-                    <>
-                      <div className="size-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Đang mint...
-                    </>
-                  ) : canMint ? (
-                    <>
-                      <Sparkles className="size-8" />
-                      MINT NFT
-                    </>
-                  ) : (
-                    'CHƯA ĐỦ ĐIỂM'
-                  )}
+                  <Hammer className="size-6" />
+                  Craft tiếp
+                </motion.button>
+                <motion.button
+                  onClick={onBack}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="flex-1 btn-playful bg-white text-gray-800 border-4 border-gray-300 text-xl"
+                >
+                  Về Dashboard
                 </motion.button>
               </div>
             </motion.div>
-          ) : (
+          ) : crafting ? (
+            /* ── Forging Animation ── */
             <motion.div
-              key="result"
+              key="forging"
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-white rounded-4xl shadow-2xl p-12 text-center max-w-2xl mx-auto border-8 border-playful-green"
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3 }}
+              className="bg-white rounded-4xl shadow-2xl p-10 border-8 border-playful-purple text-center"
             >
+              <div className="relative flex justify-center mb-6">
+                <motion.div
+                  animate={{
+                    rotate: [-15, 15, -15, 15, -15],
+                    scale: [1, 1.15, 1, 1.15, 1],
+                  }}
+                  transition={{
+                    duration: 0.9,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
+                  className="text-9xl select-none"
+                >
+                  ⚒️
+                </motion.div>
+                <motion.div
+                  animate={{ scale: [1, 2.2, 1], opacity: [0.25, 0.05, 0.25] }}
+                  transition={{ duration: 1.1, repeat: Infinity }}
+                  className="absolute size-24 rounded-full bg-playful-purple/30 self-center -z-10"
+                />
+              </div>
               <motion.div
-                initial={{ rotate: -180, scale: 0 }}
-                animate={{ rotate: 0, scale: 1 }}
-                transition={{ type: "spring", stiffness: 150 }}
-                className="text-9xl mb-6"
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 1.4, repeat: Infinity }}
+                className="text-5xl mb-4"
               >
-                {mintResult.emoji}
+                🏮
               </motion.div>
-              <h3 className="font-display font-black text-5xl text-playful-green mb-4">Mint thành công!</h3>
-              <p className="text-3xl text-gray-700 mb-8 font-bold">
-                Cuộn Chun {mintResult.tier === 1 ? 'Đồng' : mintResult.tier === 2 ? 'Bạc' : 'Vàng'}
+              <h2 className="font-display font-black text-3xl text-playful-purple mb-2">
+                Đang rèn NFT...
+              </h2>
+              <p className="text-gray-500 font-semibold mb-6">
+                Chờ blockchain xác nhận ⛓️
               </p>
+              <div className="flex justify-center gap-2">
+                {[0, 0.25, 0.5].map((delay, i) => (
+                  <motion.div
+                    key={i}
+                    animate={{ scale: [1, 1.6, 1], opacity: [0.3, 1, 0.3] }}
+                    transition={{ duration: 0.75, repeat: Infinity, delay }}
+                    className="size-3 bg-playful-purple rounded-full"
+                  />
+                ))}
+              </div>
+            </motion.div>
+          ) : (
+            /* ── Craft Form ── */
+            <motion.div
+              key="form"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+            >
+              {/* Info card */}
+              <div className="bg-white rounded-4xl shadow-2xl p-8 border-8 border-playful-purple mb-6">
+                <h2 className="font-display font-black text-2xl text-gray-900 mb-6">
+                  Craft Cuộn Chun NFT
+                </h2>
 
-              <div className="bg-sunny-100 rounded-3xl p-6 mb-8 border-4 border-sunny-300">
-                <p className="text-lg text-gray-700 font-semibold">NFT đã được thêm vào ví của bạn!</p>
+                {/* Recipe */}
+                <div className="bg-sunny-50 border-4 border-sunny-300 rounded-3xl p-6 mb-6">
+                  <h3 className="font-bold text-gray-700 uppercase text-sm mb-4">
+                    Nguyên liệu
+                  </h3>
+                  <div className="flex items-center justify-around">
+                    <div className="text-center">
+                      <div className="text-5xl mb-2">🔮</div>
+                      <p className="font-black text-2xl text-playful-orange">
+                        {craftCost}
+                      </p>
+                      <p className="text-sm text-gray-500 font-semibold">
+                        Chun Raw
+                      </p>
+                    </div>
+                    <div className="text-3xl text-gray-400">+</div>
+                    <div className="text-center">
+                      <div className="text-5xl mb-2">💧</div>
+                      <p className="font-black text-2xl text-playful-blue">
+                        0.1
+                      </p>
+                      <p className="text-sm text-gray-500 font-semibold">SUI</p>
+                    </div>
+                    <div className="text-3xl text-gray-400">→</div>
+                    <div className="text-center">
+                      <div className="text-5xl mb-2">🏮</div>
+                      <p className="font-black text-2xl text-playful-purple">
+                        1
+                      </p>
+                      <p className="text-sm text-gray-500 font-semibold">NFT</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Current balance */}
+                <div className="flex items-center justify-between bg-gray-50 border-4 border-gray-200 rounded-3xl p-5 mb-6">
+                  <span className="font-bold text-gray-700">
+                    Chun Raw hiện có:
+                  </span>
+                  <span
+                    className={`font-display font-black text-3xl ${canCraft ? "text-playful-green" : "text-red-500"}`}
+                  >
+                    {displayChunRaw}
+                    {!canCraft && displayChunRaw < craftCost && (
+                      <span className="text-sm font-semibold text-red-400 ml-2">
+                        (cần {craftCost - displayChunRaw} nữa)
+                      </span>
+                    )}
+                  </span>
+                </div>
+
+                {!TREASURY_OBJECT_ID && (
+                  <div className="bg-yellow-50 border-4 border-yellow-400 rounded-3xl p-4 mb-4">
+                    <p className="text-yellow-800 font-bold text-sm">
+                      ⚠️ VITE_TREASURY_OBJECT_ID chưa được cấu hình trong .env
+                    </p>
+                  </div>
+                )}
+
+                {/* Craft button */}
+                <motion.button
+                  onClick={handleCraft}
+                  disabled={!canCraft || crafting}
+                  whileHover={canCraft && !crafting ? { scale: 1.05 } : {}}
+                  whileTap={canCraft && !crafting ? { scale: 0.95 } : {}}
+                  className={`w-full btn-playful text-2xl flex items-center justify-center gap-3 border-4 ${
+                    canCraft && !crafting
+                      ? "bg-gradient-to-r from-playful-purple to-playful-pink text-white border-white shadow-2xl"
+                      : "bg-gray-200 text-gray-400 border-gray-300 cursor-not-allowed"
+                  }`}
+                >
+                  {crafting ? (
+                    <>
+                      <div className="size-6 border-4 border-white/40 border-t-white rounded-full animate-spin" />
+                      Đang craft...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="size-7" />
+                      CRAFT NFT
+                    </>
+                  )}
+                </motion.button>
               </div>
 
-              <motion.button
-                onClick={handleClose}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="bg-playful-green text-white px-16 py-5 rounded-full font-display font-black text-2xl shadow-2xl border-4 border-white"
-              >
-                Hoàn tất ✓
-              </motion.button>
+              {/* Description */}
+              <div className="bg-white/70 rounded-3xl p-6 border-4 border-white">
+                <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                  <span>📖</span> Cuộn Chun NFT là gì?
+                </h3>
+                <ul className="space-y-2 text-gray-600 font-semibold text-sm">
+                  <li>
+                    • NFT on-chain được mint từ Chun Raw kiếm qua gameplay
+                  </li>
+                  <li>• Có thể giao dịch trên Marketplace</li>
+                  <li>• Dùng để Trade-up lên tier cao hơn</li>
+                  <li>• Mỗi NFT là unique, có tier: Bronze / Silver / Gold</li>
+                </ul>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -341,3 +540,4 @@ export default function MintScreen({ onBack, playerData, onMint }: MintScreenPro
     </div>
   );
 }
+

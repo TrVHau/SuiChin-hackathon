@@ -4,11 +4,12 @@
 # Editor
 .vscode/
 .idea/
-
+.aidlc-rule-details/
+.copilot/
+aidlc-docs/
+AGENTS.md
 # Move build outputs
 contract/build/
-contract/Move.lock
-contract/Published.toml
 
 # Node
 node_modules/
@@ -25,7 +26,7 @@ build/
 *.local
 
 # Environment variables
-.env
+.env # removed from ignore to allow push
 .env.local
 .env.*.local
 
@@ -53,3 +54,5 @@ coverage/
 
 # Debug logs
 debug*.log
+# Ignore aidlc folder
+aidlc/

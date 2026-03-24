@@ -1,249 +1,131 @@
+/// Module achievement — Soulbound Achievement Badge theo streak.
+///
+/// Badge là SOULBOUND: has key ONLY (không có store).
+/// Module này dùng transfer::transfer (private) nên không thể re-transfer.
+/// Contract verify streak on-chain. FE chịu trách nhiệm không gọi 2 lần
+/// cùng badge_type (contract không check duplicate để tiết kiệm gas).
+///
+/// Milestones:
+///   badge_type  1  → Streak ≥  1  (Người Mới Bắt Đầu)
+///   badge_type  5  → Streak ≥  5  (Người Chơi Xuất Sắc)
+///   badge_type 18  → Streak ≥ 18  (Tay Chun Thiên Tài)
+///   badge_type 36  → Streak ≥ 36  (Cao Thủ Búng Chun)
+///   badge_type 67  → Streak ≥ 67  (Huyền Thoại Búng Chun)
 module suichin::achievement {
     use std::string::{Self, String};
-    use sui::display;
-    use sui::package;
+    use sui::clock::{Self, Clock};
     use sui::event;
-    use suichin::player::{Self, PlayerProfile};
+    use suichin::player_profile::{Self, PlayerProfile};
 
+    // ─── Error codes ──────────────────────────────────────────────────────────
+    const E_INVALID_BADGE_TYPE: u64 = 400;
+    const E_STREAK_TOO_LOW:     u64 = 401;
+    const E_NOT_OWNER:          u64 = 402;
 
-    // Achievement milestones
-    const MILESTONE_BEGINNER: u64 = 1;      // Người Mới Bắt Đầu
-    const MILESTONE_SKILLED: u64 = 5;       // Người Chơi Xuất Sắc
-    const MILESTONE_EXPERT: u64 = 18;       // Tay Chun Thiên Tài
-    const MILESTONE_MASTER: u64 = 36;       // Cao Thủ Búng Chun
-    const MILESTONE_LEGEND: u64 = 67;       // Huyền Thoại Búng Chun
-
-    // ===== Errors =====
-    const E_NOT_OWNER: u64 = 299;
-    const E_INVALID_MILESTONE: u64 = 300;
-    const E_INSUFFICIENT_STREAK: u64 = 301;
-    const E_ALREADY_CLAIMED: u64 = 302;
-
-    // ===== Structs =====
-    public struct ACHIEVEMENT has drop {}
-
-    public struct Achievement has key {
+    // ─── Struct ───────────────────────────────────────────────────────────────
+    /// has key ONLY → SOULBOUND (không thể public_transfer)
+    public struct AchievementBadge has key {
         id: UID,
-        milestone: u64,          // 1, 5, 18, 36, 67
-        title: String,           // Tên danh hiệu
-        description: String,     // Mô tả achievement
-        image_url: String,       // URL ảnh achievement (String để tương thích wallet)
-        owner: address,          // Address của owner (để tracking)
-        claimed_at: u64,         // Timestamp claim
+        badge_type: u64,    // milestone: 1 | 5 | 18 | 36 | 67
+        name: String,
+        description: String,
+        image_url: String,
+        earned_at: u64,     // timestamp ms
     }
 
-    // ===== Events =====
-
-    public struct AchievementClaimed has copy, drop {
-        achievement_id: ID,
-        milestone: u64,
-        title: String,
-        owner: address,
-        claimed_at: u64,
+    // ─── Events ───────────────────────────────────────────────────────────────
+    public struct BadgeClaimed has copy, drop {
+        badge_id: ID,
+        recipient: address,
+        badge_type: u64,
+        earned_at: u64,
     }
 
-    // ===== Init Function =====
+    // ─── Helpers ──────────────────────────────────────────────────────────────
 
-    #[allow(lint(share_owned))]
-    fun init(otw: ACHIEVEMENT, ctx: &mut TxContext) {
-        let publisher = package::claim(otw, ctx);
-
-        let mut display = display::new<Achievement>(&publisher, ctx);
-
-        display.add(
-            string::utf8(b"name"),
-            string::utf8(b"{title}")
-        );
-        display.add(
-            string::utf8(b"description"),
-            string::utf8(b"{description}")
-        );
-        display.add(
-            string::utf8(b"image_url"),
-            string::utf8(b"{image_url}")
-        );
-        display.add(
-            string::utf8(b"milestone"),
-            string::utf8(b"Streak {milestone}")
-        );
-        display.add(
-            string::utf8(b"type"),
-            string::utf8(b"Soulbound Achievement")
-        );
-        display.add(
-            string::utf8(b"project_name"),
-            string::utf8(b"SuiChin")
-        );
-        display.add(
-            string::utf8(b"project_url"),
-            string::utf8(b"https://github.com/TrVHau/SuiChin-hackathon")
-        );
-
-        display.update_version();
-
-        transfer::public_share_object(display);
-        transfer::public_transfer(publisher, ctx.sender());
+    /// Tra cứu yêu cầu streak theo badge_type.
+    /// Abort E_INVALID_BADGE_TYPE nếu badge_type không hợp lệ.
+    fun milestone_streak(badge_type: u64): u64 {
+        if      (badge_type == 1)  { 1  }
+        else if (badge_type == 5)  { 5  }
+        else if (badge_type == 18) { 18 }
+        else if (badge_type == 36) { 36 }
+        else if (badge_type == 67) { 67 }
+        else { abort E_INVALID_BADGE_TYPE }
     }
 
-    // ===== Public Entry Functions =====
+    /// Tra cứu tên badge.
+    fun badge_name(badge_type: u64): String {
+        if      (badge_type == 1)  { string::utf8(b"Nguoi Moi Bat Dau")    }
+        else if (badge_type == 5)  { string::utf8(b"Nguoi Choi Xuat Sac")  }
+        else if (badge_type == 18) { string::utf8(b"Tay Chun Thien Tai")   }
+        else if (badge_type == 36) { string::utf8(b"Cao Thu Bung Chun")    }
+        else                       { string::utf8(b"Huyen Thoai Bung Chun")}
+    }
 
-    /// Claim achievement NFT khi đạt milestone
-    public fun claim_achievement(
-        profile: &mut PlayerProfile,
-        milestone: u64,
-        ctx: &mut TxContext
+    /// Tra cứu mô tả badge.
+    fun badge_description(badge_type: u64): String {
+        if      (badge_type == 1)  { string::utf8(b"Dat streak 1 lan thang lien tiep")  }
+        else if (badge_type == 5)  { string::utf8(b"Dat streak 5 lan thang lien tiep")  }
+        else if (badge_type == 18) { string::utf8(b"Dat streak 18 lan thang lien tiep") }
+        else if (badge_type == 36) { string::utf8(b"Dat streak 36 lan thang lien tiep") }
+        else                       { string::utf8(b"Dat streak 67 lan thang lien tiep") }
+    }
+
+    /// Tra cứu image URL badge.
+    fun badge_image_url(badge_type: u64): String {
+        if      (badge_type == 1)  { string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/achievements/achievement1.png")  }
+        else if (badge_type == 5)  { string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/achievements/achievement2.png")  }
+        else if (badge_type == 18) { string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/achievements/achievement3.png") }
+        else if (badge_type == 36) { string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/achievements/achievement4.png") }
+        else                       { string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/achievements/achievement5.png") }
+    }
+
+    // ─── Entry Function ───────────────────────────────────────────────────────
+
+    /// Mint AchievementBadge cho sender.
+    /// Contract verify profile.streak >= milestone tương ứng.
+    /// Contract KHÔNG check duplicate — FE không gọi 2 lần cùng badge_type.
+    public fun claim_badge(
+        profile: &PlayerProfile,
+        badge_type: u64,
+        clock: &Clock,
+        ctx: &mut TxContext,
     ) {
-        assert!(player::owner(profile) == tx_context::sender(ctx), E_NOT_OWNER);
-        
-        assert!(is_valid_milestone(milestone), E_INVALID_MILESTONE);
+        let sender = tx_context::sender(ctx);
 
-        assert!(!player::has_achievement(profile, milestone), E_ALREADY_CLAIMED);
+        // Verify caller owns the profile
+        assert!(sender == player_profile::owner(profile), E_NOT_OWNER);
 
-        let max_streak = player::max_streak(profile);
-        assert!(max_streak >= milestone, E_INSUFFICIENT_STREAK);
+        let required_streak = milestone_streak(badge_type); // abort nếu invalid
+        assert!(player_profile::streak(profile) >= required_streak, E_STREAK_TOO_LOW);
+        let earned_at = clock::timestamp_ms(clock);
 
-        let title = get_milestone_title(milestone);
-        let description = get_milestone_description(milestone);
-        let image_url = get_milestone_image_url(milestone);
-        let owner = player::owner(profile);
-        let claimed_at = tx_context::epoch_timestamp_ms(ctx);
-
-        let achievement = Achievement {
+        let badge = AchievementBadge {
             id: object::new(ctx),
-            milestone,
-            title,
-            description,
-            image_url,
-            owner,
-            claimed_at,
+            badge_type,
+            name: badge_name(badge_type),
+            description: badge_description(badge_type),
+            image_url: badge_image_url(badge_type),
+            earned_at,
         };
 
-        let achievement_id = object::id(&achievement);
-
-        player::add_achievement(profile, milestone);
-
-        event::emit(AchievementClaimed {
-            achievement_id,
-            milestone,
-            title,
-            owner,
-            claimed_at,
+        event::emit(BadgeClaimed {
+            badge_id: object::id(&badge),
+            recipient: sender,
+            badge_type,
+            earned_at,
         });
 
-        transfer::public_transfer(achievement, owner);
+        // Soulbound: dùng transfer::transfer (không phải public_transfer)
+        // → receiver không thể re-transfer vì badge không có `store`
+        transfer::transfer(badge, sender);
     }
 
-    // ===== View Functions =====
-
-    public fun milestone(achievement: &Achievement): u64 {
-        achievement.milestone
-    }
-
-    public fun title(achievement: &Achievement): String {
-        achievement.title
-    }
-
-    public fun owner(achievement: &Achievement): address {
-        achievement.owner
-    }
-
-    public fun claimed_at(achievement: &Achievement): u64 {
-        achievement.claimed_at
-    }
-
-    fun is_valid_milestone(milestone: u64): bool {
-        milestone == MILESTONE_BEGINNER ||
-        milestone == MILESTONE_SKILLED ||
-        milestone == MILESTONE_EXPERT ||
-        milestone == MILESTONE_MASTER ||
-        milestone == MILESTONE_LEGEND
-    }
-
-    fun get_milestone_title(milestone: u64): String {
-        if (milestone == MILESTONE_BEGINNER) {
-            string::utf8(b"Nguoi Moi Bat Dau")
-        } else if (milestone == MILESTONE_SKILLED) {
-            string::utf8(b"Nguoi Choi Xuat Sac")
-        } else if (milestone == MILESTONE_EXPERT) {
-            string::utf8(b"Tay Chun Thien Tai")
-        } else if (milestone == MILESTONE_MASTER) {
-            string::utf8(b"Cao Thu Bung Chun")
-        } else if (milestone == MILESTONE_LEGEND) {
-            string::utf8(b"Huyen Thoai Bung Chun")
-        } else {
-            string::utf8(b"Unknown Achievement")
-        }
-    }
-
-    fun get_milestone_description(milestone: u64): String {
-        if (milestone == MILESTONE_BEGINNER) {
-            string::utf8(b"Thang 1 tran - Buoc dau vao the gioi bung chun")
-        } else if (milestone == MILESTONE_SKILLED) {
-            string::utf8(b"Thang lien tiep 5 tran - Ky nang dang cap")
-        } else if (milestone == MILESTONE_EXPERT) {
-            string::utf8(b"Thang lien tiep 18 tran - Thien tai bung chun")
-        } else if (milestone == MILESTONE_MASTER) {
-            string::utf8(b"Thang lien tiep 36 tran - Bac thay vo doi")
-        } else if (milestone == MILESTONE_LEGEND) {
-            string::utf8(b"Thang lien tiep 67 tran - Huyen thoai song doi")
-        } else {
-            string::utf8(b"Unknown milestone")
-        }
-    }
-
-    fun get_milestone_image_url(milestone: u64): String {
-        if (milestone == MILESTONE_BEGINNER) {
-            string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement1.png")
-        } else if (milestone == MILESTONE_SKILLED) {
-            string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement2.png")
-        } else if (milestone == MILESTONE_EXPERT) {
-            string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement3.png")
-        } else if (milestone == MILESTONE_MASTER) {
-            string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement4.png")
-        } else {
-            string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/dev/frontend/public/achievements/achievement5.png")
-        }
-    }
-
-    public fun get_all_milestones(): vector<u64> {
-        let mut milestones = vector::empty<u64>();
-        vector::push_back(&mut milestones, MILESTONE_BEGINNER);
-        vector::push_back(&mut milestones, MILESTONE_SKILLED);
-        vector::push_back(&mut milestones, MILESTONE_EXPERT);
-        vector::push_back(&mut milestones, MILESTONE_MASTER);
-        vector::push_back(&mut milestones, MILESTONE_LEGEND);
-        milestones
-    }
-
-    public fun get_milestone(nft: &Achievement): u64 {
-        nft.milestone
-    }
-
-    public fun get_title(nft: &Achievement): String {
-        nft.title
-    }
-
-    public fun get_description(nft: &Achievement): String {
-        nft.description
-    }
-
-    public fun get_owner(nft: &Achievement): address {
-        nft.owner
-    }
-
-    public fun get_claimed_at(nft: &Achievement): u64 {
-        nft.claimed_at
-    }
-
-
-    #[test_only]
-    public fun init_for_testing(ctx: &mut TxContext) {
-        let otw = ACHIEVEMENT {};
-        init(otw, ctx);
-    }
-
-    #[test_only]
-    public fun test_init(ctx: &mut TxContext) {
-        init_for_testing(ctx);
-    }
+    // ─── Public Accessors ─────────────────────────────────────────────────────
+    public fun badge_type(badge: &AchievementBadge): u64    { badge.badge_type }
+    public fun name(badge: &AchievementBadge): String       { badge.name }
+    public fun description(badge: &AchievementBadge): String{ badge.description }
+    public fun image_url(badge: &AchievementBadge): String  { badge.image_url }
+    public fun earned_at(badge: &AchievementBadge): u64     { badge.earned_at }
 }

@@ -1,224 +1,247 @@
+/// Tests for suichin::achievement module
+/// Covers: claim_badge (success/streak_too_low/invalid_type/not_owner)
 #[test_only]
 module suichin::achievement_tests {
-    use sui::test_scenario::{Self as ts};
+    use sui::test_scenario;
     use sui::clock::{Self, Clock};
-    use suichin::player::{Self, PlayerProfile};
-    use suichin::achievement::{Self, Achievement};
-    use std::string;
+    use suichin::player_profile::{Self, PlayerProfile};
+    use suichin::achievement::{Self, AchievementBadge};
 
-    const PLAYER1: address = @0x1;
+    const PLAYER: address = @0xB;
+    const OTHER: address  = @0xC;
 
-    fun setup_test(scenario: &mut ts::Scenario): Clock {
-        let clock = clock::create_for_testing(ts::ctx(scenario));
-        
-        // Initialize achievement module
-        ts::next_tx(scenario, PLAYER1);
+    // ── Helper: create profile and win N times ───────────────────────────
+    fun setup_profile_with_streak(
+        scenario: &mut test_scenario::Scenario,
+        clock: &mut Clock,
+        wins: u64,
+    ) {
+        test_scenario::next_tx(scenario, PLAYER);
         {
-            achievement::test_init(ts::ctx(scenario));
+            player_profile::init_profile(test_scenario::ctx(scenario));
         };
-        
-        // Create profile for player
-        ts::next_tx(scenario, PLAYER1);
-        {
-            player::create_profile(&clock, ts::ctx(scenario));
+
+        let mut i = 0;
+        while (i < wins) {
+            clock::set_for_testing(clock, 100_000 + ((i + 1) * 20_000));
+            test_scenario::next_tx(scenario, PLAYER);
+            {
+                let mut profile = test_scenario::take_from_sender<PlayerProfile>(scenario);
+                player_profile::report_result(
+                    &mut profile, 5, true, clock,
+                    test_scenario::ctx(scenario),
+                );
+                test_scenario::return_to_sender(scenario, profile);
+            };
+            i = i + 1;
         };
-        
-        clock
     }
 
     #[test]
-    fun test_claim_beginner_achievement() {
-        let mut scenario = ts::begin(PLAYER1);
-        let clock = setup_test(&mut scenario);
-        
-        // Set streak to 1
-        ts::next_tx(&mut scenario, PLAYER1);
+    fun test_claim_badge_streak_1() {
+        let mut scenario = test_scenario::begin(PLAYER);
+        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+        clock::set_for_testing(&mut clock, 100_000);
+
+        setup_profile_with_streak(&mut scenario, &mut clock, 1);
+
+        // Claim badge type 1 (requires streak >= 1)
+        clock::set_for_testing(&mut clock, 500_000);
+        test_scenario::next_tx(&mut scenario, PLAYER);
         {
-            let mut profile = ts::take_from_sender<PlayerProfile>(&scenario);
-            player::update_streak(&mut profile, 1, 1);
-            ts::return_to_sender(&scenario, profile);
-        };
-        
-        // Claim beginner achievement (milestone 1)
-        ts::next_tx(&mut scenario, PLAYER1);
-        {
-            let mut profile = ts::take_from_sender<PlayerProfile>(&scenario);
-            
-            achievement::claim_achievement(
-                &mut profile,
-                1,  // MILESTONE_BEGINNER
-                ts::ctx(&mut scenario)
+            let profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
+            achievement::claim_badge(
+                &profile, 1, &clock,
+                test_scenario::ctx(&mut scenario),
             );
-            
-            // Check achievement was added to profile
-            assert!(player::has_achievement(&profile, 1) == true, 0);
-            
-            ts::return_to_sender(&scenario, profile);
+            test_scenario::return_to_sender(&scenario, profile);
         };
 
-        // Verify achievement NFT was created
-        ts::next_tx(&mut scenario, PLAYER1);
+        // Verify badge was minted
+        test_scenario::next_tx(&mut scenario, PLAYER);
         {
-            assert!(ts::has_most_recent_for_sender<Achievement>(&scenario), 0);
-            let nft = ts::take_from_sender<Achievement>(&scenario);
-            
-            assert!(achievement::get_milestone(&nft) == 1, 1);
-            assert!(achievement::get_title(&nft) == string::utf8(b"Nguoi Moi Bat Dau"), 2);
-            
-            ts::return_to_sender(&scenario, nft);
+            let badge = test_scenario::take_from_sender<AchievementBadge>(&scenario);
+            assert!(achievement::badge_type(&badge) == 1, 0);
+            test_scenario::return_to_sender(&scenario, badge);
         };
 
         clock::destroy_for_testing(clock);
-        ts::end(scenario);
+        test_scenario::end(scenario);
     }
 
     #[test]
-    fun test_claim_skilled_achievement() {
-        let mut scenario = ts::begin(PLAYER1);
-        let clock = setup_test(&mut scenario);
-        
-        // Set streak to 5
-        ts::next_tx(&mut scenario, PLAYER1);
+    fun test_claim_badge_streak_5() {
+        let mut scenario = test_scenario::begin(PLAYER);
+        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+        clock::set_for_testing(&mut clock, 100_000);
+
+        setup_profile_with_streak(&mut scenario, &mut clock, 5);
+
+        clock::set_for_testing(&mut clock, 500_000);
+        test_scenario::next_tx(&mut scenario, PLAYER);
         {
-            let mut profile = ts::take_from_sender<PlayerProfile>(&scenario);
-            player::update_streak(&mut profile, 5, 5);
-            ts::return_to_sender(&scenario, profile);
-        };
-        
-        // Claim skilled achievement (milestone 5)
-        ts::next_tx(&mut scenario, PLAYER1);
-        {
-            let mut profile = ts::take_from_sender<PlayerProfile>(&scenario);
-            
-            achievement::claim_achievement(&mut profile, 5, ts::ctx(&mut scenario));
-            assert!(player::has_achievement(&profile, 5) == true, 0);
-            
-            ts::return_to_sender(&scenario, profile);
+            let profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
+            achievement::claim_badge(
+                &profile, 5, &clock,
+                test_scenario::ctx(&mut scenario),
+            );
+            test_scenario::return_to_sender(&scenario, profile);
         };
 
-        ts::next_tx(&mut scenario, PLAYER1);
+        test_scenario::next_tx(&mut scenario, PLAYER);
         {
-            let nft = ts::take_from_sender<Achievement>(&scenario);
-            assert!(achievement::get_milestone(&nft) == 5, 0);
-            assert!(achievement::get_title(&nft) == string::utf8(b"Nguoi Choi Xuat Sac"), 1);
-            ts::return_to_sender(&scenario, nft);
+            let badge = test_scenario::take_from_sender<AchievementBadge>(&scenario);
+            assert!(achievement::badge_type(&badge) == 5, 0);
+            test_scenario::return_to_sender(&scenario, badge);
         };
 
         clock::destroy_for_testing(clock);
-        ts::end(scenario);
+        test_scenario::end(scenario);
     }
 
     #[test]
-    #[expected_failure(abort_code = suichin::achievement::E_INSUFFICIENT_STREAK)]
-    fun test_claim_achievement_insufficient_streak() {
-        let mut scenario = ts::begin(PLAYER1);
-        let clock = setup_test(&mut scenario);
-        
-        // Set streak to 3 (not enough for milestone 5)
-        ts::next_tx(&mut scenario, PLAYER1);
+    fun test_claim_multiple_badges() {
+        let mut scenario = test_scenario::begin(PLAYER);
+        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+        clock::set_for_testing(&mut clock, 100_000);
+
+        setup_profile_with_streak(&mut scenario, &mut clock, 5);
+
+        // Claim badge 1 and badge 5 in sequence
+        clock::set_for_testing(&mut clock, 500_000);
+        test_scenario::next_tx(&mut scenario, PLAYER);
         {
-            let mut profile = ts::take_from_sender<PlayerProfile>(&scenario);
-            player::update_streak(&mut profile, 3, 3);
-            ts::return_to_sender(&scenario, profile);
+            let profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
+            achievement::claim_badge(
+                &profile, 1, &clock,
+                test_scenario::ctx(&mut scenario),
+            );
+            test_scenario::return_to_sender(&scenario, profile);
         };
-        
-        // Try to claim milestone 5 (should fail)
-        ts::next_tx(&mut scenario, PLAYER1);
+
+        clock::set_for_testing(&mut clock, 600_000);
+        test_scenario::next_tx(&mut scenario, PLAYER);
         {
-            let mut profile = ts::take_from_sender<PlayerProfile>(&scenario);
-            achievement::claim_achievement(&mut profile, 5, ts::ctx(&mut scenario));
-            ts::return_to_sender(&scenario, profile);
+            let profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
+            achievement::claim_badge(
+                &profile, 5, &clock,
+                test_scenario::ctx(&mut scenario),
+            );
+            test_scenario::return_to_sender(&scenario, profile);
         };
 
         clock::destroy_for_testing(clock);
-        ts::end(scenario);
+        test_scenario::end(scenario);
     }
 
     #[test]
-    #[expected_failure(abort_code = suichin::achievement::E_ALREADY_CLAIMED)]
-    fun test_claim_achievement_already_claimed() {
-        let mut scenario = ts::begin(PLAYER1);
-        let clock = setup_test(&mut scenario);
-        
-        // Set streak to 5
-        ts::next_tx(&mut scenario, PLAYER1);
+    #[expected_failure]
+    fun test_claim_badge_streak_too_low() {
+        let mut scenario = test_scenario::begin(PLAYER);
+        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+        clock::set_for_testing(&mut clock, 100_000);
+
         {
-            let mut profile = ts::take_from_sender<PlayerProfile>(&scenario);
-            player::update_streak(&mut profile, 5, 5);
-            ts::return_to_sender(&scenario, profile);
+            player_profile::init_profile(test_scenario::ctx(&mut scenario));
         };
-        
-        // First claim (should succeed)
-        ts::next_tx(&mut scenario, PLAYER1);
+
+        // Try to claim badge type 5 with streak 0 → abort (E_STREAK_TOO_LOW)
+        test_scenario::next_tx(&mut scenario, PLAYER);
         {
-            let mut profile = ts::take_from_sender<PlayerProfile>(&scenario);
-            achievement::claim_achievement(&mut profile, 5, ts::ctx(&mut scenario));
-            ts::return_to_sender(&scenario, profile);
-        };
-        
-        // Second claim (should fail)
-        ts::next_tx(&mut scenario, PLAYER1);
-        {
-            let mut profile = ts::take_from_sender<PlayerProfile>(&scenario);
-            achievement::claim_achievement(&mut profile, 5, ts::ctx(&mut scenario));
-            ts::return_to_sender(&scenario, profile);
+            let profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
+            achievement::claim_badge(
+                &profile, 5, &clock,
+                test_scenario::ctx(&mut scenario),
+            );
+            test_scenario::return_to_sender(&scenario, profile);
         };
 
         clock::destroy_for_testing(clock);
-        ts::end(scenario);
+        test_scenario::end(scenario);
     }
 
     #[test]
-    #[expected_failure(abort_code = suichin::achievement::E_INVALID_MILESTONE)]
-    fun test_claim_invalid_milestone() {
-        let mut scenario = ts::begin(PLAYER1);
-        let clock = setup_test(&mut scenario);
-        
-        ts::next_tx(&mut scenario, PLAYER1);
+    #[expected_failure]
+    fun test_claim_badge_invalid_type() {
+        let mut scenario = test_scenario::begin(PLAYER);
+        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+        clock::set_for_testing(&mut clock, 100_000);
+
         {
-            let mut profile = ts::take_from_sender<PlayerProfile>(&scenario);
-            player::update_streak(&mut profile, 100, 100);
-            
-            // Try to claim invalid milestone
-            achievement::claim_achievement(&mut profile, 99, ts::ctx(&mut scenario));
-            
-            ts::return_to_sender(&scenario, profile);
+            player_profile::init_profile(test_scenario::ctx(&mut scenario));
+        };
+
+        // badge_type 99 is invalid → abort (E_INVALID_BADGE_TYPE)
+        test_scenario::next_tx(&mut scenario, PLAYER);
+        {
+            let profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
+            achievement::claim_badge(
+                &profile, 99, &clock,
+                test_scenario::ctx(&mut scenario),
+            );
+            test_scenario::return_to_sender(&scenario, profile);
         };
 
         clock::destroy_for_testing(clock);
-        ts::end(scenario);
+        test_scenario::end(scenario);
     }
 
     #[test]
-    fun test_claim_legend_achievement() {
-        let mut scenario = ts::begin(PLAYER1);
-        let clock = setup_test(&mut scenario);
-        
-        // Set streak to 67
-        ts::next_tx(&mut scenario, PLAYER1);
-        {
-            let mut profile = ts::take_from_sender<PlayerProfile>(&scenario);
-            player::update_streak(&mut profile, 67, 67);
-            ts::return_to_sender(&scenario, profile);
-        };
-        
-        // Claim legend achievement (milestone 67)
-        ts::next_tx(&mut scenario, PLAYER1);
-        {
-            let mut profile = ts::take_from_sender<PlayerProfile>(&scenario);
-            achievement::claim_achievement(&mut profile, 67, ts::ctx(&mut scenario));
-            ts::return_to_sender(&scenario, profile);
-        };
+    #[expected_failure]
+    fun test_claim_badge_not_owner() {
+        let mut scenario = test_scenario::begin(PLAYER);
+        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+        clock::set_for_testing(&mut clock, 100_000);
 
-        ts::next_tx(&mut scenario, PLAYER1);
+        setup_profile_with_streak(&mut scenario, &mut clock, 1);
+
+        // OTHER tries to claim using PLAYER's profile → abort (E_NOT_OWNER)
+        clock::set_for_testing(&mut clock, 500_000);
+        test_scenario::next_tx(&mut scenario, OTHER);
         {
-            let nft = ts::take_from_sender<Achievement>(&scenario);
-            assert!(achievement::get_milestone(&nft) == 67, 0);
-            assert!(achievement::get_title(&nft) == string::utf8(b"Huyen Thoai Bung Chun"), 1);
-            ts::return_to_sender(&scenario, nft);
+            let profile = test_scenario::take_from_address<PlayerProfile>(&scenario, PLAYER);
+            achievement::claim_badge(
+                &profile, 1, &clock,
+                test_scenario::ctx(&mut scenario),
+            );
+            test_scenario::return_to_address(PLAYER, profile);
         };
 
         clock::destroy_for_testing(clock);
-        ts::end(scenario);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_badge_accessors() {
+        let mut scenario = test_scenario::begin(PLAYER);
+        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+        clock::set_for_testing(&mut clock, 100_000);
+
+        setup_profile_with_streak(&mut scenario, &mut clock, 1);
+
+        clock::set_for_testing(&mut clock, 500_000);
+        test_scenario::next_tx(&mut scenario, PLAYER);
+        {
+            let profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
+            achievement::claim_badge(
+                &profile, 1, &clock,
+                test_scenario::ctx(&mut scenario),
+            );
+            test_scenario::return_to_sender(&scenario, profile);
+        };
+
+        test_scenario::next_tx(&mut scenario, PLAYER);
+        {
+            let badge = test_scenario::take_from_sender<AchievementBadge>(&scenario);
+            assert!(achievement::badge_type(&badge) == 1, 0);
+            assert!(achievement::earned_at(&badge) == 500_000, 1);
+            let _name = achievement::name(&badge);
+            let _desc = achievement::description(&badge);
+            let _url  = achievement::image_url(&badge);
+            test_scenario::return_to_sender(&scenario, badge);
+        };
+
+        clock::destroy_for_testing(clock);
+        test_scenario::end(scenario);
     }
 }

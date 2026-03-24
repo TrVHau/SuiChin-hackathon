@@ -1,228 +1,231 @@
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
-import { useState, useEffect } from "react";
+import {
+  useCurrentAccount,
+  useSignAndExecuteTransaction,
+  useSuiClient,
+} from "@mysten/dapp-kit";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
-  buildCreateProfileTx,
-  buildRecordSessionTx,
-  buildClaimFaucetTx,
-  buildCraftRollTx,
-  buildClaimAchievementTx,
+  buildClaimBadgeTx,
+  buildInitProfileTx,
+  buildReportResultTx,
 } from "@/lib/sui-client";
-import { PACKAGE_ID, MODULES } from "@/config/sui.config";
+import {
+  ACHIEVEMENT_MILESTONES,
+  MAX_DELTA_CHUN,
+  PLAYER_PROFILE_TYPE,
+} from "@/config/sui.config";
+import { useGameStore } from "@/stores/gameStore";
 
 export interface PlayerProfileData {
   objectId: string;
-  address: string;
-  tier1: number;
-  tier2: number;
-  tier3: number;
-  maxStreak: number;
-  currentStreak: number;
-  faucetLastClaim: number;
-  achievements: number[];
+  owner: string;
+  chun_raw: number;
+  wins: number;
+  losses: number;
+  streak: number;
+  last_played_ms: number;
+  staked_chun: number;
+  last_faucet_ms: number;
+}
+
+function pickBestProfile(profiles: PlayerProfileData[]): PlayerProfileData {
+  const sorted = [...profiles].sort((a, b) => {
+    const byLastPlayed = b.last_played_ms - a.last_played_ms;
+    if (byLastPlayed !== 0) return byLastPlayed;
+
+    const byGames = b.wins + b.losses - (a.wins + a.losses);
+    if (byGames !== 0) return byGames;
+
+    const byChun = b.chun_raw - a.chun_raw;
+    if (byChun !== 0) return byChun;
+
+    const byStake = b.staked_chun - a.staked_chun;
+    if (byStake !== 0) return byStake;
+
+    return a.objectId.localeCompare(b.objectId);
+  });
+
+  return sorted[0];
 }
 
 export function useSuiProfile() {
   const account = useCurrentAccount();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const suiClient = useSuiClient();
-  
+  const setStoreProfile = useGameStore((s) => s.setProfile);
+
   const [profile, setProfile] = useState<PlayerProfileData | null>(null);
   const [loading, setLoading] = useState(false);
   const [hasProfile, setHasProfile] = useState(false);
 
-  const loadProfile = async () => {
+  const fetchProfiles = useCallback(
+    async (owner: string): Promise<PlayerProfileData[]> => {
+      const objects = await suiClient.getOwnedObjects({
+        owner,
+        filter: { StructType: PLAYER_PROFILE_TYPE },
+        options: { showContent: true, showType: true },
+      });
+
+      const parsed: PlayerProfileData[] = [];
+      for (const item of objects.data) {
+        const content = item.data?.content;
+        if (!item.data || !content || !("fields" in content)) continue;
+        const fields = content.fields as Record<string, unknown>;
+        parsed.push({
+          objectId: item.data.objectId,
+          owner,
+          chun_raw: Number(fields.chun_raw ?? 0),
+          wins: Number(fields.wins ?? 0),
+          losses: Number(fields.losses ?? 0),
+          streak: Number(fields.streak ?? 0),
+          last_played_ms: Number(fields.last_played_ms ?? 0),
+          staked_chun: Number(fields.staked_chun ?? 0),
+          last_faucet_ms: Number(fields.last_faucet_ms ?? 0),
+        });
+      }
+
+      return parsed;
+    },
+    [suiClient],
+  );
+
+  const loadProfile = useCallback(async () => {
     if (!account?.address) return;
 
     setLoading(true);
     try {
-      const objects = await suiClient.getOwnedObjects({
-        owner: account.address,
-        filter: {
-          StructType: `${PACKAGE_ID}::${MODULES.PLAYER}::PlayerProfile`,
-        },
-        options: {
-          showContent: true,
-          showType: true,
-        },
-      });
-      
-      if (objects.data.length === 0) {
+      const profiles = await fetchProfiles(account.address);
+
+      if (profiles.length === 0) {
         setHasProfile(false);
         setProfile(null);
+        setStoreProfile(null);
         return;
       }
 
-      const profileObj = objects.data[0];
+      const selected = pickBestProfile(profiles);
       setHasProfile(true);
-
-      const content = profileObj.data?.content;
-      if (content && 'fields' in content && profileObj.data) {
-        const fields = content.fields as any;
-        
-        let achievementsArray: number[] = [];
-        if (fields.achievements) {
-          if (Array.isArray(fields.achievements)) {
-            achievementsArray = fields.achievements.map((a: any) => Number(a));
-          } else if (typeof fields.achievements === 'object' && 'contents' in fields.achievements) {
-            achievementsArray = (fields.achievements.contents || []).map((a: any) => Number(a));
-          }
-        }
-        
-        const profileData = {
-          objectId: profileObj.data.objectId,
-          address: account.address,
-          tier1: Number(fields.tier1 || 0),
-          tier2: Number(fields.tier2 || 0),
-          tier3: Number(fields.tier3 || 0),
-          maxStreak: Number(fields.max_streak || 0),
-          currentStreak: Number(fields.current_streak || 0),
-          faucetLastClaim: Number(fields.faucet_last_claim || 0),
-          achievements: achievementsArray,
-        };
-        setProfile(profileData);
-      }
+      setProfile(selected);
+      setStoreProfile(selected);
     } catch (error) {
       console.error("Error loading profile:", error);
-      toast.error("Không thể tải profile");
+      toast.error("Khong the tai profile");
     } finally {
       setLoading(false);
     }
-  };
+  }, [account?.address, fetchProfiles, setStoreProfile]);
 
-  const createProfile = () => {
+  const createProfile = async (onSuccess?: () => void, onError?: () => void) => {
     if (!account?.address) {
-      toast.error("Vui lòng kết nối ví");
+      toast.error("Vui long ket noi vi");
+      onError?.();
       return;
     }
 
-    const tx = buildCreateProfileTx();
-    
+    setLoading(true);
+    try {
+      // Guard against duplicate creation: check on-chain one more time right before init.
+      const existing = await fetchProfiles(account.address);
+      if (existing.length > 0) {
+        const selected = pickBestProfile(existing);
+        setHasProfile(true);
+        setProfile(selected);
+        setStoreProfile(selected);
+        toast.info("Da tim thay profile cu, khong tao moi.");
+        onSuccess?.();
+        return;
+      }
+    } catch (error) {
+      console.error("Pre-create profile check failed:", error);
+      // Continue to create if check fails unexpectedly.
+    } finally {
+      setLoading(false);
+    }
+
+    const tx = buildInitProfileTx();
     signAndExecute(
-      {
-        transaction: tx,
-      },
+      { transaction: tx },
       {
         onSuccess: () => {
-          toast.success("Tạo profile thành công!");
-          setTimeout(() => loadProfile(), 2000);
+          setTimeout(async () => {
+            await loadProfile();
+            onSuccess?.();
+          }, 1500);
         },
         onError: (error) => {
           console.error("Create profile error:", error);
-          toast.error("Tạo profile thất bại");
+          toast.error("Tao profile that bai");
+          onError?.();
         },
-      }
+      },
     );
   };
 
-  const recordSession = (
-    deltaTier1: number,
-    deltaTier2: number,
-    deltaTier3: number,
-    isTier1Positive: boolean,
-    isTier2Positive: boolean,
-    isTier3Positive: boolean,
-    newMaxStreak: number,
-    newCurrentStreak: number
+  const reportResult = (
+    isWin: boolean,
+    onSuccess?: () => void,
+    onError?: () => void,
   ) => {
     if (!profile) {
-      toast.error("Không tìm thấy profile");
+      toast.error("Khong tim thay profile");
       return;
     }
 
-    const tx = buildRecordSessionTx(
-      profile.objectId,
-      deltaTier1,
-      deltaTier2,
-      deltaTier3,
-      isTier1Positive,
-      isTier2Positive,
-      isTier3Positive,
-      newMaxStreak,
-      newCurrentStreak
-    );
+    const delta = isWin ? Math.min(1 + profile.streak, MAX_DELTA_CHUN) : 1;
+    const tx = buildReportResultTx(profile.objectId, delta, isWin);
 
     signAndExecute(
       { transaction: tx },
       {
         onSuccess: () => {
-          toast.success("Lưu kết quả thành công!");
-          setTimeout(() => loadProfile(), 2000);
+          const msg = isWin
+            ? `+${delta} Chun, Streak: ${profile.streak + 1}`
+            : "-1 Chun, Streak reset";
+          toast.success(msg);
+          setTimeout(() => {
+            loadProfile();
+            onSuccess?.();
+          }, 1200);
         },
         onError: (error) => {
-          console.error("Record session error:", error);
-          toast.error("Lưu kết quả thất bại");
+          console.error("Report result error:", error);
+          const errMsg = String(error?.message ?? "");
+          if (errMsg.includes("101")) {
+            toast.error("Cooldown chua het, cho them 10 giay");
+          } else if (errMsg.includes("102")) {
+            toast.error("Delta qua lon (toi da 20)");
+          } else {
+            toast.error("Luu ket qua that bai");
+          }
+          onError?.();
         },
-      }
-    );
-  };
-
-  const claimFaucet = () => {
-    if (!profile) {
-      toast.error("Không tìm thấy profile");
-      return;
-    }
-
-    const tx = buildClaimFaucetTx(profile.objectId);
-
-    signAndExecute(
-      { transaction: tx },
-      {
-        onSuccess: () => {
-          toast.success("Xin chun thành công!");
-          setTimeout(() => loadProfile(), 2000);
-        },
-        onError: (error) => {
-          console.error("Claim faucet error:", error);
-          toast.error("Xin chun thất bại");
-        },
-      }
+      },
     );
   };
 
-  const craftRoll = (useTier1: number, useTier2: number, useTier3: number) => {
+  const claimAchievement = (badgeType: number) => {
     if (!profile) {
-      toast.error("Không tìm thấy profile");
+      toast.error("Khong tim thay profile");
       return;
     }
 
-    const tx = buildCraftRollTx(profile.objectId, useTier1, useTier2, useTier3);
-
+    const tx = buildClaimBadgeTx(profile.objectId, badgeType);
     signAndExecute(
       { transaction: tx },
       {
         onSuccess: () => {
-          toast.success("Mint NFT thành công!");
-          setTimeout(() => loadProfile(), 2000);
+          const milestoneName = Object.entries(ACHIEVEMENT_MILESTONES).find(
+            ([, v]) => v === badgeType,
+          )?.[0];
+          toast.success(`Claim badge ${milestoneName ?? badgeType} thanh cong`);
+          setTimeout(() => loadProfile(), 1200);
         },
         onError: (error) => {
-          console.error("Craft roll error:", error);
-          toast.error("Mint NFT thất bại");
+          console.error("Claim badge error:", error);
+          toast.error("Claim badge that bai");
         },
-      }
-    );
-  };
-
-  const claimAchievement = (milestone: number) => {
-    if (!profile) {
-      toast.error("Không tìm thấy profile");
-      return;
-    }
-
-    const tx = buildClaimAchievementTx(profile.objectId, milestone);
-
-    signAndExecute(
-      { transaction: tx },
-      {
-        onSuccess: () => {
-          toast.success("Claim achievement thành công!");
-          setTimeout(() => loadProfile(), 2000);
-        },
-        onError: (error) => {
-          console.error("Claim achievement error:", error);
-          toast.error("Claim achievement thất bại");
-        },
-      }
+      },
     );
   };
 
@@ -232,8 +235,9 @@ export function useSuiProfile() {
     } else {
       setProfile(null);
       setHasProfile(false);
+      setStoreProfile(null);
     }
-  }, [account?.address]);
+  }, [account?.address, loadProfile, setStoreProfile]);
 
   return {
     account,
@@ -241,9 +245,7 @@ export function useSuiProfile() {
     loading,
     hasProfile,
     createProfile,
-    recordSession,
-    claimFaucet,
-    craftRoll,
+    reportResult,
     claimAchievement,
     refreshProfile: loadProfile,
   };

@@ -4,7 +4,6 @@ import {
   GameEngine,
   createGameEngine,
   type GameEvent,
-  type GameEventType,
 } from "@/game/engine";
 import type {
   GameState,
