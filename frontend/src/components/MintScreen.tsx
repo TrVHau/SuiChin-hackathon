@@ -399,9 +399,13 @@ export default function WorkshopScreen({
               <motion.div
                 animate={{ opacity: [0.5, 1, 0.5] }}
                 transition={{ duration: 1.4, repeat: Infinity }}
-                className="text-5xl mb-4"
+                className="mb-4 flex justify-center"
               >
-                🏮
+                <img
+                  src="/nft/tier1_v1.png"
+                  alt="Tier 1 NFT"
+                  className="size-16 rounded-2xl object-cover border-2 border-playful-purple/30"
+                />
               </motion.div>
               <h2 className="font-display font-black text-3xl text-playful-purple mb-2">
                 Đang rèn NFT...
@@ -441,7 +445,11 @@ export default function WorkshopScreen({
                   </h3>
                   <div className="flex items-center justify-around">
                     <div className="text-center">
-                      <div className="text-5xl mb-2">🔮</div>
+                      <img
+                        src="/img/chun_raw.jpg"
+                        alt="Chun Raw"
+                        className="size-14 rounded-2xl object-cover mx-auto mb-2 border-2 border-sunny-200"
+                      />
                       <p className="font-black text-2xl text-playful-orange">
                         {craftCost}
                       </p>
@@ -459,7 +467,11 @@ export default function WorkshopScreen({
                     </div>
                     <div className="text-3xl text-gray-400">→</div>
                     <div className="text-center">
-                      <div className="text-5xl mb-2">🏮</div>
+                      <img
+                        src="/nft/tier1_v1.png"
+                        alt="Tier 1 NFT"
+                        className="size-14 rounded-2xl object-cover mx-auto mb-2 border-2 border-playful-purple/30"
+                      />
                       <p className="font-black text-2xl text-playful-purple">
                         1
                       </p>
