@@ -9,7 +9,8 @@ module suichin::player_profile {
     // ─── Constants ───────────────────────────────────────────────────────────────
     const COOLDOWN_MS: u64          = 10_000;     // 10 giây giữa hai lần report_result
     const MAX_DELTA_CHUN: u64       = 20;          // delta tối đa mỗi ván
-    const FAUCET_COOLDOWN_MS: u64   = 7_200_000;  // 2 giờ giữa mỗi 1 chun tich lũy
+    //const FAUCET_COOLDOWN_MS: u64   = 7_200_000;  // 2 giờ giữa mỗi 1 chun tich lũy
+    const FAUCET_COOLDOWN_MS: u64   = 60_000;     // (test-only) 1 phút giữa mỗi 1 chun tich lũy
     const FAUCET_MAX_STACK: u64     = 10;          // tối đa chun stack được
 
     // ─── Error codes ────────────────────────────────────────────────────────────

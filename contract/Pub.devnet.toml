@@ -7,9 +7,9 @@ chain-id = "e9eed8f1"
 
 [[published]]
 source = { local = "/mnt/c/code/blockchain/SuiChin-hackathon/contract" }
-published-at = "0x07d3079c4715d16b119517112e3dba807d64ca10bcb1399617be2c8e49194421"
-original-id = "0x07d3079c4715d16b119517112e3dba807d64ca10bcb1399617be2c8e49194421"
+published-at = "0x40bd67bb56be3f6f8a531f88bc01515a208d795e62c351e65fe35d067aac6d31"
+original-id = "0x40bd67bb56be3f6f8a531f88bc01515a208d795e62c351e65fe35d067aac6d31"
 version = 1
-toolchain-version = "1.67.0"
+toolchain-version = "1.69.0"
 build-config = { flavor = "sui", edition = "2024" }
-upgrade-capability = "0x66080cdbb270dae915946fbeaae55536817d960189562739f8e64aaa37e02929"
+upgrade-capability = "0x0be9f915f6040a80dceb956e78ac7e887ac0a7e6f070ab551716b7f7743a3d69"
