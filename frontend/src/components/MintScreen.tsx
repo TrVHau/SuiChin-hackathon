@@ -328,18 +328,23 @@ export default function WorkshopScreen({
               <motion.div
                 animate={{ rotate: [0, -15, 15, -15, 0], scale: [1, 1.3, 1] }}
                 transition={{ duration: 0.9 }}
-                className="text-9xl mb-6"
+                className="text-9xl mb-6 flex justify-center"
               >
-                {cfg.emoji}
+                {craftResult.tier === 0 ? (
+                  <img
+                    src="/nft/scrap.png"
+                    alt="Scrap"
+                    className="size-28 rounded-3xl object-cover border-4 border-gray-300 shadow-lg"
+                  />
+                ) : (
+                  cfg.emoji
+                )}
               </motion.div>
               <h2
                 className={`font-display font-black text-3xl mb-3 ${cfg.color}`}
               >
                 {cfg.headline}
               </h2>
-              <p className="text-gray-500 font-semibold mb-2">
-                {craftResult.roll >= 0 ? `Roll: ${craftResult.roll} / 99` : "Ket qua da xac nhan on-chain"}
-              </p>
               <p className="text-gray-500 mb-8">
                 {craftResult.success
                   ? "NFT đã về ví của bạn 🎉"
