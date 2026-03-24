@@ -328,18 +328,23 @@ export default function WorkshopScreen({
               <motion.div
                 animate={{ rotate: [0, -15, 15, -15, 0], scale: [1, 1.3, 1] }}
                 transition={{ duration: 0.9 }}
-                className="text-9xl mb-6"
+                className="text-9xl mb-6 flex justify-center"
               >
-                {cfg.emoji}
+                {craftResult.tier === 0 ? (
+                  <img
+                    src="/nft/scrap.png"
+                    alt="Scrap"
+                    className="size-28 rounded-3xl object-cover border-4 border-gray-300 shadow-lg"
+                  />
+                ) : (
+                  cfg.emoji
+                )}
               </motion.div>
               <h2
                 className={`font-display font-black text-3xl mb-3 ${cfg.color}`}
               >
                 {cfg.headline}
               </h2>
-              <p className="text-gray-500 font-semibold mb-2">
-                {craftResult.roll >= 0 ? `Roll: ${craftResult.roll} / 99` : "Ket qua da xac nhan on-chain"}
-              </p>
               <p className="text-gray-500 mb-8">
                 {craftResult.success
                   ? "NFT đã về ví của bạn 🎉"
@@ -399,9 +404,13 @@ export default function WorkshopScreen({
               <motion.div
                 animate={{ opacity: [0.5, 1, 0.5] }}
                 transition={{ duration: 1.4, repeat: Infinity }}
-                className="text-5xl mb-4"
+                className="mb-4 flex justify-center"
               >
-                🏮
+                <img
+                  src="/nft/tier1_v1.png"
+                  alt="Tier 1 NFT"
+                  className="size-16 rounded-2xl object-cover border-2 border-playful-purple/30"
+                />
               </motion.div>
               <h2 className="font-display font-black text-3xl text-playful-purple mb-2">
                 Đang rèn NFT...
@@ -441,7 +450,11 @@ export default function WorkshopScreen({
                   </h3>
                   <div className="flex items-center justify-around">
                     <div className="text-center">
-                      <div className="text-5xl mb-2">🔮</div>
+                      <img
+                        src="/img/chun_raw.jpg"
+                        alt="Chun Raw"
+                        className="size-14 rounded-2xl object-cover mx-auto mb-2 border-2 border-sunny-200"
+                      />
                       <p className="font-black text-2xl text-playful-orange">
                         {craftCost}
                       </p>
@@ -459,7 +472,11 @@ export default function WorkshopScreen({
                     </div>
                     <div className="text-3xl text-gray-400">→</div>
                     <div className="text-center">
-                      <div className="text-5xl mb-2">🏮</div>
+                      <img
+                        src="/nft/tier1_v1.png"
+                        alt="Tier 1 NFT"
+                        className="size-14 rounded-2xl object-cover mx-auto mb-2 border-2 border-playful-purple/30"
+                      />
                       <p className="font-black text-2xl text-playful-purple">
                         1
                       </p>

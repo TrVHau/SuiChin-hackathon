@@ -61,11 +61,18 @@ export default function PvPScreen({ onBack, profileId, chunRaw, onSuccess }: PvP
                     ${selectedWager === w
                       ? 'bg-playful-purple text-white border-playful-purple scale-105'
                       : 'bg-white text-gray-800 border-gray-200 hover:border-playful-purple'
-                    }
-                    ${chunRaw < w ? 'opacity-40 cursor-not-allowed' : ''}`}
+                  }
+                  ${chunRaw < w ? 'opacity-40 cursor-not-allowed' : ''}`}
                   disabled={chunRaw < w}
                 >
-                  {w} 🔮
+                  <span className="inline-flex items-center gap-2">
+                    {w}
+                    <img
+                      src="/img/chun_raw.jpg"
+                      alt="Chun Raw"
+                      className="size-5 rounded-md object-cover border border-gray-300"
+                    />
+                  </span>
                 </button>
               ))}
             </div>

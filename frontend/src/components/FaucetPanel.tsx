@@ -1,7 +1,6 @@
-import { motion } from 'framer-motion';
-import { Droplets } from 'lucide-react';
-import { useFaucet } from '@/hooks/useFaucet';
-import { FAUCET_COOLDOWN_MS, FAUCET_MAX_STACK } from '@/config/sui.config';
+import { motion } from "framer-motion";
+import { useFaucet } from "@/hooks/useFaucet";
+import { FAUCET_COOLDOWN_MS, FAUCET_MAX_STACK } from "@/config/sui.config";
 
 interface FaucetPanelProps {
   profileId: string;
@@ -9,57 +8,78 @@ interface FaucetPanelProps {
   onSuccess?: () => void;
 }
 
-export default function FaucetPanel({ profileId, lastFaucetMs, onSuccess }: FaucetPanelProps) {
+export default function FaucetPanel({
+  profileId,
+  lastFaucetMs,
+  onSuccess,
+}: FaucetPanelProps) {
   const { claimFaucet, pendingFaucet, claiming, faucetSupport } = useFaucet(profileId);
-  const pending = pendingFaucet(lastFaucetMs);
+  const pendingRaw = pendingFaucet(lastFaucetMs);
+  const pending = Number.isFinite(pendingRaw) ? pendingRaw : 0;
 
   const nextMs = lastFaucetMs + FAUCET_COOLDOWN_MS;
   const remainingMin = Math.max(0, Math.ceil((nextMs - Date.now()) / 60_000));
+  const clampedStack = Math.max(0, Math.min(pending, FAUCET_MAX_STACK));
+  const rawProgress = FAUCET_MAX_STACK > 0 ? (clampedStack / FAUCET_MAX_STACK) * 100 : 0;
+  const stackProgress = clampedStack > 0 ? Math.max(6, rawProgress) : 0;
 
   return (
-    <div className="bg-white/80 border-4 border-playful-teal rounded-3xl p-5 shadow-lg">
-      <div className="flex items-center gap-3 mb-4">
-        <Droplets className="size-6 text-playful-teal" />
-        <h3 className="font-display font-black text-lg text-gray-900">Faucet Chun</h3>
-        <span className="ml-auto text-xs font-bold text-gray-500">
-          Stack: {Math.min(pending, FAUCET_MAX_STACK)} / {FAUCET_MAX_STACK}
-        </span>
-      </div>
-
-      {/* Stack bar */}
-      <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
-        <motion.div
-          className="bg-playful-teal h-3 rounded-full"
-          initial={{ width: 0 }}
-          animate={{ width: `${(Math.min(pending, FAUCET_MAX_STACK) / FAUCET_MAX_STACK) * 100}%` }}
-          transition={{ duration: 0.6, ease: 'easeOut' }}
+    <div className="text-left">
+      <div className="bg-playful-teal/10 p-3 rounded-3xl mb-5 inline-block border-4 border-white shadow-lg">
+        <img
+          src="/img/chun_raw.jpg"
+          alt="Chun Raw"
+          className="size-16 rounded-2xl object-cover"
         />
       </div>
 
-      {faucetSupport === "unsupported" ? (
-        <p className="text-center text-sm text-amber-700 font-semibold">
-          Faucet khong duoc ho tro tren package hien tai.
+      <h3 className="font-display font-black text-3xl text-gray-900 mb-2">Faucet Chun</h3>
+      <p className="text-gray-700 font-semibold text-lg mb-4">
+        Moi 1 phut nhan duoc 1 Chun, toi da {FAUCET_MAX_STACK} stack.
+      </p>
+
+      <div className="mb-4">
+        <div className="w-full rounded-full h-3 border border-gray-300 overflow-hidden bg-gray-200">
+          <div
+            className="h-3 rounded-full transition-all duration-500"
+            style={{
+              width: `${stackProgress}%`,
+              background: "linear-gradient(90deg, #14b8a6 0%, #22d3ee 100%)",
+            }}
+          />
+        </div>
+        <p className="mt-2 text-sm font-bold text-gray-500">
+          Stack: {Math.min(pending, FAUCET_MAX_STACK)} / {FAUCET_MAX_STACK} ({Math.round(stackProgress)}%)
         </p>
-      ) : pending > 0 ? (
+      </div>
+
+      <>
         <motion.button
           onClick={() => claimFaucet(lastFaucetMs, onSuccess)}
-          disabled={claiming}
-          whileHover={{ scale: 1.04 }}
-          whileTap={{ scale: 0.95 }}
-          className="w-full py-3 rounded-2xl font-black text-white text-lg
-                     bg-playful-teal hover:brightness-110 transition-all
-                     disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={claiming || pending <= 0 || faucetSupport === "unsupported"}
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.96 }}
+          className="w-full py-3 rounded-2xl font-black text-black text-lg bg-yellow-300 border-4 border-amber-700 shadow-lg hover:bg-yellow-200 transition-all disabled:bg-gray-300 disabled:text-gray-500 disabled:border-gray-400 disabled:opacity-100 disabled:cursor-not-allowed"
         >
-          {claiming ? '⏳ Đang nhận...' : `Nhận ${pending} Chun 💧`}
+          {claiming
+            ? "Dang nhan..."
+            : faucetSupport === "unsupported"
+              ? "Faucet khong ho tro"
+              : pending > 0
+                ? `Nhan ${pending} Chun`
+                : "Chua den luot claim"}
         </motion.button>
-      ) : (
-        <p className="text-center text-sm text-gray-500 font-semibold">
-          ⏰ Còn {remainingMin} phút để tích lũy thêm
-        </p>
-      )}
-      <p className="text-center text-xs text-gray-400 mt-2">
-        Mỗi 1 phút = +1 Chun · tối đa {FAUCET_MAX_STACK}
-      </p>
+        {faucetSupport === "unsupported" && (
+          <p className="text-sm text-amber-700 font-semibold mt-2">
+            Package hien tai khong ho tro ham faucet.
+          </p>
+        )}
+        {pending <= 0 && (
+          <p className="text-sm text-gray-500 font-semibold mt-2">
+            Con {remainingMin} phut de tich luy them.
+          </p>
+        )}
+      </>
     </div>
   );
 }

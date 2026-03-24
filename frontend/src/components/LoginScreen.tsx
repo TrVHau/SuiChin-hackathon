@@ -1,4 +1,4 @@
-import { Wallet, CheckCircle } from "lucide-react";
+import { CheckCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { ConnectButton, useCurrentAccount } from "@mysten/dapp-kit";
 

@@ -361,6 +361,28 @@ export default function Dashboard({
               </div>
             </motion.button>
 
+            {/* Faucet */}
+            {playerData.objectId && (
+              <motion.div
+                variants={item}
+                whileHover={{ scale: 1.03, rotate: -1 }}
+                className="bg-white border-8 border-playful-teal rounded-4xl p-8 shadow-2xl relative overflow-hidden"
+              >
+                <img
+                  src="/img/chun_raw.jpg"
+                  alt="Chun Raw"
+                  className="absolute top-4 right-4 size-16 rounded-2xl object-cover opacity-25"
+                />
+                <div className="relative z-10">
+                  <FaucetPanel
+                    profileId={playerData.objectId}
+                    lastFaucetMs={playerData.last_faucet_ms ?? 0}
+                    onSuccess={onRefreshProfile}
+                  />
+                </div>
+              </motion.div>
+            )}
+
             {/* PvP Online */}
             {onOpenPvP && (
               <motion.button
@@ -389,16 +411,6 @@ export default function Dashboard({
           </div>
         </motion.div>
 
-        {/* Faucet Panel */}
-        {playerData.objectId && (
-          <div className="mt-8">
-            <FaucetPanel
-              profileId={playerData.objectId}
-              lastFaucetMs={playerData.last_faucet_ms ?? 0}
-              onSuccess={onRefreshProfile}
-            />
-          </div>
-        )}
       </main>
     </div>
   );
