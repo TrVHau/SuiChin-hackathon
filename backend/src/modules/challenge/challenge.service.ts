@@ -1,5 +1,5 @@
 import type { IChainAdapter } from "../../infra/chain/chain-adapter";
-import { MockChainAdapter } from "../../infra/chain/mock-chain-adapter";
+import { buildChainAdapter } from "../../infra/chain/build-chain-adapter";
 import { AppError } from "../../shared/errors";
 import { challengeRepository, normalizeCreateInput } from "./challenge.repository";
 import type {
@@ -21,7 +21,7 @@ function validateParticipant(challenge: Challenge, walletAddress: string): void 
 }
 
 export class ChallengeService {
-  constructor(private readonly chainAdapter: IChainAdapter = new MockChainAdapter()) {}
+  constructor(private readonly chainAdapter: IChainAdapter = buildChainAdapter()) {}
 
   async createChallenge(challengerWallet: string, rawInput: CreateChallengeInput): Promise<Challenge> {
     const input = normalizeCreateInput(rawInput);
@@ -120,6 +120,8 @@ export class ChallengeService {
     const chainResult = await this.chainAdapter.finalizeChallenge({
       challengeId,
       winnerWallet,
+      challengerWallet: challenge.challengerWallet,
+      opponentWallet: challenge.opponentWallet,
       stakeEnabled: challenge.stakeEnabled,
       stakeAmount: challenge.stakeAmount,
     });

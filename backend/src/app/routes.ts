@@ -20,6 +20,8 @@ export function registerRoutes(app: Express) {
       ok: true,
       storageBackend: env.BACKEND_STORAGE,
       matchmakingBackend: env.MATCHMAKING_BACKEND,
+      chainAdapter: env.CHAIN_ADAPTER,
+      suiNetwork: env.SUI_NETWORK,
     });
   });
 

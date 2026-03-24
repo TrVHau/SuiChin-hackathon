@@ -33,6 +33,7 @@ interface MatchStartEvent {
   roomId: string;
   players: string[];
   challengeId: string;
+  wager?: number;
 }
 
 interface MatchFinalizedEvent {
@@ -101,6 +102,7 @@ export function usePvP(_profileId: string | undefined) {
         roomId: event.roomId,
         challengeId: event.challengeId,
         opponent: opponentWallet,
+        wager: event.wager ?? prev.wager,
       }));
 
       toast.success("Da tim thay doi thu. Bat dau tran!");
@@ -136,7 +138,7 @@ export function usePvP(_profileId: string | undefined) {
       socketRef.current = socket;
 
       socket.on("connect", () => {
-        socket.emit("queue.join", (ack: QueueJoinAck) => {
+        socket.emit("queue.join", { wager }, (ack: QueueJoinAck) => {
           if (!ack.ok) {
             toast.error(ack.error ?? "queue.join failed");
             setPvP((prev) => ({ ...prev, status: "error" }));

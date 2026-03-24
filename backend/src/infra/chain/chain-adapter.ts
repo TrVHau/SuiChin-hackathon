@@ -1,6 +1,8 @@
 export interface FinalizeChallengePayload {
   challengeId: string;
   winnerWallet: string | null;
+  challengerWallet: string;
+  opponentWallet: string | null;
   stakeEnabled: boolean;
   stakeAmount: number;
 }

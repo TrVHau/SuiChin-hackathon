@@ -1,5 +1,6 @@
 import type { Server as HttpServer } from "node:http";
 import { Server, type Socket } from "socket.io";
+import { z } from "zod";
 import { corsOrigins } from "../../config/env";
 import { challengeService } from "../../modules/challenge/challenge.service";
 import { SubmitResultSchema } from "../../modules/challenge/challenge.schemas";
@@ -35,6 +36,10 @@ function resolveWinnerWallet(results: ChallengeResultRecord[]): string | null {
   return null;
 }
 
+const QueueJoinPayloadSchema = z.object({
+  wager: z.coerce.number().int().min(0).max(1_000_000).default(0),
+});
+
 export function attachMultiplayerGateway(server: HttpServer) {
   const io = new Server(server, {
     cors: { origin: corsOrigins, credentials: true },
@@ -54,45 +59,63 @@ export function attachMultiplayerGateway(server: HttpServer) {
   });
 
   namespace.on("connection", (socket) => {
-    socket.on("queue.join", async (ack?: (payload: unknown) => void) => {
-      try {
-        const walletAddress = getWalletFromSocket(socket);
-        const result = await matchmakingService.joinQueue(walletAddress);
-        if (result.matched && result.roomId && result.opponentWallet) {
-          const challenge = await challengeService.createChallenge(result.opponentWallet, {
-            mode: "REALTIME",
-            opponentWallet: walletAddress,
-          });
-          await challengeService.acceptChallenge(challenge.id, walletAddress);
+    socket.on(
+      "queue.join",
+      async (
+        payloadOrAck?: unknown | ((payload: unknown) => void),
+        maybeAck?: (payload: unknown) => void,
+      ) => {
+        try {
+          const ack = typeof payloadOrAck === "function" ? payloadOrAck : maybeAck;
+          const payload =
+            typeof payloadOrAck === "function" || payloadOrAck == null
+              ? {}
+              : payloadOrAck;
+          const parsedPayload = QueueJoinPayloadSchema.parse(payload);
+          const wager = parsedPayload.wager;
 
-          challengeByRoom.set(result.roomId, challenge.id);
-          roomByChallenge.set(challenge.id, result.roomId);
+          const walletAddress = getWalletFromSocket(socket);
+          const result = await matchmakingService.joinQueue(walletAddress, wager);
+          if (result.matched && result.roomId && result.opponentWallet) {
+            const challenge = await challengeService.createChallenge(result.opponentWallet, {
+              mode: "REALTIME",
+              opponentWallet: walletAddress,
+              stakeEnabled: result.wager > 0,
+              stakeAmount: result.wager,
+            });
+            await challengeService.acceptChallenge(challenge.id, walletAddress);
 
-          joinWalletSocketsToRoom(namespace, walletAddress, result.roomId);
-          joinWalletSocketsToRoom(namespace, result.opponentWallet, result.roomId);
-          namespace.to(result.roomId).emit("match.start", {
-            roomId: result.roomId,
-            players: [walletAddress, result.opponentWallet],
-            challengeId: challenge.id,
-          });
+            challengeByRoom.set(result.roomId, challenge.id);
+            roomByChallenge.set(challenge.id, result.roomId);
 
-          ack?.({
-            ok: true,
-            result: {
-              ...result,
+            joinWalletSocketsToRoom(namespace, walletAddress, result.roomId);
+            joinWalletSocketsToRoom(namespace, result.opponentWallet, result.roomId);
+            namespace.to(result.roomId).emit("match.start", {
+              roomId: result.roomId,
+              players: [walletAddress, result.opponentWallet],
               challengeId: challenge.id,
-            },
+              wager: result.wager,
+            });
+
+            ack?.({
+              ok: true,
+              result: {
+                ...result,
+                challengeId: challenge.id,
+              },
+            });
+            return;
+          }
+          ack?.({ ok: true, result });
+        } catch (err) {
+          const ack = typeof payloadOrAck === "function" ? payloadOrAck : maybeAck;
+          ack?.({
+            ok: false,
+            error: err instanceof Error ? err.message : "queue.join failed",
           });
-          return;
         }
-        ack?.({ ok: true, result });
-      } catch (err) {
-        ack?.({
-          ok: false,
-          error: err instanceof Error ? err.message : "queue.join failed",
-        });
-      }
-    });
+      },
+    );
 
     socket.on("queue.leave", async (ack?: (payload: unknown) => void) => {
       const walletAddress = getWalletFromSocket(socket);

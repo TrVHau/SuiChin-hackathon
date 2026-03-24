@@ -29,6 +29,7 @@ async function loadAppFactory(): Promise<AppFactory> {
   // Force test execution to use in-memory backends regardless of .env.
   process.env.BACKEND_STORAGE = "memory";
   process.env.MATCHMAKING_BACKEND = "memory";
+  process.env.CHAIN_ADAPTER = "mock";
   process.env.NODE_ENV = "test";
 
   const [{ createApp }, { attachMultiplayerGateway }, { challengeService }, { matchmakingService }] =
