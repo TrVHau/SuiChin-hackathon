@@ -86,7 +86,11 @@ export default function Dashboard({
   const [cooldownLeft, setCooldownLeft] = useState(0);
   useEffect(() => {
     const update = () => {
-      const elapsed = Date.now() - playerData.last_played_ms;
+      const nowMs = Date.now();
+      const parsedLastPlayedMs = Number(playerData.last_played_ms);
+      const lastPlayedMs = Number.isFinite(parsedLastPlayedMs) ? parsedLastPlayedMs : 0;
+      // Guard against skewed/future timestamps causing massive fake cooldowns in UI.
+      const elapsed = Math.max(0, nowMs - lastPlayedMs);
       setCooldownLeft(Math.max(0, Math.ceil((COOLDOWN_MS - elapsed) / 1000)));
     };
     update();
