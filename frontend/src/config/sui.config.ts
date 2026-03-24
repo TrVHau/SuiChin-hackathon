@@ -38,7 +38,7 @@ export const CRAFT_FEE_MIST = 100_000_000n;
 export const MAX_DELTA_CHUN = 20;
 export const COOLDOWN_MS = 10_000;
 
-export const FAUCET_COOLDOWN_MS = 7_200_000;
+export const FAUCET_COOLDOWN_MS = 60_000;
 export const FAUCET_MAX_STACK = 10;
 
 export const HALVING_INTERVAL = 1_000;

@@ -58,7 +58,7 @@ export default function FaucetPanel({ profileId, lastFaucetMs, onSuccess }: Fauc
         </p>
       )}
       <p className="text-center text-xs text-gray-400 mt-2">
-        Mỗi 2 giờ = +1 Chun · tối đa {FAUCET_MAX_STACK}
+        Mỗi 1 phút = +1 Chun · tối đa {FAUCET_MAX_STACK}
       </p>
     </div>
   );

@@ -24,6 +24,11 @@ interface FaucetCallTarget {
   functionName: string;
 }
 
+type NormalizedModuleLike = {
+  exposedFunctions?: Record<string, unknown>;
+  exposed_functions?: Record<string, unknown>;
+};
+
 export function useFaucet(profileId: string | undefined) {
   const account = useCurrentAccount();
   const suiClient = useSuiClient();
@@ -40,7 +45,7 @@ export function useFaucet(profileId: string | undefined) {
     return Math.min(Math.floor(elapsed / FAUCET_COOLDOWN_MS), FAUCET_MAX_STACK);
   }, []);
 
-  const extractFunctionNames = (normalized: Record<string, unknown>): string[] => {
+  const extractFunctionNames = (normalized: NormalizedModuleLike): string[] => {
     const exposedMap =
       (normalized.exposedFunctions as Record<string, unknown> | undefined) ??
       (normalized.exposed_functions as Record<string, unknown> | undefined) ??
@@ -52,10 +57,10 @@ export function useFaucet(profileId: string | undefined) {
     if (resolvedTarget) return resolvedTarget;
 
     try {
-      const normalized = (await suiClient.getNormalizedMoveModule({
+      const normalized = await suiClient.getNormalizedMoveModule({
         package: PACKAGE_ID,
         module: MODULES.PLAYER_PROFILE,
-      })) as Record<string, unknown>;
+      });
 
       const functionNames = extractFunctionNames(normalized);
       const found = FAUCET_FN_CANDIDATES.find((fn) => functionNames.includes(fn));
@@ -75,7 +80,7 @@ export function useFaucet(profileId: string | undefined) {
     try {
       const modules = (await suiClient.getNormalizedMoveModulesByPackage({
         package: PACKAGE_ID,
-      })) as Record<string, Record<string, unknown>>;
+      })) as Record<string, NormalizedModuleLike>;
 
       for (const [moduleName, moduleDef] of Object.entries(modules)) {
         const functionNames = extractFunctionNames(moduleDef);
