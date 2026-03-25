@@ -1,15 +1,11 @@
 import { ArrowLeft, Trophy, Lock } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import { useOwnedNFTs } from "@/hooks/useOwnedNFTs";
 import { useSignAndExecuteTransaction } from "@mysten/dapp-kit";
 import { buildClaimBadgeTx } from "@/lib/sui-client";
-
-interface AchievementScreenProps {
-  onBack: () => void;
-  maxStreak: number;
-  profileId: string;
-}
+import { useGame } from "@/providers/GameContext";
 
 const ACHIEVEMENTS = [
   {
@@ -44,18 +40,23 @@ const ACHIEVEMENTS = [
   },
 ];
 
-export default function AchievementScreen({
-  onBack,
-  maxStreak,
-  profileId,
-}: AchievementScreenProps) {
+export default function AchievementScreen() {
+  const navigate = useNavigate();
+  const { playerData } = useGame();
   const { badges, refetch: refetchBadges } = useOwnedNFTs();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const resolvedProfileId = playerData?.objectId ?? "";
+  const resolvedMaxStreak = playerData?.streak ?? 0;
+  const handleBack = () => navigate("/dashboard");
   const claimedMilestones = badges.map((b) => b.badge_type);
 
   const handleClaim = (milestone: number) => {
+    if (!resolvedProfileId) {
+      toast.error("Khong tim thay profile");
+      return;
+    }
     toast.loading("Đang claim achievement...", { id: `claim-${milestone}` });
-    const tx = buildClaimBadgeTx(profileId, milestone);
+    const tx = buildClaimBadgeTx(resolvedProfileId, milestone);
     signAndExecute(
       { transaction: tx },
       {
@@ -77,7 +78,7 @@ export default function AchievementScreen({
       <div className="max-w-5xl mx-auto px-6 py-10">
         <div className="flex items-center gap-6 mb-8">
           <motion.button
-            onClick={onBack}
+            onClick={handleBack}
             whileHover={{ scale: 1.1, rotate: -5 }}
             whileTap={{ scale: 0.9 }}
             className="bg-white p-5 rounded-full shadow-2xl border-4 border-sunny-400"
@@ -92,7 +93,7 @@ export default function AchievementScreen({
               </h1>
             </div>
             <p className="text-gray-600 mt-2 font-semibold text-lg">
-              Max Streak: {maxStreak}
+              Max Streak: {resolvedMaxStreak}
             </p>
           </div>
         </div>
@@ -112,7 +113,7 @@ export default function AchievementScreen({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {ACHIEVEMENTS.map((achievement, index) => {
-              const isUnlocked = maxStreak >= achievement.milestone;
+              const isUnlocked = resolvedMaxStreak >= achievement.milestone;
               const isClaimed = claimedMilestones.includes(
                 achievement.milestone,
               );
@@ -187,12 +188,12 @@ export default function AchievementScreen({
                         <div
                           className="bg-gradient-to-r from-sunny-400 to-playful-orange h-full transition-all"
                           style={{
-                            width: `${Math.min((maxStreak / achievement.milestone) * 100, 100)}%`,
+                            width: `${Math.min((resolvedMaxStreak / achievement.milestone) * 100, 100)}%`,
                           }}
                         ></div>
                       </div>
                       <p className="text-xs text-gray-600 mt-1 font-semibold">
-                        {maxStreak}/{achievement.milestone}
+                        {resolvedMaxStreak}/{achievement.milestone}
                       </p>
                     </div>
                   )}

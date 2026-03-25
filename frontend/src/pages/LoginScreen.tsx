@@ -1,13 +1,13 @@
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { ConnectButton, useCurrentAccount } from "@mysten/dapp-kit";
+import { useLoginHandler } from "@/hooks/useLoginHandler";
+import { useGame } from "@/providers/GameContext";
 
-interface LoginScreenProps {
-  onLogin: () => void;
-}
-
-export default function LoginScreen({ onLogin }: LoginScreenProps) {
+export default function LoginScreen() {
   const account = useCurrentAccount();
+  const { loading } = useGame();
+  const { handleLogin } = useLoginHandler();
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center px-4 bg-sunny-gradient">
@@ -27,7 +27,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
             <div className="absolute inset-0 bg-white/20 backdrop-blur-sm"></div>
 
             <motion.img
-              src="/public/logo.png"
+              src="/logo.png"
               alt="SuiChin Logo"
               animate={{ rotate: [0, 5, -5, 0] }}
               transition={{ duration: 2, repeat: Infinity }}
@@ -81,14 +81,19 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
             </div>
           ) : (
             <motion.button
-              onClick={onLogin}
+              onClick={handleLogin}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="bg-gradient-to-r from-playful-green to-sunny-500 h-20 rounded-full shadow-2xl w-full flex items-center justify-center gap-3 border-4 border-white"
+              disabled={loading}
+              className="bg-gradient-to-r from-playful-green to-sunny-500 h-20 rounded-full shadow-2xl w-full flex items-center justify-center gap-3 border-4 border-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <CheckCircle className="size-8 text-white drop-shadow" />
+              {loading ? (
+                <Loader2 className="size-8 text-white drop-shadow animate-spin" />
+              ) : (
+                <CheckCircle className="size-8 text-white drop-shadow" />
+              )}
               <span className="font-display font-bold text-2xl text-white drop-shadow">
-                Đăng nhập ngay!
+                {loading ? "Đang xử lý..." : "Đăng nhập ngay!"}
               </span>
             </motion.button>
           )}

@@ -1,9 +1,12 @@
-import { ArrowLeft, Hammer, Sparkles } from "lucide-react";
+import { Hammer, Sparkles } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import { useSuiClient, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import PageHeader from "@/components/common/PageHeader";
 import { buildCraftChunTx } from "@/lib/sui-client";
+import { useGame } from "@/providers/GameContext";
 import {
   TREASURY_OBJECT_ID,
   PACKAGE_ID,
@@ -89,29 +92,25 @@ const TIER_CONFIG = {
   },
 } as const;
 
-interface WorkshopScreenProps {
-  onBack: () => void;
-  profileId: string;
-  chunRaw: number;
-  onSuccess?: () => void;
-}
-
-export default function WorkshopScreen({
-  onBack,
-  profileId,
-  chunRaw,
-  onSuccess,
-}: WorkshopScreenProps) {
+export default function WorkshopScreen() {
+  const navigate = useNavigate();
+  const { playerData, refreshProfile } = useGame();
+  const resolvedProfileId = playerData?.objectId ?? "";
+  const resolvedChunRaw = playerData?.chun_raw ?? 0;
+  const handleBack = () => navigate("/dashboard");
+  const handleSuccess = () => {
+    void refreshProfile();
+  };
   const suiClient = useSuiClient();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const [crafting, setCrafting] = useState(false);
   const [craftResult, setCraftResult] = useState<CraftResultData | null>(null);
   const [craftCost, setCraftCost] = useState<number>(10);
-  const [displayChunRaw, setDisplayChunRaw] = useState<number>(chunRaw);
+  const [displayChunRaw, setDisplayChunRaw] = useState<number>(resolvedChunRaw);
 
   useEffect(() => {
-    setDisplayChunRaw(chunRaw);
-  }, [chunRaw]);
+    setDisplayChunRaw(resolvedChunRaw);
+  }, [resolvedChunRaw]);
 
   // Fetch halving cost from Treasury
   useEffect(() => {
@@ -190,7 +189,7 @@ export default function WorkshopScreen({
 
   const readLiveCraftState = async (): Promise<{ liveChun: number; liveCost: number }> => {
     const [profileObj, treasuryObj] = await Promise.all([
-      suiClient.getObject({ id: profileId, options: { showContent: true } }),
+      suiClient.getObject({ id: resolvedProfileId, options: { showContent: true } }),
       suiClient.getObject({ id: TREASURY_OBJECT_ID, options: { showContent: true } }),
     ]);
 
@@ -206,6 +205,10 @@ export default function WorkshopScreen({
 
   const handleCraft = async () => {
     if (!canCraft || crafting) return;
+    if (!resolvedProfileId) {
+      toast.error("Khong tim thay profile");
+      return;
+    }
 
     try {
       const { liveChun, liveCost } = await readLiveCraftState();
@@ -223,7 +226,7 @@ export default function WorkshopScreen({
     setCrafting(true);
     toast.loading("Dang craft Cuon Chun NFT...", { id: "craft" });
 
-    const tx = buildCraftChunTx(profileId, TREASURY_OBJECT_ID);
+    const tx = buildCraftChunTx(resolvedProfileId, TREASURY_OBJECT_ID);
 
     signAndExecute(
       { transaction: tx },
@@ -262,12 +265,12 @@ export default function WorkshopScreen({
             } catch {
               // Ignore extra read errors here.
             }
-            onSuccess?.();
+            handleSuccess();
             setCrafting(false);
             return;
           }
           setCrafting(false);
-          onSuccess?.();
+          handleSuccess();
         },
         onError: (err) => {
           setCrafting(false);
@@ -296,23 +299,13 @@ export default function WorkshopScreen({
   return (
     <div className="min-h-screen bg-sunny-gradient">
       <div className="max-w-2xl mx-auto px-6 py-10">
-        {/* Header */}
-        <div className="flex items-center gap-6 mb-8">
-          <motion.button
-            onClick={onBack}
-            whileHover={{ scale: 1.1, rotate: -5 }}
-            whileTap={{ scale: 0.9 }}
-            className="bg-white p-5 rounded-full shadow-2xl border-4 border-playful-purple"
-          >
-            <ArrowLeft className="size-7 text-playful-purple" />
-          </motion.button>
-          <div className="flex items-center gap-3">
-            <span className="text-5xl">⚒️</span>
-            <h1 className="font-display font-black text-4xl text-gray-900">
-              Workshop
-            </h1>
-          </div>
-        </div>
+        <PageHeader
+          onBack={handleBack}
+          title="Workshop"
+          emoji="⚒️"
+          backBorderClass="border-playful-purple"
+          backIconClass="text-playful-purple"
+        />
 
         <AnimatePresence mode="wait">
           {craftResult && cfg ? (
@@ -361,7 +354,7 @@ export default function WorkshopScreen({
                   Craft tiếp
                 </motion.button>
                 <motion.button
-                  onClick={onBack}
+                  onClick={handleBack}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   className="flex-1 btn-playful bg-white text-gray-800 border-4 border-gray-300 text-xl"
@@ -557,4 +550,3 @@ export default function WorkshopScreen({
     </div>
   );
 }
-

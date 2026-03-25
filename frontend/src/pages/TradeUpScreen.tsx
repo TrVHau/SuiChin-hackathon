@@ -1,7 +1,8 @@
-import { ArrowLeft, ArrowUpCircle, RefreshCw } from "lucide-react";
+import { ArrowUpCircle } from "lucide-react";
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import { useSuiClient, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
 import { useOwnedNFTs } from "@/hooks/useOwnedNFTs";
 import type { CuonChunNFT } from "@/hooks/useOwnedNFTs";
@@ -10,6 +11,8 @@ import {
   buildTradeUpSilverToGoldTx,
 } from "@/lib/sui-client";
 import { PACKAGE_ID } from "@/config/sui.config";
+import PageHeader from "@/components/common/PageHeader";
+import RefreshButton from "@/components/common/RefreshButton";
 
 // ── Confetti ──
 const CONFETTI_COLORS = ["#FF6B6B","#FFE66D","#4ECDC4","#A78BFA","#34D399","#F472B6","#FCD34D","#60A5FA"];
@@ -83,10 +86,6 @@ const RESULT_CONFIG = {
   },
 } as const;
 
-interface TradeUpScreenProps {
-  onBack: () => void;
-}
-
 type TradeMode = "bronze-to-silver" | "silver-to-gold";
 
 const TRADE_CONFIG: Record<
@@ -124,7 +123,9 @@ const TRADE_CONFIG: Record<
   },
 };
 
-export default function TradeUpScreen({ onBack }: TradeUpScreenProps) {
+export default function TradeUpScreen() {
+  const navigate = useNavigate();
+  const handleBack = () => navigate("/dashboard");
   const suiClient = useSuiClient();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const { cuonChuns, loading, refetch } = useOwnedNFTs();
@@ -239,39 +240,22 @@ export default function TradeUpScreen({ onBack }: TradeUpScreenProps) {
   return (
     <div className="min-h-screen bg-sunny-gradient">
       <div className="max-w-4xl mx-auto px-6 py-10">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-6">
-            <motion.button
-              onClick={onBack}
-              whileHover={{ scale: 1.1, rotate: -5 }}
-              whileTap={{ scale: 0.9 }}
-              className="bg-white p-5 rounded-full shadow-2xl border-4 border-playful-orange"
-            >
-              <ArrowLeft className="size-7 text-playful-orange" />
-            </motion.button>
-            <div className="flex items-center gap-3">
-              <span className="text-5xl">⬆️</span>
-              <h1 className="font-display font-black text-4xl text-gray-900">
-                Trade-up
-              </h1>
-            </div>
-          </div>
-          <motion.button
-            onClick={() => {
-              refetch();
-              setSelected([]);
-            }}
-            disabled={loading}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            className="bg-white p-4 rounded-full shadow-xl border-4 border-gray-200 disabled:opacity-50"
-          >
-            <RefreshCw
-              className={`size-6 text-gray-600 ${loading ? "animate-spin" : ""}`}
+        <PageHeader
+          onBack={handleBack}
+          title="Trade-up"
+          emoji="⬆️"
+          backBorderClass="border-playful-orange"
+          backIconClass="text-playful-orange"
+          rightSlot={
+            <RefreshButton
+              onClick={() => {
+                refetch();
+                setSelected([]);
+              }}
+              loading={loading}
             />
-          </motion.button>
-        </div>
+          }
+        />
 
         {/* Mode selector */}
         <div className="flex gap-4 mb-8">
@@ -460,9 +444,11 @@ export default function TradeUpScreen({ onBack }: TradeUpScreenProps) {
                         className="w-full aspect-square object-cover rounded-2xl mb-2"
                       />
                     ) : (
-                      <div className="w-full aspect-square rounded-2xl mb-2 bg-gray-100 flex items-center justify-center text-4xl">
-                        🏮
-                      </div>
+                      <img
+                        src="/nft/tier1_v1.png"
+                        alt="Tier 1 NFT"
+                        className="w-full aspect-square object-cover rounded-2xl mb-2 bg-gray-100"
+                      />
                     )}
                     {isSelected && (
                       <div className="absolute top-1 right-1 bg-playful-orange text-white text-xs font-black px-1.5 rounded-full">

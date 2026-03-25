@@ -1,7 +1,8 @@
-import { ArrowLeft, RefreshCw, ShoppingCart, Tag, X } from "lucide-react";
+import { ShoppingCart, Tag, X } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import {
   useCurrentAccount,
   useSignAndExecuteTransaction,
@@ -16,10 +17,8 @@ import {
   buildCancelListingTx,
 } from "@/lib/sui-client";
 import { MARKET_OBJECT_ID } from "@/config/sui.config";
-
-interface MarketplaceScreenProps {
-  onBack: () => void;
-}
+import PageHeader from "@/components/common/PageHeader";
+import RefreshButton from "@/components/common/RefreshButton";
 
 const TIER_LABELS: Record<number, { label: string; emoji: string }> = {
   1: { label: "Bronze", emoji: "🥉" },
@@ -33,7 +32,9 @@ function formatSui(mist: bigint): string {
 
 type Tab = "browse" | "sell";
 
-export default function MarketplaceScreen({ onBack }: MarketplaceScreenProps) {
+export default function MarketplaceScreen() {
+  const navigate = useNavigate();
+  const handleBack = () => navigate("/dashboard");
   const account = useCurrentAccount();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const {
@@ -145,39 +146,22 @@ export default function MarketplaceScreen({ onBack }: MarketplaceScreenProps) {
   return (
     <div className="min-h-screen bg-sunny-gradient">
       <div className="max-w-5xl mx-auto px-6 py-10">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-6">
-            <motion.button
-              onClick={onBack}
-              whileHover={{ scale: 1.1, rotate: -5 }}
-              whileTap={{ scale: 0.9 }}
-              className="bg-white p-5 rounded-full shadow-2xl border-4 border-playful-green"
-            >
-              <ArrowLeft className="size-7 text-playful-green" />
-            </motion.button>
-            <div className="flex items-center gap-3">
-              <span className="text-5xl">🛒</span>
-              <h1 className="font-display font-black text-4xl text-gray-900">
-                Marketplace
-              </h1>
-            </div>
-          </div>
-          <motion.button
-            onClick={() => {
-              refetchListings();
-              refetchNFTs();
-            }}
-            disabled={listLoading || nftLoading}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            className="bg-white p-4 rounded-full shadow-xl border-4 border-gray-200 disabled:opacity-50"
-          >
-            <RefreshCw
-              className={`size-6 text-gray-600 ${listLoading || nftLoading ? "animate-spin" : ""}`}
+        <PageHeader
+          onBack={handleBack}
+          title="Marketplace"
+          emoji="🛒"
+          backBorderClass="border-playful-green"
+          backIconClass="text-playful-green"
+          rightSlot={
+            <RefreshButton
+              onClick={() => {
+                refetchListings();
+                refetchNFTs();
+              }}
+              loading={listLoading || nftLoading}
             />
-          </motion.button>
-        </div>
+          }
+        />
 
         {/* Tab switcher */}
         <div className="flex gap-4 mb-8">
@@ -222,9 +206,11 @@ export default function MarketplaceScreen({ onBack }: MarketplaceScreenProps) {
                           whileHover={{ scale: 1.03 }}
                           className="bg-yellow-50 border-4 border-yellow-400 rounded-3xl p-4 shadow-lg relative"
                         >
-                          <div className="text-4xl text-center mb-2">
-                            {tier.emoji} 🏮
-                          </div>
+                          <img
+                            src={l.image_url || "/nft/tier1_v1.png"}
+                            alt={l.name || `${tier.label} NFT`}
+                            className="w-full aspect-square rounded-2xl object-cover mb-2"
+                          />
                           <p className="font-black text-gray-900 text-sm truncate">
                             {tier.label}
                           </p>
@@ -278,9 +264,11 @@ export default function MarketplaceScreen({ onBack }: MarketplaceScreenProps) {
                         whileHover={{ scale: 1.04 }}
                         className="bg-white border-4 border-playful-green/40 rounded-3xl p-4 shadow-lg"
                       >
-                        <div className="text-4xl text-center mb-2">
-                          {tier.emoji} 🏮
-                        </div>
+                        <img
+                          src={l.image_url || "/nft/tier1_v1.png"}
+                          alt={l.name || `${tier.label} NFT`}
+                          className="w-full aspect-square rounded-2xl object-cover mb-2"
+                        />
                         <p className="font-black text-gray-900 text-sm">
                           {tier.label} NFT
                         </p>
@@ -367,9 +355,11 @@ export default function MarketplaceScreen({ onBack }: MarketplaceScreenProps) {
                               className="w-full aspect-square object-cover rounded-2xl mb-2"
                             />
                           ) : (
-                            <div className="w-full aspect-square rounded-2xl mb-2 bg-gray-100 flex items-center justify-center text-4xl">
-                              🏮
-                            </div>
+                            <img
+                              src="/nft/tier1_v1.png"
+                              alt="Tier 1 NFT"
+                              className="w-full aspect-square object-cover rounded-2xl mb-2"
+                            />
                           )}
                           <p className="text-xs font-bold text-gray-700">
                             {tier.emoji} {tier.label}

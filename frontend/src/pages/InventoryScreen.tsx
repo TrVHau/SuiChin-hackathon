@@ -1,23 +1,18 @@
 import {
-  ArrowLeft,
-  RefreshCw,
   ShoppingCart,
   ArrowUpCircle,
 } from "lucide-react";
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { useOwnedNFTs } from "@/hooks/useOwnedNFTs";
+import PageHeader from "@/components/common/PageHeader";
+import RefreshButton from "@/components/common/RefreshButton";
 import type {
   CuonChunNFT,
   ScrapItem,
   AchievementBadgeItem,
 } from "@/hooks/useOwnedNFTs";
-
-interface InventoryScreenProps {
-  onBack: () => void;
-  onOpenMarketplace?: () => void;
-  onOpenTradeUp?: () => void;
-}
 
 type TierFilter = "all" | 1 | 2 | 3;
 
@@ -59,9 +54,11 @@ function NFTCard({
           className="w-full aspect-square object-cover rounded-2xl mb-2"
         />
       ) : (
-        <div className="w-full aspect-square rounded-2xl mb-2 bg-white/60 flex items-center justify-center text-5xl">
-          🏮
-        </div>
+        <img
+          src="/nft/tier1_v1.png"
+          alt="Tier 1 NFT"
+          className="w-full aspect-square object-cover rounded-2xl mb-2 bg-white/60"
+        />
       )}
       <p className="font-display font-black text-xs text-gray-900 truncate">
         {nft.name || `#${nft.objectId.slice(-4)}`}
@@ -161,11 +158,11 @@ const container = {
 };
 const item = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } };
 
-export default function InventoryScreen({
-  onBack,
-  onOpenMarketplace,
-  onOpenTradeUp,
-}: InventoryScreenProps) {
+export default function InventoryScreen() {
+  const navigate = useNavigate();
+  const handleBack = () => navigate("/dashboard");
+  const handleOpenMarketplace = () => navigate("/marketplace");
+  const handleOpenTradeUp = () => navigate("/trade-up");
   const { cuonChuns, scraps, badges, loading, refetch } = useOwnedNFTs();
   const [tierFilter, setTierFilter] = useState<TierFilter>("all");
 
@@ -179,41 +176,15 @@ export default function InventoryScreen({
   return (
     <div className="min-h-screen bg-sunny-gradient">
       <div className="max-w-5xl mx-auto px-6 py-10">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-6">
-            <motion.button
-              onClick={onBack}
-              whileHover={{ scale: 1.1, rotate: -5 }}
-              whileTap={{ scale: 0.9 }}
-              className="bg-white p-5 rounded-full shadow-2xl border-4 border-playful-blue"
-            >
-              <ArrowLeft className="size-7 text-playful-blue" />
-            </motion.button>
-            <div className="flex items-center gap-3">
-              <span className="text-5xl">🎒</span>
-              <div>
-                <h1 className="font-display font-black text-4xl text-gray-900">
-                  Kho Đồ
-                </h1>
-                <p className="text-gray-600 font-semibold">
-                  {totalItems} vật phẩm
-                </p>
-              </div>
-            </div>
-          </div>
-          <motion.button
-            onClick={refetch}
-            disabled={loading}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            className="bg-white p-4 rounded-full shadow-xl border-4 border-gray-200 disabled:opacity-50"
-          >
-            <RefreshCw
-              className={`size-6 text-gray-600 ${loading ? "animate-spin" : ""}`}
-            />
-          </motion.button>
-        </div>
+        <PageHeader
+          onBack={handleBack}
+          title="Kho Đồ"
+          emoji="🎒"
+          subtitle={`${totalItems} vật phẩm`}
+          backBorderClass="border-playful-blue"
+          backIconClass="text-playful-blue"
+          rightSlot={<RefreshButton onClick={refetch} loading={loading} />}
+        />
 
         {loading && totalItems === 0 ? (
           <div className="space-y-10">
@@ -251,7 +222,12 @@ export default function InventoryScreen({
               <section>
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="font-display font-black text-2xl text-gray-900 flex items-center gap-2">
-                    🏮 Cuộn Chun NFT
+                    <img
+                      src="/nft/tier1_v1.png"
+                      alt="Tier 1 NFT"
+                      className="size-8 rounded-xl object-cover border-2 border-playful-purple/30"
+                    />
+                    Cuộn Chun NFT
                     <span className="bg-playful-purple text-white text-sm font-black px-3 py-1 rounded-full">
                       {filteredNFTs.length}
                       {tierFilter !== "all" && ` / ${cuonChuns.length}`}
@@ -293,10 +269,10 @@ export default function InventoryScreen({
                       <motion.div key={nft.objectId} variants={item}>
                         <NFTCard
                           nft={nft}
-                          onList={onOpenMarketplace}
+                          onList={handleOpenMarketplace}
                           onTradeUp={
                             nft.tier === 1 || nft.tier === 2
-                              ? onOpenTradeUp
+                              ? handleOpenTradeUp
                               : undefined
                           }
                         />

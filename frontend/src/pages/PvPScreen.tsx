@@ -1,25 +1,27 @@
-import { ArrowLeft, Loader2, Swords, Trophy } from "lucide-react";
+import { Loader2, Swords, Trophy } from "lucide-react";
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { usePvP } from "@/hooks/usePvP";
+import PageHeader from "@/components/common/PageHeader";
+import { useGame } from "@/providers/GameContext";
 
 const WAGER_OPTIONS = [1, 5, 10, 20, 50];
 
-interface PvPScreenProps {
-  onBack: () => void;
-  profileId: string;
-  chunRaw: number;
-  onSuccess?: () => void;
-}
-
-export default function PvPScreen({ onBack, profileId, chunRaw, onSuccess }: PvPScreenProps) {
+export default function PvPScreen() {
+  const navigate = useNavigate();
+  const { playerData, refreshProfile } = useGame();
+  const resolvedProfileId = playerData?.objectId ?? "";
+  const resolvedChunRaw = playerData?.chun_raw ?? 0;
+  const handleBack = () => navigate("/dashboard");
+  const handleSuccess = () => void refreshProfile();
   const account = useCurrentAccount();
-  const { pvp, joinQueue, leaveQueue, reportRound } = usePvP(profileId);
+  const { pvp, joinQueue, leaveQueue, reportRound } = usePvP(resolvedProfileId);
   const [selectedWager, setSelectedWager] = useState(5);
 
   const handleJoin = () => {
-    if (chunRaw < selectedWager) return;
+    if (resolvedChunRaw < selectedWager) return;
     joinQueue(selectedWager);
   };
 
@@ -28,21 +30,13 @@ export default function PvPScreen({ onBack, profileId, chunRaw, onSuccess }: PvP
   return (
     <div className="min-h-screen bg-gradient-to-br from-playful-purple/20 via-white to-playful-blue/20">
       <div className="max-w-md mx-auto px-6 py-10">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
-          <motion.button
-            onClick={onBack}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            className="bg-white p-4 rounded-full shadow-xl border-4 border-playful-purple"
-          >
-            <ArrowLeft className="size-6 text-playful-purple" />
-          </motion.button>
-          <div className="flex items-center gap-2">
-            <Swords className="size-7 text-red-500" />
-            <h1 className="font-display font-black text-3xl text-gray-900">PvP Online</h1>
-          </div>
-        </div>
+        <PageHeader
+          onBack={handleBack}
+          title="PvP Online"
+          emoji="⚔️"
+          backBorderClass="border-playful-purple"
+          backIconClass="text-playful-purple"
+        />
 
         {/* Idle / wager selection */}
         {(pvp.status === "idle" || pvp.status === "error") && (
@@ -62,8 +56,8 @@ export default function PvPScreen({ onBack, profileId, chunRaw, onSuccess }: PvP
                       ? 'bg-playful-purple text-white border-playful-purple scale-105'
                       : 'bg-white text-gray-800 border-gray-200 hover:border-playful-purple'
                   }
-                  ${chunRaw < w ? 'opacity-40 cursor-not-allowed' : ''}`}
-                  disabled={chunRaw < w}
+                  ${resolvedChunRaw < w ? 'opacity-40 cursor-not-allowed' : ''}`}
+                  disabled={resolvedChunRaw < w}
                 >
                   <span className="inline-flex items-center gap-2">
                     {w}
@@ -76,12 +70,12 @@ export default function PvPScreen({ onBack, profileId, chunRaw, onSuccess }: PvP
                 </button>
               ))}
             </div>
-            <p className="text-sm text-gray-500 mb-4">Chun Raw của bạn: <b>{chunRaw}</b></p>
+            <p className="text-sm text-gray-500 mb-4">Chun Raw của bạn: <b>{resolvedChunRaw}</b></p>
             <motion.button
               onClick={handleJoin}
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.96 }}
-              disabled={chunRaw < selectedWager}
+              disabled={resolvedChunRaw < selectedWager}
               className="w-full py-4 rounded-2xl font-black text-white text-xl
                          bg-red-500 hover:bg-red-600 transition-all
                          disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
@@ -205,7 +199,10 @@ export default function PvPScreen({ onBack, profileId, chunRaw, onSuccess }: PvP
               </p>
             )}
             <motion.button
-              onClick={() => { onSuccess?.(); onBack(); }}
+              onClick={() => {
+                handleSuccess();
+                handleBack();
+              }}
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.96 }}
               className="w-full py-4 rounded-2xl font-black text-white text-xl bg-playful-purple hover:brightness-110"
