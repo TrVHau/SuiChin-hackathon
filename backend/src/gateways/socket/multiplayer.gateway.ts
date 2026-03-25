@@ -40,6 +40,13 @@ const QueueJoinPayloadSchema = z.object({
   wager: z.coerce.number().int().min(0).max(1_000_000).default(0),
 });
 
+const MatchShotPayloadSchema = z.object({
+  challengeId: z.string().uuid(),
+  x: z.number().finite(),
+  y: z.number().finite(),
+  force: z.number().finite().min(0).max(5000),
+});
+
 export function attachMultiplayerGateway(server: HttpServer) {
   const io = new Server(server, {
     cors: { origin: corsOrigins, credentials: true },
@@ -48,6 +55,8 @@ export function attachMultiplayerGateway(server: HttpServer) {
   const namespace = io.of("/multiplayer");
   const challengeByRoom = new Map<string, string>();
   const roomByChallenge = new Map<string, string>();
+  const currentTurnByChallenge = new Map<string, string>();
+  const shotSequenceByChallenge = new Map<string, number>();
 
   namespace.use((socket, next) => {
     const walletAddress = socket.handshake.auth?.walletAddress;
@@ -97,6 +106,14 @@ export function attachMultiplayerGateway(server: HttpServer) {
               wager: result.wager,
             });
 
+            const firstTurnWallet = challenge.challengerWallet;
+            currentTurnByChallenge.set(challenge.id, firstTurnWallet);
+            shotSequenceByChallenge.set(challenge.id, 0);
+            namespace.to(result.roomId).emit("match.turn", {
+              challengeId: challenge.id,
+              currentTurnWallet: firstTurnWallet,
+            });
+
             ack?.({
               ok: true,
               result: {
@@ -121,6 +138,75 @@ export function attachMultiplayerGateway(server: HttpServer) {
       const walletAddress = getWalletFromSocket(socket);
       const result = await matchmakingService.leaveQueue(walletAddress);
       ack?.({ ok: true, result });
+    });
+
+    socket.on("match.shot.submit", async (payload: unknown, ack?: (payload: unknown) => void) => {
+      try {
+        const walletAddress = getWalletFromSocket(socket);
+        const parsed = MatchShotPayloadSchema.parse(payload);
+        const roomId = roomByChallenge.get(parsed.challengeId);
+        if (!roomId) {
+          throw new Error("Room not found for challenge");
+        }
+
+        const challenge = await challengeService.getChallenge(parsed.challengeId);
+        if (!challenge) {
+          throw new Error("Challenge not found");
+        }
+
+        const isParticipant =
+          challenge.challengerWallet === walletAddress || challenge.opponentWallet === walletAddress;
+        if (!isParticipant) {
+          throw new Error("Wallet does not belong to this challenge");
+        }
+
+        const expectedTurn = currentTurnByChallenge.get(parsed.challengeId) ?? challenge.challengerWallet;
+        if (expectedTurn !== walletAddress) {
+          throw new Error("Not your turn");
+        }
+
+        const nextTurnWallet =
+          walletAddress === challenge.challengerWallet
+            ? challenge.opponentWallet
+            : challenge.challengerWallet;
+        if (!nextTurnWallet) {
+          throw new Error("Challenge is missing opponent");
+        }
+
+        const nextSeq = (shotSequenceByChallenge.get(parsed.challengeId) ?? 0) + 1;
+        shotSequenceByChallenge.set(parsed.challengeId, nextSeq);
+        currentTurnByChallenge.set(parsed.challengeId, nextTurnWallet);
+
+        namespace.to(roomId).emit("match.shot.received", {
+          challengeId: parsed.challengeId,
+          byWallet: walletAddress,
+          seq: nextSeq,
+          shot: {
+            x: parsed.x,
+            y: parsed.y,
+            force: parsed.force,
+          },
+          nextTurnWallet,
+          atMs: Date.now(),
+        });
+        namespace.to(roomId).emit("match.turn", {
+          challengeId: parsed.challengeId,
+          currentTurnWallet: nextTurnWallet,
+        });
+
+        ack?.({
+          ok: true,
+          result: {
+            seq: nextSeq,
+            nextTurnWallet,
+          },
+        });
+      } catch (err) {
+        ack?.({
+          ok: false,
+          error: err instanceof Error ? err.message : "match.shot.submit failed",
+        });
+      }
     });
 
     socket.on("match.result.submit", async (payload: unknown, ack?: (payload: unknown) => void) => {
@@ -167,6 +253,8 @@ export function attachMultiplayerGateway(server: HttpServer) {
           challengeByRoom.delete(roomId);
         }
         roomByChallenge.delete(parsed.challengeId);
+        currentTurnByChallenge.delete(parsed.challengeId);
+        shotSequenceByChallenge.delete(parsed.challengeId);
 
         ack?.({
           ok: true,

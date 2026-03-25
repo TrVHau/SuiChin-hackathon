@@ -29,6 +29,15 @@ interface SubmitResultAck {
   error?: string;
 }
 
+interface SubmitShotAck {
+  ok: boolean;
+  result?: {
+    seq: number;
+    nextTurnWallet: string;
+  };
+  error?: string;
+}
+
 interface MatchStartEvent {
   roomId: string;
   players: string[];
@@ -40,6 +49,24 @@ interface MatchFinalizedEvent {
   challengeId: string;
   winnerWallet: string | null;
   txDigest: string | null;
+}
+
+interface MatchTurnEvent {
+  challengeId: string;
+  currentTurnWallet: string;
+}
+
+interface MatchShotEvent {
+  challengeId: string;
+  byWallet: string;
+  seq: number;
+  shot: {
+    x: number;
+    y: number;
+    force: number;
+  };
+  nextTurnWallet: string;
+  atMs: number;
 }
 
 export type PvPStatus =
@@ -63,6 +90,18 @@ export interface PvPState {
   resultTx: string | null;
   winner: string | null;
   submittedResult: MatchResult | null;
+  currentTurnWallet: string | null;
+  myTurn: boolean;
+  lastShot:
+    | {
+        byWallet: string;
+        seq: number;
+        x: number;
+        y: number;
+        force: number;
+        atMs: number;
+      }
+    | null;
 }
 
 const INITIAL_STATE: PvPState = {
@@ -76,6 +115,9 @@ const INITIAL_STATE: PvPState = {
   resultTx: null,
   winner: null,
   submittedResult: null,
+  currentTurnWallet: null,
+  myTurn: false,
+  lastShot: null,
 };
 
 export function usePvP(_profileId: string | undefined) {
@@ -103,6 +145,9 @@ export function usePvP(_profileId: string | undefined) {
         challengeId: event.challengeId,
         opponent: opponentWallet,
         wager: event.wager ?? prev.wager,
+        currentTurnWallet: null,
+        myTurn: false,
+        lastShot: null,
       }));
 
       toast.success("Da tim thay doi thu. Bat dau tran!");
@@ -189,6 +234,36 @@ export function usePvP(_profileId: string | undefined) {
         }
       });
 
+      socket.on("match.turn", (event: MatchTurnEvent) => {
+        setPvP((prev) => {
+          if (prev.challengeId !== event.challengeId) return prev;
+          return {
+            ...prev,
+            currentTurnWallet: event.currentTurnWallet,
+            myTurn: Boolean(account?.address) && event.currentTurnWallet === account?.address,
+          };
+        });
+      });
+
+      socket.on("match.shot.received", (event: MatchShotEvent) => {
+        setPvP((prev) => {
+          if (prev.challengeId !== event.challengeId) return prev;
+          return {
+            ...prev,
+            lastShot: {
+              byWallet: event.byWallet,
+              seq: event.seq,
+              x: event.shot.x,
+              y: event.shot.y,
+              force: event.shot.force,
+              atMs: event.atMs,
+            },
+            currentTurnWallet: event.nextTurnWallet,
+            myTurn: Boolean(account?.address) && event.nextTurnWallet === account?.address,
+          };
+        });
+      });
+
       socket.on("connect_error", () => {
         toast.error("Khong ket noi duoc backend");
         setPvP((prev) => ({ ...prev, status: "error" }));
@@ -264,11 +339,43 @@ export function usePvP(_profileId: string | undefined) {
     [account, pvp.challengeId, pvp.submittedResult],
   );
 
+  const submitShot = useCallback(
+    (shot: { x: number; y: number; force: number }) => {
+      const socket = socketRef.current;
+      if (!socket || !account?.address) return;
+      if (!pvp.challengeId) return;
+      if (pvp.status !== "playing") return;
+      if (!pvp.myTurn) {
+        toast.info("Chua den luot ban");
+        return;
+      }
+
+      socket.emit(
+        "match.shot.submit",
+        {
+          challengeId: pvp.challengeId,
+          x: shot.x,
+          y: shot.y,
+          force: shot.force,
+        },
+        (ack: SubmitShotAck) => {
+          if (!ack.ok) {
+            toast.error(ack.error ?? "Gui cu ban that bai");
+            return;
+          }
+
+          toast.success(`Da gui cu ban #${ack.result?.seq ?? "?"}`);
+        },
+      );
+    },
+    [account, pvp.challengeId, pvp.myTurn, pvp.status],
+  );
+
   useEffect(() => {
     return () => {
       safeDisconnect();
     };
   }, [safeDisconnect]);
 
-  return { pvp, joinQueue, leaveQueue, reportRound };
+  return { pvp, joinQueue, leaveQueue, reportRound, submitShot };
 }

@@ -20,7 +20,8 @@ export default function PvPScreen() {
   const handleBack = () => navigate("/dashboard");
   const handleSuccess = () => void refreshProfile();
   const account = useCurrentAccount();
-  const { pvp, joinQueue, leaveQueue, reportRound } = usePvP(resolvedProfileId);
+  const { pvp, joinQueue, leaveQueue, reportRound, submitShot } =
+    usePvP(resolvedProfileId);
   const [selectedWager, setSelectedWager] = useState(5);
 
   const handleJoin = () => {
@@ -65,6 +66,7 @@ export default function PvPScreen() {
           <PvpPlayingCard
             pvp={pvp}
             myAddress={account?.address}
+            onShoot={submitShot}
             onReportRound={reportRound}
           />
         )}
