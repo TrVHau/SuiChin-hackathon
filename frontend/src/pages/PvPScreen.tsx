@@ -20,8 +20,7 @@ export default function PvPScreen() {
   const handleBack = () => navigate("/dashboard");
   const handleSuccess = () => void refreshProfile();
   const account = useCurrentAccount();
-  const { pvp, joinQueue, leaveQueue, reportRound, submitShot } =
-    usePvP(resolvedProfileId);
+  const { pvp, joinQueue, leaveQueue, submitShot, resolveLocalMatch } = usePvP(resolvedProfileId);
   const [selectedWager, setSelectedWager] = useState(5);
 
   const handleJoin = () => {
@@ -33,7 +32,7 @@ export default function PvPScreen() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-playful-purple/20 via-white to-playful-blue/20">
-      <div className="max-w-md mx-auto px-6 py-10">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-8 md:py-10">
         <PageHeader
           onBack={handleBack}
           title="PvP Online"
@@ -67,7 +66,7 @@ export default function PvPScreen() {
             pvp={pvp}
             myAddress={account?.address}
             onShoot={submitShot}
-            onReportRound={reportRound}
+            onLocalFinish={resolveLocalMatch}
           />
         )}
 

@@ -92,16 +92,14 @@ export interface PvPState {
   submittedResult: MatchResult | null;
   currentTurnWallet: string | null;
   myTurn: boolean;
-  lastShot:
-    | {
-        byWallet: string;
-        seq: number;
-        x: number;
-        y: number;
-        force: number;
-        atMs: number;
-      }
-    | null;
+  lastShot: {
+    byWallet: string;
+    seq: number;
+    x: number;
+    y: number;
+    force: number;
+    atMs: number;
+  } | null;
 }
 
 const INITIAL_STATE: PvPState = {
@@ -136,7 +134,8 @@ export function usePvP(_profileId: string | undefined) {
   const setMatchedFromEvent = useCallback(
     (event: MatchStartEvent) => {
       const myWallet = account?.address ?? "";
-      const opponentWallet = event.players.find((wallet) => wallet !== myWallet) ?? null;
+      const opponentWallet =
+        event.players.find((wallet) => wallet !== myWallet) ?? null;
 
       setPvP((prev) => ({
         ...prev,
@@ -145,14 +144,20 @@ export function usePvP(_profileId: string | undefined) {
         challengeId: event.challengeId,
         opponent: opponentWallet,
         wager: event.wager ?? prev.wager,
+        scores: [0, 0],
         currentTurnWallet: null,
         myTurn: false,
         lastShot: null,
+        submittedResult: null,
+        winner: null,
+        resultTx: null,
       }));
 
       toast.success("Da tim thay doi thu. Bat dau tran!");
       setTimeout(() => {
-        setPvP((prev) => (prev.status === "matched" ? { ...prev, status: "playing" } : prev));
+        setPvP((prev) =>
+          prev.status === "matched" ? { ...prev, status: "playing" } : prev,
+        );
       }, 700);
     },
     [account?.address],
@@ -240,7 +245,9 @@ export function usePvP(_profileId: string | undefined) {
           return {
             ...prev,
             currentTurnWallet: event.currentTurnWallet,
-            myTurn: Boolean(account?.address) && event.currentTurnWallet === account?.address,
+            myTurn:
+              Boolean(account?.address) &&
+              event.currentTurnWallet === account?.address,
           };
         });
       });
@@ -248,6 +255,7 @@ export function usePvP(_profileId: string | undefined) {
       socket.on("match.shot.received", (event: MatchShotEvent) => {
         setPvP((prev) => {
           if (prev.challengeId !== event.challengeId) return prev;
+
           return {
             ...prev,
             lastShot: {
@@ -259,7 +267,9 @@ export function usePvP(_profileId: string | undefined) {
               atMs: event.atMs,
             },
             currentTurnWallet: event.nextTurnWallet,
-            myTurn: Boolean(account?.address) && event.nextTurnWallet === account?.address,
+            myTurn:
+              Boolean(account?.address) &&
+              event.nextTurnWallet === account?.address,
           };
         });
       });
@@ -371,11 +381,23 @@ export function usePvP(_profileId: string | undefined) {
     [account, pvp.challengeId, pvp.myTurn, pvp.status],
   );
 
+  const resolveLocalMatch = useCallback((winnerWallet: string | null) => {
+    setPvP((prev) => {
+      if (prev.status !== "playing") return prev;
+      return {
+        ...prev,
+        status: "resolved",
+        winner: winnerWallet,
+        resultTx: null,
+      };
+    });
+  }, []);
+
   useEffect(() => {
     return () => {
       safeDisconnect();
     };
   }, [safeDisconnect]);
 
-  return { pvp, joinQueue, leaveQueue, reportRound, submitShot };
+  return { pvp, joinQueue, leaveQueue, reportRound, submitShot, resolveLocalMatch };
 }
