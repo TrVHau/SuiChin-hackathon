@@ -1,36 +1,31 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import GameCanvas from "./GameCanvas";
-
-interface GameSessionProps {
-  onBack: () => void;
-  currentStreak: number;
-  onReportResult: (
-    isWin: boolean,
-    onDone?: () => void,
-    onError?: () => void,
-  ) => void;
-}
+import { useNavigate } from "react-router-dom";
+import GameCanvas from "../components/GameCanvas";
+import { useGame } from "@/providers/GameContext";
 
 type Phase = "playing" | "submitting";
 
-export default function GameSession({
-  onBack,
-  currentStreak,
-  onReportResult,
-}: GameSessionProps) {
+export default function GameSession() {
+  const navigate = useNavigate();
+  const { playerData, reportResult, refreshProfile } = useGame();
+  const resolvedCurrentStreak = playerData?.streak ?? 0;
+  const resolvedOnBack = () => {
+    void refreshProfile();
+    navigate("/dashboard");
+  };
   const [phase, setPhase] = useState<Phase>("playing");
   const [roundKey, setRoundKey] = useState(0);
   const [sessionWins, setSessionWins] = useState(0);
   const [sessionLosses, setSessionLosses] = useState(0);
-  const [streak, setStreak] = useState(currentStreak);
+  const [streak, setStreak] = useState(resolvedCurrentStreak);
 
   const submitResult = (isWin: boolean) => {
     setPhase("submitting");
     toast.loading("Dang luu ket qua len blockchain...", { id: "report" });
 
-    onReportResult(
+    reportResult(
       isWin,
       () => {
         if (isWin) {
@@ -58,7 +53,7 @@ export default function GameSession({
         key={roundKey}
         onWin={() => submitResult(true)}
         onLose={() => submitResult(false)}
-        onBack={onBack}
+        onBack={resolvedOnBack}
         enabled={phase === "playing"}
       />
 

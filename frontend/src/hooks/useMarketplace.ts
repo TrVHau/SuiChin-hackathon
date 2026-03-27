@@ -9,6 +9,9 @@ export interface ListingMeta {
   seller: string;
   price: bigint;
   tier: number;
+  variant: number;
+  name: string;
+  image_url: string;
   listed_at: number;
 }
 
@@ -66,6 +69,38 @@ function extractListingMetaValue(rawFields: unknown): Record<string, unknown> | 
   return rawValue;
 }
 
+async function resolveNftVisualMeta(
+  suiClient: ReturnType<typeof useSuiClient>,
+  nftObjectId: string,
+): Promise<{ name: string; image_url: string; tier: number; variant: number }> {
+  const fallback = {
+    name: "Cuon Chun NFT",
+    image_url: "",
+    tier: 1,
+    variant: 1,
+  };
+
+  try {
+    const nftObj = await suiClient.getObject({
+      id: nftObjectId,
+      options: { showContent: true },
+    });
+
+    const content = nftObj.data?.content;
+    if (!content || !("fields" in content)) return fallback;
+    const f = content.fields as Record<string, unknown>;
+
+    return {
+      name: String(f.name ?? fallback.name),
+      image_url: String(f.image_url ?? ""),
+      tier: Number(f.tier ?? fallback.tier),
+      variant: Number(f.variant ?? fallback.variant),
+    };
+  } catch {
+    return fallback;
+  }
+}
+
 export function useMarketplace(): MarketplaceData {
   const suiClient = useSuiClient();
   const [listings, setListings] = useState<ListingMeta[]>([]);
@@ -111,12 +146,22 @@ export function useMarketplace(): MarketplaceData {
         if (!f) return null;
 
         const listingId = extractListingId(df.name.value);
+        const nftObjectId =
+          typeof f.nft_id === "string" && f.nft_id.startsWith("0x")
+            ? f.nft_id
+            : listingId;
+
+        const visualMeta = await resolveNftVisualMeta(suiClient, nftObjectId);
+
         return {
           listingId,
-          nftObjectId: listingId,
+          nftObjectId,
           seller: String(f.seller ?? ""),
           price: BigInt(String(f.price ?? "0")),
-          tier: Number(f.tier ?? 1),
+          tier: Number(f.tier ?? visualMeta.tier),
+          variant: Number(f.variant ?? visualMeta.variant),
+          name: String(f.name ?? visualMeta.name),
+          image_url: String(f.image_url ?? visualMeta.image_url),
           listed_at: Number(f.listed_at ?? 0),
         } satisfies ListingMeta;
       });

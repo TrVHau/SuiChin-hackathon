@@ -137,6 +137,16 @@ async function testSocketFlow(factory: AppFactory) {
         );
       });
 
+      const initialTurn = new Promise<{
+        challengeId: string;
+        currentTurnWallet: string;
+      }>((resolve) => {
+        clientA.once(
+          "match.turn",
+          (payload: { challengeId: string; currentTurnWallet: string }) => resolve(payload),
+        );
+      });
+
       const ackA = await new Promise<{ ok: boolean; result: { matched: boolean } }>((resolve) => {
         clientA.emit("queue.join", (payload: { ok: boolean; result: { matched: boolean } }) => {
           resolve(payload);
@@ -179,6 +189,55 @@ async function testSocketFlow(factory: AppFactory) {
       assert.equal(startB.challengeId, ackB.result.challengeId);
 
       const challengeId = ackB.result.challengeId as string;
+
+      const firstTurn = await initialTurn;
+      assert.equal(firstTurn.challengeId, challengeId);
+      assert.equal(firstTurn.currentTurnWallet, "wallet_A");
+
+      const shotReceivedByB = new Promise<{
+        challengeId: string;
+        byWallet: string;
+        seq: number;
+        shot: { x: number; y: number; force: number };
+        nextTurnWallet: string;
+      }>((resolve) => {
+        clientB.once(
+          "match.shot.received",
+          (payload: {
+            challengeId: string;
+            byWallet: string;
+            seq: number;
+            shot: { x: number; y: number; force: number };
+            nextTurnWallet: string;
+          }) => resolve(payload),
+        );
+      });
+
+      const shotAck = await new Promise<{
+        ok: boolean;
+        result?: { seq: number; nextTurnWallet: string };
+      }>((resolve) => {
+        clientA.emit(
+          "match.shot.submit",
+          { challengeId, x: 128, y: 256, force: 820 },
+          (payload: { ok: boolean; result?: { seq: number; nextTurnWallet: string } }) =>
+            resolve(payload),
+        );
+      });
+
+      assert.equal(shotAck.ok, true);
+      assert.equal(shotAck.result?.seq, 1);
+      assert.equal(shotAck.result?.nextTurnWallet, "wallet_B");
+
+      const shotEvent = await shotReceivedByB;
+      assert.equal(shotEvent.challengeId, challengeId);
+      assert.equal(shotEvent.byWallet, "wallet_A");
+      assert.equal(shotEvent.seq, 1);
+      assert.equal(shotEvent.shot.x, 128);
+      assert.equal(shotEvent.shot.y, 256);
+      assert.equal(shotEvent.shot.force, 820);
+      assert.equal(shotEvent.nextTurnWallet, "wallet_B");
+
       const finalizeEvent = new Promise<{
         challengeId: string;
         winnerWallet: string | null;

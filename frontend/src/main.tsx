@@ -1,7 +1,9 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { SuiProvider } from './providers/SuiProvider';
+import { GameProvider } from './providers/GameContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import './styles/index.css';
 
@@ -17,11 +19,15 @@ console.log('📍 Root element:', rootElement);
 if (rootElement) {
   createRoot(rootElement).render(
     <StrictMode>
-      <ErrorBoundary>
-        <SuiProvider>
-          <App />
-        </SuiProvider>
-      </ErrorBoundary>
+      <BrowserRouter>
+        <ErrorBoundary>
+          <SuiProvider>
+            <GameProvider>
+              <App />
+            </GameProvider>
+          </SuiProvider>
+        </ErrorBoundary>
+      </BrowserRouter>
     </StrictMode>,
   );
 } else {
