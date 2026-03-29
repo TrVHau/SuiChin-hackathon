@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -21,7 +21,24 @@ export default function GameSession() {
   const [sessionLosses, setSessionLosses] = useState(0);
   const [streak, setStreak] = useState(resolvedCurrentStreak);
 
+  useEffect(() => {
+    if (!playerData) return;
+    if (playerData.chun_raw <= 0) {
+      toast.error("Bạn đã hết Chun. Hãy nhận thêm Chun rồi quay lại chơi.");
+      resolvedOnBack();
+    }
+  }, [playerData]);
+
   const submitResult = (isWin: boolean) => {
+    if ((playerData?.chun_raw ?? 0) <= 0) {
+      toast.error("Bạn đã hết Chun. Hãy nhận thêm Chun trước khi chơi tiếp.");
+      resolvedOnBack();
+      return;
+    }
+
+    const willReachZeroAfterThisRound =
+      !isWin && (playerData?.chun_raw ?? 0) <= 1;
+
     setPhase("submitting");
     toast.loading("Dang luu ket qua len blockchain...", { id: "report" });
 
@@ -37,6 +54,13 @@ export default function GameSession() {
           setStreak(0);
           toast.error("Thua! Ket qua da luu on-chain.", { id: "report" });
         }
+
+        if (willReachZeroAfterThisRound) {
+          toast.info("Bạn đã hết Chun. Hãy nhận thêm Chun rồi quay lại chơi.");
+          resolvedOnBack();
+          return;
+        }
+
         setPhase("playing");
         setRoundKey((k) => k + 1);
       },
@@ -68,8 +92,12 @@ export default function GameSession() {
             animate={{ scale: 1, opacity: 1 }}
             className="bg-white rounded-3xl p-8 border-4 border-playful-blue shadow-2xl text-center"
           >
-            <p className="font-display font-black text-2xl text-gray-900 mb-2">Dang luu ket qua...</p>
-            <p className="text-gray-600 font-semibold">Vui long doi trong giay lat.</p>
+            <p className="font-display font-black text-2xl text-gray-900 mb-2">
+              Dang luu ket qua...
+            </p>
+            <p className="text-gray-600 font-semibold">
+              Vui long doi trong giay lat.
+            </p>
           </motion.div>
         </div>
       )}
