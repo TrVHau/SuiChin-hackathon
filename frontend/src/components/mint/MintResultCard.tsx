@@ -1,7 +1,10 @@
 import { Hammer } from "lucide-react";
 import { motion } from "framer-motion";
 import ConfettiBurst from "@/components/common/ConfettiBurst";
-import type { CraftResultData, MintVisualConfig } from "@/hooks/useMintCraftFlow";
+import type {
+  CraftResultData,
+  MintVisualConfig,
+} from "@/hooks/useMintCraftFlow";
 
 interface MintResultCardProps {
   craftResult: CraftResultData;
@@ -53,7 +56,7 @@ export default function MintResultCard({
           onClick={onReset}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          className="flex-1 btn-playful bg-playful-purple text-white border-4 border-white text-xl"
+          className="flex-1 btn-playful bg-playful-purple text-white border-4 border-white text-xl flex items-center justify-center gap-2"
         >
           <Hammer className="size-6" />
           Craft tiếp
@@ -62,7 +65,7 @@ export default function MintResultCard({
           onClick={onBack}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          className="flex-1 btn-playful bg-white text-gray-800 border-4 border-gray-300 text-xl"
+          className="flex-1 btn-playful bg-white text-gray-800 border-4 border-gray-300 text-xl flex items-center justify-center"
         >
           Về Dashboard
         </motion.button>

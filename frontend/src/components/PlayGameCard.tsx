@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
-import { Play, Clock } from "lucide-react";
+import { Play, Clock, Coins } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useGame } from "@/providers/GameContext";
 import { COOLDOWN_MS } from "@/config/sui.config";
@@ -9,12 +9,16 @@ export function PlayGameCard() {
   const navigate = useNavigate();
   const { playerData } = useGame();
   const [cooldownLeft, setCooldownLeft] = useState(0);
+  const hasChun = (playerData?.chun_raw ?? 0) > 0;
+  const canPlay = cooldownLeft === 0 && hasChun;
 
   useEffect(() => {
     const update = () => {
       const nowMs = Date.now();
       const parsedLastPlayedMs = Number(playerData?.last_played_ms || 0);
-      const lastPlayedMs = Number.isFinite(parsedLastPlayedMs) ? parsedLastPlayedMs : 0;
+      const lastPlayedMs = Number.isFinite(parsedLastPlayedMs)
+        ? parsedLastPlayedMs
+        : 0;
       const elapsed = Math.max(0, nowMs - lastPlayedMs);
       setCooldownLeft(Math.max(0, Math.ceil((COOLDOWN_MS - elapsed) / 1000)));
     };
@@ -41,8 +45,8 @@ export function PlayGameCard() {
           </h2>
         </div>
         <p className="text-gray-700 mb-4 text-xl font-semibold max-w-lg">
-          Búng chun với bot, thắng để kiếm Chun Raw và streak! Kết quả sẽ
-          được lưu lên blockchain.
+          Búng chun với bot, thắng để kiếm Chun Raw và streak! Kết quả sẽ được
+          lưu lên blockchain.
         </p>
 
         <div className="flex items-center gap-6 mb-6">
@@ -55,17 +59,13 @@ export function PlayGameCard() {
             </p>
           </div>
           <div className="bg-green-50 border-4 border-green-300 rounded-3xl px-5 py-3 text-center">
-            <p className="text-xs font-bold text-gray-500 uppercase">
-              Thắng
-            </p>
+            <p className="text-xs font-bold text-gray-500 uppercase">Thắng</p>
             <p className="font-black text-3xl text-green-600">
               {playerData.wins}
             </p>
           </div>
           <div className="bg-red-50 border-4 border-red-300 rounded-3xl px-5 py-3 text-center">
-            <p className="text-xs font-bold text-gray-500 uppercase">
-              Thua
-            </p>
+            <p className="text-xs font-bold text-gray-500 uppercase">Thua</p>
             <p className="font-black text-3xl text-red-500">
               {playerData.losses}
             </p>
@@ -74,20 +74,25 @@ export function PlayGameCard() {
 
         <motion.button
           onClick={() => {
-            if (cooldownLeft === 0) {
+            if (canPlay) {
               navigate("/session");
             }
           }}
-          disabled={cooldownLeft > 0}
-          whileHover={cooldownLeft === 0 ? { scale: 1.05 } : {}}
-          whileTap={cooldownLeft === 0 ? { scale: 0.95 } : {}}
+          disabled={!canPlay}
+          whileHover={canPlay ? { scale: 1.05 } : {}}
+          whileTap={canPlay ? { scale: 0.95 } : {}}
           className={`btn-playful text-2xl flex items-center gap-3 border-4 ${
-            cooldownLeft > 0
+            !canPlay
               ? "bg-gray-200 text-gray-400 border-gray-300 cursor-not-allowed"
               : "bg-gradient-to-r from-playful-green to-playful-blue text-white border-white shadow-2xl"
           }`}
         >
-          {cooldownLeft > 0 ? (
+          {!hasChun ? (
+            <>
+              <Coins className="size-8" />
+              Hết Chun - Nhận thêm Chun
+            </>
+          ) : cooldownLeft > 0 ? (
             <>
               <Clock className="size-8 animate-pulse" />
               Chờ {cooldownLeft}s...
@@ -99,6 +104,11 @@ export function PlayGameCard() {
             </>
           )}
         </motion.button>
+        {!hasChun && (
+          <p className="mt-3 text-sm font-semibold text-gray-600">
+            Bạn cần nhận thêm Chun trước khi chơi với máy.
+          </p>
+        )}
       </div>
     </motion.div>
   );
