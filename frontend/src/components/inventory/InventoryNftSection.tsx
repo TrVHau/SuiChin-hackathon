@@ -20,6 +20,11 @@ interface InventoryNftSectionProps {
   setTierFilter: (filter: TierFilter) => void;
   onOpenMarketplace: () => void;
   onOpenTradeUp: () => void;
+  onRedeem: (nft: CuonChunNFT) => void;
+  isRedeeming: (objectId: string) => boolean;
+  getRedeemLabel: (tier: number) => string;
+  isRedeemDisabled: (tier: number) => boolean;
+  getRedeemDisabledReason: (tier: number) => string | undefined;
 }
 
 export default function InventoryNftSection({
@@ -29,6 +34,11 @@ export default function InventoryNftSection({
   setTierFilter,
   onOpenMarketplace,
   onOpenTradeUp,
+  onRedeem,
+  isRedeeming,
+  getRedeemLabel,
+  isRedeemDisabled,
+  getRedeemDisabledReason,
 }: InventoryNftSectionProps) {
   if (cuonChuns.length === 0) return null;
 
@@ -66,6 +76,11 @@ export default function InventoryNftSection({
                 nft={nft}
                 onList={onOpenMarketplace}
                 onTradeUp={nft.tier === 1 || nft.tier === 2 ? onOpenTradeUp : undefined}
+                onRedeem={() => onRedeem(nft)}
+                redeeming={isRedeeming(nft.objectId)}
+                redeemLabel={getRedeemLabel(nft.tier)}
+                redeemDisabled={isRedeemDisabled(nft.tier)}
+                redeemDisabledReason={getRedeemDisabledReason(nft.tier)}
               />
             </motion.div>
           ))}

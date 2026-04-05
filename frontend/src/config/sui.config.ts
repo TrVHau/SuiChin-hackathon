@@ -34,7 +34,7 @@ export const BADGE_TYPE = `${PACKAGE_ID}::${MODULES.ACHIEVEMENT}::AchievementBad
 export const PLAYER_PROFILE_TYPE = `${PACKAGE_ID}::${MODULES.PLAYER_PROFILE}::PlayerProfile`;
 
 export const CRAFT_CHUN_COST = 10;
-export const CRAFT_FEE_MIST = 100_000_000n;
+export const CRAFT_POOL_CONTRIBUTION_MIST = 100_000_000n;
 export const MAX_DELTA_CHUN = 20;
 export const COOLDOWN_MS = 10_000;
 

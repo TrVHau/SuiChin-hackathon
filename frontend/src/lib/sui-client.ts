@@ -3,7 +3,7 @@ import {
   PACKAGE_ID,
   MODULES,
   CLOCK_OBJECT_ID,
-  CRAFT_FEE_MIST,
+  CRAFT_POOL_CONTRIBUTION_MIST,
 } from "@/config/sui.config";
 
 export function buildInitProfileTx(): Transaction {
@@ -61,7 +61,7 @@ export function buildCraftChunTx(
   treasuryId: string,
 ): Transaction {
   const tx = new Transaction();
-  const [paymentCoin] = tx.splitCoins(tx.gas, [CRAFT_FEE_MIST]);
+  const [paymentCoin] = tx.splitCoins(tx.gas, [CRAFT_POOL_CONTRIBUTION_MIST]);
   tx.moveCall({
     target: `${PACKAGE_ID}::${MODULES.CRAFT}::craft_chun`,
     arguments: [
@@ -70,6 +70,18 @@ export function buildCraftChunTx(
       paymentCoin,
       tx.object(CLOCK_OBJECT_ID),
     ],
+  });
+  return tx;
+}
+
+export function buildRedeemChunTx(
+  treasuryId: string,
+  nftId: string,
+): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${PACKAGE_ID}::${MODULES.CRAFT}::redeem_chun`,
+    arguments: [tx.object(treasuryId), tx.object(nftId)],
   });
   return tx;
 }

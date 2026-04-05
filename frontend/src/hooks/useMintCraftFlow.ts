@@ -243,7 +243,7 @@ export function useMintCraftFlow() {
             return;
           }
           if (message.includes("500")) {
-            toast.error("Craft that bai: Khong du 0.1 SUI phi craft", { id: "craft" });
+            toast.error("Craft that bai: Khong du 0.1 SUI nap vao pool", { id: "craft" });
             return;
           }
           toast.error(`Craft that bai: ${message}`, { id: "craft" });

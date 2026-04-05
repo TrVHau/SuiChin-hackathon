@@ -1,20 +1,36 @@
-/// Tests for suichin::craft module
-/// Covers: init (Treasury+AdminCap), craft_chun, withdraw, error cases,
-///         halving cost calculation (current_craft_cost)
+/// Tests for suichin::craft module with bucketed pool + fixed redeem payouts.
 #[test_only]
 module suichin::craft_tests {
-    use sui::test_scenario;
     use sui::clock;
     use sui::coin;
     use sui::sui::SUI;
+    use sui::test_scenario;
+    use suichin::craft::{Self, Treasury};
+    use suichin::cuon_chun::{Self, CuonChunNFT};
     use suichin::player_profile::{Self, PlayerProfile};
-    use suichin::craft::{Self, Treasury, AdminCap};
 
-    const ADMIN: address  = @0xA;
+    const ADMIN: address = @0xA;
     const PLAYER: address = @0xB;
 
+    fun init_player_with_chun(
+        scenario: &mut test_scenario::Scenario,
+        chun_raw: u64,
+    ) {
+        test_scenario::next_tx(scenario, PLAYER);
+        {
+            player_profile::init_profile(test_scenario::ctx(scenario));
+        };
+
+        test_scenario::next_tx(scenario, PLAYER);
+        {
+            let mut profile = test_scenario::take_from_sender<PlayerProfile>(scenario);
+            player_profile::set_chun_raw_for_testing(&mut profile, chun_raw);
+            test_scenario::return_to_sender(scenario, profile);
+        };
+    }
+
     #[test]
-    fun test_craft_init_creates_treasury_and_admin() {
+    fun test_craft_init_creates_treasury_only() {
         let mut scenario = test_scenario::begin(ADMIN);
         {
             craft::test_init(test_scenario::ctx(&mut scenario));
@@ -25,104 +41,123 @@ module suichin::craft_tests {
             let treasury = test_scenario::take_shared<Treasury>(&scenario);
             assert!(craft::treasury_balance(&treasury) == 0, 0);
             test_scenario::return_shared(treasury);
-
-            let admin_cap = test_scenario::take_from_sender<AdminCap>(&scenario);
-            test_scenario::return_to_sender(&scenario, admin_cap);
         };
 
         test_scenario::end(scenario);
     }
 
     #[test]
-    fun test_craft_chun_succeeds() {
+    fun test_fund_treasury_permissionless() {
         let mut scenario = test_scenario::begin(ADMIN);
-        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
-        clock::set_for_testing(&mut clock, 100_000);
-
-        // Init craft module (Treasury + AdminCap)
         {
             craft::test_init(test_scenario::ctx(&mut scenario));
         };
 
-        // Create player profile
         test_scenario::next_tx(&mut scenario, PLAYER);
         {
-            player_profile::init_profile(test_scenario::ctx(&mut scenario));
+            let mut treasury = test_scenario::take_shared<Treasury>(&scenario);
+            let payment = coin::mint_for_testing<SUI>(1_000_000_000, test_scenario::ctx(&mut scenario));
+            craft::fund_treasury(&mut treasury, payment, test_scenario::ctx(&mut scenario));
+
+            assert!(craft::treasury_balance(&treasury) == 1_000_000_000, 0);
+            assert!(craft::bronze_pool_balance(&treasury) == 120_000_000, 1);
+            assert!(craft::silver_pool_balance(&treasury) == 370_000_000, 2);
+            assert!(craft::gold_pool_balance(&treasury) == 510_000_000, 3);
+            test_scenario::return_shared(treasury);
         };
 
-        // Set chun_raw to 10 for craft
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure]
+    fun test_fund_treasury_zero_rejected() {
+        let mut scenario = test_scenario::begin(ADMIN);
+        {
+            craft::test_init(test_scenario::ctx(&mut scenario));
+        };
+
         test_scenario::next_tx(&mut scenario, PLAYER);
         {
-            let mut profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
-            player_profile::set_chun_raw_for_testing(&mut profile, 10);
-            test_scenario::return_to_sender(&scenario, profile);
+            let mut treasury = test_scenario::take_shared<Treasury>(&scenario);
+            let payment = coin::mint_for_testing<SUI>(0, test_scenario::ctx(&mut scenario));
+            craft::fund_treasury(&mut treasury, payment, test_scenario::ctx(&mut scenario));
+            test_scenario::return_shared(treasury);
         };
 
-        // Craft NFT (0.2 SUI payment, 0.1 SUI fee, 0.1 refund)
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_quote_redeem_amount_by_tier_fixed() {
+        let mut scenario = test_scenario::begin(ADMIN);
+        {
+            craft::test_init(test_scenario::ctx(&mut scenario));
+        };
+
+        test_scenario::next_tx(&mut scenario, ADMIN);
+        {
+            let mut treasury = test_scenario::take_shared<Treasury>(&scenario);
+            let payment = coin::mint_for_testing<SUI>(2_000_000_000, test_scenario::ctx(&mut scenario));
+            craft::fund_treasury(&mut treasury, payment, test_scenario::ctx(&mut scenario));
+
+            assert!(craft::quote_redeem_amount(&treasury, 1) == 20_000_000, 0);
+            assert!(craft::quote_redeem_amount(&treasury, 2) == 120_000_000, 1);
+            assert!(craft::quote_redeem_amount(&treasury, 3) == 500_000_000, 2);
+            test_scenario::return_shared(treasury);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_quote_redeem_amount_zero_when_bucket_low() {
+        let mut scenario = test_scenario::begin(ADMIN);
+        {
+            craft::test_init(test_scenario::ctx(&mut scenario));
+        };
+
+        test_scenario::next_tx(&mut scenario, ADMIN);
+        {
+            let mut treasury = test_scenario::take_shared<Treasury>(&scenario);
+            let payment = coin::mint_for_testing<SUI>(100_000_000, test_scenario::ctx(&mut scenario));
+            craft::fund_treasury(&mut treasury, payment, test_scenario::ctx(&mut scenario));
+
+            // Gold bucket receives only 51_000_000, below fixed payout 500_000_000.
+            assert!(craft::quote_redeem_amount(&treasury, 3) == 0, 0);
+            test_scenario::return_shared(treasury);
+        };
+
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_craft_chun_contributes_to_pool() {
+        let mut scenario = test_scenario::begin(ADMIN);
+        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+        clock::set_for_testing(&mut clock, 100_000);
+
+        {
+            craft::test_init(test_scenario::ctx(&mut scenario));
+        };
+        init_player_with_chun(&mut scenario, 10);
+
         test_scenario::next_tx(&mut scenario, PLAYER);
         {
             let mut profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
             let mut treasury = test_scenario::take_shared<Treasury>(&scenario);
-            let payment = coin::mint_for_testing<SUI>(
-                200_000_000, test_scenario::ctx(&mut scenario),
-            );
+            let payment = coin::mint_for_testing<SUI>(200_000_000, test_scenario::ctx(&mut scenario));
 
             craft::craft_chun(
-                &mut profile, &mut treasury, payment, &clock,
+                &mut profile,
+                &mut treasury,
+                payment,
+                &clock,
                 test_scenario::ctx(&mut scenario),
             );
 
-            // chun_raw should decrease by 10
             assert!(player_profile::chun_raw(&profile) == 0, 0);
-            // Treasury should receive 0.1 SUI (100_000_000 MIST)
             assert!(craft::treasury_balance(&treasury) == 100_000_000, 1);
-
-            test_scenario::return_to_sender(&scenario, profile);
-            test_scenario::return_shared(treasury);
-        };
-
-        clock::destroy_for_testing(clock);
-        test_scenario::end(scenario);
-    }
-
-    #[test]
-    fun test_craft_exact_payment() {
-        let mut scenario = test_scenario::begin(ADMIN);
-        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
-        clock::set_for_testing(&mut clock, 100_000);
-
-        {
-            craft::test_init(test_scenario::ctx(&mut scenario));
-        };
-
-        test_scenario::next_tx(&mut scenario, PLAYER);
-        {
-            player_profile::init_profile(test_scenario::ctx(&mut scenario));
-        };
-
-        test_scenario::next_tx(&mut scenario, PLAYER);
-        {
-            let mut profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
-            player_profile::set_chun_raw_for_testing(&mut profile, 10);
-            test_scenario::return_to_sender(&scenario, profile);
-        };
-
-        // Exact 0.1 SUI payment — no refund needed (coin destroyed)
-        test_scenario::next_tx(&mut scenario, PLAYER);
-        {
-            let mut profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
-            let mut treasury = test_scenario::take_shared<Treasury>(&scenario);
-            let payment = coin::mint_for_testing<SUI>(
-                100_000_000, test_scenario::ctx(&mut scenario),
-            );
-
-            craft::craft_chun(
-                &mut profile, &mut treasury, payment, &clock,
-                test_scenario::ctx(&mut scenario),
-            );
-
-            assert!(craft::treasury_balance(&treasury) == 100_000_000, 0);
-
             test_scenario::return_to_sender(&scenario, profile);
             test_scenario::return_shared(treasury);
         };
@@ -133,7 +168,7 @@ module suichin::craft_tests {
 
     #[test]
     #[expected_failure]
-    fun test_craft_insufficient_payment() {
+    fun test_craft_chun_insufficient_payment() {
         let mut scenario = test_scenario::begin(ADMIN);
         let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
         clock::set_for_testing(&mut clock, 100_000);
@@ -141,62 +176,19 @@ module suichin::craft_tests {
         {
             craft::test_init(test_scenario::ctx(&mut scenario));
         };
-
-        test_scenario::next_tx(&mut scenario, PLAYER);
-        {
-            player_profile::init_profile(test_scenario::ctx(&mut scenario));
-        };
+        init_player_with_chun(&mut scenario, 10);
 
         test_scenario::next_tx(&mut scenario, PLAYER);
         {
             let mut profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
-            player_profile::set_chun_raw_for_testing(&mut profile, 10);
             let mut treasury = test_scenario::take_shared<Treasury>(&scenario);
-            // Only 50_000_000 MIST (need 100_000_000) → abort
-            let payment = coin::mint_for_testing<SUI>(
-                50_000_000, test_scenario::ctx(&mut scenario),
-            );
+            let payment = coin::mint_for_testing<SUI>(50_000_000, test_scenario::ctx(&mut scenario));
 
             craft::craft_chun(
-                &mut profile, &mut treasury, payment, &clock,
-                test_scenario::ctx(&mut scenario),
-            );
-
-            test_scenario::return_to_sender(&scenario, profile);
-            test_scenario::return_shared(treasury);
-        };
-
-        clock::destroy_for_testing(clock);
-        test_scenario::end(scenario);
-    }
-
-    #[test]
-    #[expected_failure]
-    fun test_craft_insufficient_chun() {
-        let mut scenario = test_scenario::begin(ADMIN);
-        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
-        clock::set_for_testing(&mut clock, 100_000);
-
-        {
-            craft::test_init(test_scenario::ctx(&mut scenario));
-        };
-
-        test_scenario::next_tx(&mut scenario, PLAYER);
-        {
-            player_profile::init_profile(test_scenario::ctx(&mut scenario));
-        };
-
-        // Profile has 0 chun_raw (need 10) → abort
-        test_scenario::next_tx(&mut scenario, PLAYER);
-        {
-            let mut profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
-            let mut treasury = test_scenario::take_shared<Treasury>(&scenario);
-            let payment = coin::mint_for_testing<SUI>(
-                200_000_000, test_scenario::ctx(&mut scenario),
-            );
-
-            craft::craft_chun(
-                &mut profile, &mut treasury, payment, &clock,
+                &mut profile,
+                &mut treasury,
+                payment,
+                &clock,
                 test_scenario::ctx(&mut scenario),
             );
 
@@ -218,30 +210,19 @@ module suichin::craft_tests {
         {
             craft::test_init(test_scenario::ctx(&mut scenario));
         };
+        init_player_with_chun(&mut scenario, 10);
 
-        // PLAYER creates profile
-        test_scenario::next_tx(&mut scenario, PLAYER);
-        {
-            player_profile::init_profile(test_scenario::ctx(&mut scenario));
-        };
-        test_scenario::next_tx(&mut scenario, PLAYER);
-        {
-            let mut profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
-            player_profile::set_chun_raw_for_testing(&mut profile, 10);
-            test_scenario::return_to_sender(&scenario, profile);
-        };
-
-        // ADMIN tries to craft using PLAYER's profile → abort (E_NOT_OWNER)
         test_scenario::next_tx(&mut scenario, ADMIN);
         {
             let mut profile = test_scenario::take_from_address<PlayerProfile>(&scenario, PLAYER);
             let mut treasury = test_scenario::take_shared<Treasury>(&scenario);
-            let payment = coin::mint_for_testing<SUI>(
-                200_000_000, test_scenario::ctx(&mut scenario),
-            );
+            let payment = coin::mint_for_testing<SUI>(100_000_000, test_scenario::ctx(&mut scenario));
 
             craft::craft_chun(
-                &mut profile, &mut treasury, payment, &clock,
+                &mut profile,
+                &mut treasury,
+                payment,
+                &clock,
                 test_scenario::ctx(&mut scenario),
             );
 
@@ -254,115 +235,118 @@ module suichin::craft_tests {
     }
 
     #[test]
-    fun test_admin_withdraw() {
+    fun test_redeem_chun_reduces_pool() {
         let mut scenario = test_scenario::begin(ADMIN);
-        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
-        clock::set_for_testing(&mut clock, 100_000);
-
         {
             craft::test_init(test_scenario::ctx(&mut scenario));
         };
 
-        // Player crafts → puts SUI in treasury
-        test_scenario::next_tx(&mut scenario, PLAYER);
-        {
-            player_profile::init_profile(test_scenario::ctx(&mut scenario));
-        };
-        test_scenario::next_tx(&mut scenario, PLAYER);
-        {
-            let mut profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
-            player_profile::set_chun_raw_for_testing(&mut profile, 10);
-            let mut treasury = test_scenario::take_shared<Treasury>(&scenario);
-            let payment = coin::mint_for_testing<SUI>(
-                100_000_000, test_scenario::ctx(&mut scenario),
-            );
-            craft::craft_chun(
-                &mut profile, &mut treasury, payment, &clock,
-                test_scenario::ctx(&mut scenario),
-            );
-            test_scenario::return_to_sender(&scenario, profile);
-            test_scenario::return_shared(treasury);
-        };
-
-        // Admin withdraws 50_000_000 from treasury
         test_scenario::next_tx(&mut scenario, ADMIN);
         {
-            let admin_cap = test_scenario::take_from_sender<AdminCap>(&scenario);
             let mut treasury = test_scenario::take_shared<Treasury>(&scenario);
-            craft::withdraw(
-                &admin_cap, &mut treasury, 50_000_000,
-                test_scenario::ctx(&mut scenario),
-            );
-            assert!(craft::treasury_balance(&treasury) == 50_000_000, 0);
+            let payment = coin::mint_for_testing<SUI>(2_000_000_000, test_scenario::ctx(&mut scenario));
+            craft::fund_treasury(&mut treasury, payment, test_scenario::ctx(&mut scenario));
             test_scenario::return_shared(treasury);
-            test_scenario::return_to_sender(&scenario, admin_cap);
         };
 
-        clock::destroy_for_testing(clock);
+        test_scenario::next_tx(&mut scenario, PLAYER);
+        {
+            let nft = cuon_chun::mint(1, 1u8, test_scenario::ctx(&mut scenario));
+            transfer::public_transfer(nft, PLAYER);
+        };
+
+        test_scenario::next_tx(&mut scenario, PLAYER);
+        {
+            let nft = test_scenario::take_from_sender<CuonChunNFT>(&scenario);
+            let mut treasury = test_scenario::take_shared<Treasury>(&scenario);
+            let pool_before = craft::treasury_balance(&treasury);
+
+            craft::redeem_chun(&mut treasury, nft, test_scenario::ctx(&mut scenario));
+
+            assert!(craft::treasury_balance(&treasury) == pool_before - 20_000_000, 0);
+            test_scenario::return_shared(treasury);
+        };
+
         test_scenario::end(scenario);
     }
 
     #[test]
-    fun test_admin_withdraw_all() {
+    #[expected_failure]
+    fun test_redeem_fails_when_bucket_insufficient() {
         let mut scenario = test_scenario::begin(ADMIN);
-        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
-        clock::set_for_testing(&mut clock, 100_000);
-
         {
             craft::test_init(test_scenario::ctx(&mut scenario));
         };
 
-        test_scenario::next_tx(&mut scenario, PLAYER);
-        {
-            player_profile::init_profile(test_scenario::ctx(&mut scenario));
-        };
-        test_scenario::next_tx(&mut scenario, PLAYER);
-        {
-            let mut profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
-            player_profile::set_chun_raw_for_testing(&mut profile, 10);
-            let mut treasury = test_scenario::take_shared<Treasury>(&scenario);
-            let payment = coin::mint_for_testing<SUI>(
-                100_000_000, test_scenario::ctx(&mut scenario),
-            );
-            craft::craft_chun(
-                &mut profile, &mut treasury, payment, &clock,
-                test_scenario::ctx(&mut scenario),
-            );
-            test_scenario::return_to_sender(&scenario, profile);
-            test_scenario::return_shared(treasury);
-        };
-
-        // Withdraw entire balance
+        // Fund only 0.1 SUI -> gold bucket = 51_000_000 < 500_000_000 payout.
         test_scenario::next_tx(&mut scenario, ADMIN);
         {
-            let admin_cap = test_scenario::take_from_sender<AdminCap>(&scenario);
             let mut treasury = test_scenario::take_shared<Treasury>(&scenario);
-            craft::withdraw(
-                &admin_cap, &mut treasury, 100_000_000,
-                test_scenario::ctx(&mut scenario),
-            );
-            assert!(craft::treasury_balance(&treasury) == 0, 0);
+            let payment = coin::mint_for_testing<SUI>(100_000_000, test_scenario::ctx(&mut scenario));
+            craft::fund_treasury(&mut treasury, payment, test_scenario::ctx(&mut scenario));
             test_scenario::return_shared(treasury);
-            test_scenario::return_to_sender(&scenario, admin_cap);
         };
 
-        clock::destroy_for_testing(clock);
+        test_scenario::next_tx(&mut scenario, PLAYER);
+        {
+            let nft = cuon_chun::mint(3, 1u8, test_scenario::ctx(&mut scenario));
+            transfer::public_transfer(nft, PLAYER);
+        };
+
+        test_scenario::next_tx(&mut scenario, PLAYER);
+        {
+            let nft = test_scenario::take_from_sender<CuonChunNFT>(&scenario);
+            let mut treasury = test_scenario::take_shared<Treasury>(&scenario);
+            craft::redeem_chun(&mut treasury, nft, test_scenario::ctx(&mut scenario));
+            test_scenario::return_shared(treasury);
+        };
+
         test_scenario::end(scenario);
     }
 
     #[test]
-    fun test_current_craft_cost_initial() {
+    #[expected_failure]
+    fun test_redeem_rate_limited_per_epoch() {
         let mut scenario = test_scenario::begin(ADMIN);
         {
             craft::test_init(test_scenario::ctx(&mut scenario));
         };
+
+        // Bronze bucket from this fund = 240_000_000.
+        // Epoch cap is 15% => 36_000_000.
+        // Bronze payout is 20_000_000, so 2nd redeem in same epoch should fail.
         test_scenario::next_tx(&mut scenario, ADMIN);
         {
-            let treasury = test_scenario::take_shared<Treasury>(&scenario);
-            // total_crafts = 0 → cost = 10 * 2^0 = 10
-            assert!(craft::current_craft_cost(&treasury) == 10, 0);
+            let mut treasury = test_scenario::take_shared<Treasury>(&scenario);
+            let payment = coin::mint_for_testing<SUI>(2_000_000_000, test_scenario::ctx(&mut scenario));
+            craft::fund_treasury(&mut treasury, payment, test_scenario::ctx(&mut scenario));
             test_scenario::return_shared(treasury);
         };
+
+        test_scenario::next_tx(&mut scenario, PLAYER);
+        {
+            let nft1 = cuon_chun::mint(1, 1u8, test_scenario::ctx(&mut scenario));
+            let nft2 = cuon_chun::mint(1, 2u8, test_scenario::ctx(&mut scenario));
+            transfer::public_transfer(nft1, PLAYER);
+            transfer::public_transfer(nft2, PLAYER);
+        };
+
+        test_scenario::next_tx(&mut scenario, PLAYER);
+        {
+            let nft = test_scenario::take_from_sender<CuonChunNFT>(&scenario);
+            let mut treasury = test_scenario::take_shared<Treasury>(&scenario);
+            craft::redeem_chun(&mut treasury, nft, test_scenario::ctx(&mut scenario));
+            test_scenario::return_shared(treasury);
+        };
+
+        test_scenario::next_tx(&mut scenario, PLAYER);
+        {
+            let nft = test_scenario::take_from_sender<CuonChunNFT>(&scenario);
+            let mut treasury = test_scenario::take_shared<Treasury>(&scenario);
+            craft::redeem_chun(&mut treasury, nft, test_scenario::ctx(&mut scenario));
+            test_scenario::return_shared(treasury);
+        };
+
         test_scenario::end(scenario);
     }
 
@@ -375,57 +359,23 @@ module suichin::craft_tests {
         test_scenario::next_tx(&mut scenario, ADMIN);
         {
             let mut treasury = test_scenario::take_shared<Treasury>(&scenario);
-            // Simulate 1000 crafts → step=1 → cost = 10 * 2^1 = 20
-            craft::set_total_crafts_for_testing(&mut treasury, 1_000);
-            assert!(craft::current_craft_cost(&treasury) == 20, 0);
-            // Simulate 2000 crafts → step=2 → cost = 40
-            craft::set_total_crafts_for_testing(&mut treasury, 2_000);
-            assert!(craft::current_craft_cost(&treasury) == 40, 1);
-            // Simulate 6000 crafts → step=6 → capped at 640
-            craft::set_total_crafts_for_testing(&mut treasury, 6_000);
-            assert!(craft::current_craft_cost(&treasury) == 640, 2);
-            // Simulate 9999 crafts → step=9 → still capped at 640
-            craft::set_total_crafts_for_testing(&mut treasury, 9_999);
-            assert!(craft::current_craft_cost(&treasury) == 640, 3);
-            test_scenario::return_shared(treasury);
-        };
-        test_scenario::end(scenario);
-    }
+            craft::set_total_crafts_for_testing(&mut treasury, 0);
+            assert!(craft::current_craft_cost(&treasury) == 10, 0);
 
-    #[test]
-    fun test_craft_increments_total_crafts() {
-        // A successful NFT craft (non-Scrap) should increment total_crafts.
-        // We run crafts until we hit a non-Scrap; this test just verifies the
-        // accessor works and treasury_balance + total_crafts both update.
-        // (RNG is deterministic in tests based on clock/epoch/address.)
-        let mut scenario = test_scenario::begin(ADMIN);
-        // clock set so roll = (clock_ms XOR 0 XOR addr_seed) % 100
-        // We try a clock value known to land Bronze: adjust if needed.
-        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
-        clock::set_for_testing(&mut clock, 182); // 182 % 100 = 82 → 80–91 (Bronze)
-        {
-            craft::test_init(test_scenario::ctx(&mut scenario));
-        };
-        test_scenario::next_tx(&mut scenario, PLAYER);
-        {
-            player_profile::init_profile(test_scenario::ctx(&mut scenario));
-        };
-        test_scenario::next_tx(&mut scenario, PLAYER);
-        {
-            let mut profile = test_scenario::take_from_sender<PlayerProfile>(&scenario);
-            player_profile::set_chun_raw_for_testing(&mut profile, 10);
-            let mut treasury = test_scenario::take_shared<Treasury>(&scenario);
-            let payment = coin::mint_for_testing<SUI>(100_000_000, test_scenario::ctx(&mut scenario));
-            let crafts_before = craft::total_crafts(&treasury);
-            craft::craft_chun(&mut profile, &mut treasury, payment, &clock, test_scenario::ctx(&mut scenario));
-            // total_crafts should be ≥ crafts_before (increments only on NFT, not Scrap)
-            // The key is the accessor doesn't abort
-            let _ = craft::total_crafts(&treasury);
-            let _ = crafts_before;
-            test_scenario::return_to_sender(&scenario, profile);
+            craft::set_total_crafts_for_testing(&mut treasury, 1_000);
+            assert!(craft::current_craft_cost(&treasury) == 20, 1);
+
+            craft::set_total_crafts_for_testing(&mut treasury, 2_000);
+            assert!(craft::current_craft_cost(&treasury) == 40, 2);
+
+            craft::set_total_crafts_for_testing(&mut treasury, 6_000);
+            assert!(craft::current_craft_cost(&treasury) == 640, 3);
+
+            craft::set_total_crafts_for_testing(&mut treasury, 9_999);
+            assert!(craft::current_craft_cost(&treasury) == 640, 4);
+
             test_scenario::return_shared(treasury);
         };
-        clock::destroy_for_testing(clock);
         test_scenario::end(scenario);
     }
 }

@@ -1,4 +1,4 @@
-import { ShoppingCart, ArrowUpCircle } from "lucide-react";
+import { ShoppingCart, ArrowUpCircle, Coins } from "lucide-react";
 import { motion } from "framer-motion";
 import type { CuonChunNFT } from "@/hooks/useOwnedNFTs";
 
@@ -12,12 +12,22 @@ interface InventoryNFTCardProps {
   nft: CuonChunNFT;
   onList: () => void;
   onTradeUp?: () => void;
+  onRedeem?: () => void;
+  redeemLabel?: string;
+  redeeming?: boolean;
+  redeemDisabled?: boolean;
+  redeemDisabledReason?: string;
 }
 
 export default function InventoryNFTCard({
   nft,
   onList,
   onTradeUp,
+  onRedeem,
+  redeemLabel,
+  redeeming = false,
+  redeemDisabled = false,
+  redeemDisabledReason,
 }: InventoryNFTCardProps) {
   const tier = TIER_LABELS[nft.tier] ?? TIER_LABELS[1];
 
@@ -70,6 +80,24 @@ export default function InventoryNFTCard({
           </motion.button>
         )}
       </div>
+      {onRedeem && (
+        <motion.button
+          onClick={onRedeem}
+          whileHover={{ scale: redeemDisabled || redeeming ? 1 : 1.04 }}
+          whileTap={{ scale: redeemDisabled || redeeming ? 1 : 0.96 }}
+          disabled={redeemDisabled || redeeming}
+          title={redeemDisabledReason}
+          className="mt-1 w-full flex items-center justify-center gap-1 text-xs font-black py-1.5 rounded-xl bg-white border-2 border-playful-green text-playful-green hover:bg-playful-green hover:text-white transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
+        >
+          <Coins className="size-3" />
+          {redeeming ? "Redeeming..." : redeemLabel ?? "Redeem"}
+        </motion.button>
+      )}
+      {redeemDisabledReason && (
+        <p className="mt-1 text-[10px] leading-tight text-gray-500 font-semibold">
+          {redeemDisabledReason}
+        </p>
+      )}
     </motion.div>
   );
 }
