@@ -5,3 +5,6 @@ edition = "2024.beta"
 
 [addresses]
 suichin = "0x0"
+
+[environments]
+devnet = "609cb156"

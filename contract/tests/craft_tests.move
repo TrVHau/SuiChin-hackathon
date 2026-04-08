@@ -5,7 +5,8 @@ module suichin::craft_tests {
     use sui::coin;
     use sui::sui::SUI;
     use sui::test_scenario;
-    use suichin::craft::{Self, Treasury};
+    use suichin::craft;
+    use suichin::craft_treasury::Treasury;
     use suichin::cuon_chun::{Self, CuonChunNFT};
     use suichin::player_profile::{Self, PlayerProfile};
 

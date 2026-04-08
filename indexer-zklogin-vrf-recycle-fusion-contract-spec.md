@@ -207,6 +207,7 @@ Dev contract can dam bao:
 - 20 Scrap + 0.10 SUI -> 1 Bronze NFT co chance hiem
 
 Luu y: con so nay chi la placeholder, dev contract can chot theo economy design sau.
+chốt công thức 20 Scrap -> 1Bronze NFT không dùng thêm sui nữa vì đã sịt cả đống tiền rồi .
 
 ### 8.4 Contract functions de xay
 

@@ -6,7 +6,7 @@ export const NETWORK = (import.meta.env.VITE_SUI_NETWORK || "devnet") as
 
 export const PACKAGE_ID =
   import.meta.env.VITE_SUI_PACKAGE_ID ||
-  "0x07d3079c4715d16b119517112e3dba807d64ca10bcb1399617be2c8e49194421";
+  "0xc3af7f46fe6846cd24010156ef6354858bf20908ecc6711f9389dc1e71df290a";
 export const MARKET_OBJECT_ID = import.meta.env.VITE_MARKET_OBJECT_ID || "";
 export const TREASURY_OBJECT_ID = import.meta.env.VITE_TREASURY_OBJECT_ID || "";
 export const CLOCK_OBJECT_ID = "0x6";

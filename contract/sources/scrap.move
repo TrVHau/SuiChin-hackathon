@@ -24,8 +24,8 @@ module suichin::scrap {
 
     // ─── Package-internal Functions ───────────────────────────────────────────
 
-    /// Mint Scrap mới. Chỉ gọi được từ trong cùng package.
-    public(package) fun mint(ctx: &mut TxContext): Scrap {
+    /// Mint Scrap moi cho mot recipient cu the. Chi goi duoc tu trong cung package.
+    public(package) fun mint_for(recipient: address, ctx: &mut TxContext): Scrap {
         let scrap = Scrap {
             id: object::new(ctx),
             name: string::utf8(b"Manh Vun Chun"),
@@ -35,9 +35,14 @@ module suichin::scrap {
         };
         event::emit(ScrapMinted {
             scrap_id: object::id(&scrap),
-            recipient: tx_context::sender(ctx),
+            recipient,
         });
         scrap
+    }
+
+    /// Mint Scrap moi. Chi goi duoc tu trong cung package.
+    public(package) fun mint(ctx: &mut TxContext): Scrap {
+        mint_for(tx_context::sender(ctx), ctx)
     }
 
     /// Burn Scrap. Chỉ gọi được từ trong cùng package.
