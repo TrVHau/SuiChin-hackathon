@@ -1,3 +1,223 @@
+import { cryptoService } from "./crypto.service";
+import { logger } from "../../shared/logger";
+
+export enum RoomState {
+  WAITING_FOR_PLAYERS = "WAITING_FOR_PLAYERS",
+  CHOOSING_PHASE = "CHOOSING_PHASE",
+  VALUATING_PHASE = "VALUATING_PHASE",
+  SETTLED = "SETTLED",
+}
+
+interface PlayerState {
+  socketId: string;
+  walletAddress: string;
+  nftId?: string;
+  isDisconnected: boolean;
+  disconnectTimeout?: NodeJS.Timeout;
+}
+
+export interface PvPRoom {
+  id: string; // The Object ID of the on-chain match room
+  state: RoomState;
+  players: Map<string, PlayerState>;
+  nonce: number;
+  createdAt: Date;
+}
+
+export class MatchmakingService {
+  private activeRooms: Map<string, PvPRoom> = new Map();
+  private readonly GRACE_PERIOD_MS = 30000; // 30 seconds
+
+  constructor() {
+    logger.info("Matchmaking Service initialized.");
+    try {
+      logger.info(
+        `PvP Gateway Admin Address: ${cryptoService.getPublicKeyAddress()}`,
+      );
+    } catch (e: any) {
+      logger.error("Failed to init crypto key. " + e.message);
+    }
+  }
+
+  public getRoom(roomId: string): PvPRoom | undefined {
+    return this.activeRooms.get(roomId);
+  }
+
+  public createOrJoinRoom(
+    roomId: string,
+    walletAddress: string,
+    socketId: string,
+  ): PvPRoom {
+    let room = this.activeRooms.get(roomId);
+
+    if (!room) {
+      room = {
+        id: roomId,
+        state: RoomState.WAITING_FOR_PLAYERS,
+        players: new Map(),
+        nonce: Math.floor(Math.random() * 1000000), // Simple replay tracking
+        createdAt: new Date(),
+      };
+      this.activeRooms.set(roomId, room);
+    }
+
+    if (room.state === RoomState.SETTLED) {
+      throw new Error("Room is already settled.");
+    }
+
+    // Assign player
+    room.players.set(walletAddress, {
+      socketId,
+      walletAddress,
+      isDisconnected: false,
+    });
+
+    if (
+      room.players.size === 2 &&
+      room.state === RoomState.WAITING_FOR_PLAYERS
+    ) {
+      room.state = RoomState.CHOOSING_PHASE;
+    }
+
+    return room;
+  }
+
+  public handleDisconnection(
+    socketId: string,
+    emitToRoom: (roomId: string, event: string, data: any) => void,
+  ) {
+    for (const [roomId, room] of this.activeRooms.entries()) {
+      for (const [walletAddress, player] of room.players.entries()) {
+        if (player.socketId === socketId) {
+          logger.warn(
+            `Player ${walletAddress} disconnected from room ${roomId}`,
+          );
+          player.isDisconnected = true;
+
+          // Start 30s Grace Period
+          player.disconnectTimeout = setTimeout(() => {
+            this.handleGracePeriodExpiry(roomId, walletAddress, emitToRoom);
+          }, this.GRACE_PERIOD_MS);
+
+          emitToRoom(roomId, "player_disconnected", {
+            walletAddress,
+            gracePeriodMs: this.GRACE_PERIOD_MS,
+          });
+
+          return;
+        }
+      }
+    }
+  }
+
+  public handleReconnection(
+    roomId: string,
+    walletAddress: string,
+    newSocketId: string,
+  ) {
+    const room = this.activeRooms.get(roomId);
+    if (!room) return null;
+
+    const player = room.players.get(walletAddress);
+    if (player && player.isDisconnected) {
+      player.socketId = newSocketId;
+      player.isDisconnected = false;
+      if (player.disconnectTimeout) {
+        clearTimeout(player.disconnectTimeout);
+        player.disconnectTimeout = undefined;
+      }
+      logger.info(`Player ${walletAddress} reconnected to room ${roomId}`);
+      return room;
+    }
+    return null;
+  }
+
+  public selectNft(
+    roomId: string,
+    walletAddress: string,
+    nftId: string,
+  ): PvPRoom {
+    const room = this.activeRooms.get(roomId);
+    if (!room) throw new Error("Room not found");
+    if (room.state !== RoomState.CHOOSING_PHASE)
+      throw new Error("Not in CHOOSING_PHASE");
+
+    const player = room.players.get(walletAddress);
+    if (!player) throw new Error("Player not in room");
+
+    player.nftId = nftId;
+
+    let allSelected = true;
+    for (const playerStatus of room.players.values()) {
+      if (!playerStatus.nftId) allSelected = false;
+    }
+
+    if (allSelected) {
+      room.state = RoomState.VALUATING_PHASE;
+    }
+
+    return room;
+  }
+
+  private handleGracePeriodExpiry(
+    roomId: string,
+    offlineWallet: string,
+    emitToRoom: (roomId: string, event: string, data: any) => void,
+  ) {
+    const room = this.activeRooms.get(roomId);
+    if (!room || room.state === RoomState.SETTLED) return;
+
+    logger.info(
+      `Grace period expired for ${offlineWallet} in room ${roomId}. Settling match.`,
+    );
+
+    let winner = "";
+    for (const [addr, p] of room.players.entries()) {
+      if (addr !== offlineWallet) winner = addr;
+    }
+
+    if (!winner) {
+      this.activeRooms.delete(roomId);
+      return;
+    }
+
+    this.settleMatch(room, winner, offlineWallet, emitToRoom);
+  }
+
+  public settleMatch(
+    room: PvPRoom,
+    winner: string,
+    loser: string,
+    emitToRoom: (roomId: string, event: string, data: any) => void,
+  ) {
+    try {
+      const { signature, signatureBytes } =
+        cryptoService.generateMatchSignature(
+          room.id,
+          winner,
+          loser,
+          room.nonce,
+        );
+      room.state = RoomState.SETTLED;
+
+      emitToRoom(room.id, "match_settled", {
+        winner,
+        loser,
+        signature,
+        signatureBytes: Buffer.from(signatureBytes).toString("base64"),
+      });
+
+      // Cleanup room state after grace period of settlement
+      setTimeout(() => {
+        this.activeRooms.delete(room.id);
+      }, 5000);
+    } catch (e: any) {
+      logger.error(`Error settling match ${room.id}: ${e.message}`);
+    }
+  }
+}
+
+export const matchmakingService = new MatchmakingService();
 import { env } from "../../config/env";
 import { getRedisClient } from "../../infra/cache/redis";
 
@@ -117,7 +337,11 @@ class RedisMatchmakingService implements MatchmakingService {
     }
 
     await redis.rpush(queueKey, walletAddress);
-    await redis.hset(this.walletWagerKey, walletAddress, String(normalizedWager));
+    await redis.hset(
+      this.walletWagerKey,
+      walletAddress,
+      String(normalizedWager),
+    );
     return { matched: false, wager: normalizedWager };
   }
 

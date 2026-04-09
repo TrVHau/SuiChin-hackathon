@@ -59,3 +59,79 @@ model ChallengeResult {
   @@unique([challengeId, walletAddress])
   @@index([challengeId])
 }
+
+// ----------------------------------------------------------------------------
+// INDEXER DOMAIN ENTITIES (Unit 1)
+// ----------------------------------------------------------------------------
+
+model SyncState {
+  id             Int      @id @default(1) // Singleton pattern
+  cursorTxDigest String
+  cursorEventSeq String
+  updatedAt      DateTime @updatedAt
+}
+
+model CraftEvent {
+  id            String   @id @default(uuid())
+  txDigest      String
+  eventSeq      String
+  playerAddress String
+  itemMintedId  String
+  itemType      String
+  timestampMs   BigInt
+
+  createdAt     DateTime @default(now())
+
+  @@unique([txDigest, eventSeq])
+  @@index([playerAddress])
+  @@index([itemType])
+}
+
+model MatchEvent {
+  id            String   @id @default(uuid())
+  txDigest      String
+  eventSeq      String
+  roomId        String
+  winnerAddress String
+  loserAddress  String
+  pointChange   Int
+  timestampMs   BigInt
+
+  createdAt     DateTime @default(now())
+
+  @@unique([txDigest, eventSeq])
+  @@index([winnerAddress])
+  @@index([loserAddress])
+}
+
+model FusionEvent {
+  id            String   @id @default(uuid())
+  txDigest      String
+  eventSeq      String
+  playerAddress String
+  inputItemIds  String[]
+  outputItemId  String
+  timestampMs   BigInt
+
+  createdAt     DateTime @default(now())
+
+  @@unique([txDigest, eventSeq])
+  @@index([playerAddress])
+}
+
+model MarketplaceListing {
+  id            String   @id @default(uuid())
+  txDigest      String
+  eventSeq      String
+  sellerAddress String
+  itemId        String
+  price         BigInt
+  status        String   @default("ACTIVE") // ACTIVE, CANCELLED, SOLD
+  timestampMs   BigInt
+
+  createdAt     DateTime @default(now())
+
+  @@unique([txDigest, eventSeq])
+  @@index([sellerAddress])
+  @@index([status])
+}

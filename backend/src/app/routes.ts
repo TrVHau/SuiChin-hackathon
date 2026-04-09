@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { Router } from "express";
 import { env } from "../config/env";
 import { getRuntimeDependencyReport } from "../infra/runtime/dependency-check";
+import { indexerRoutes } from "../modules/indexer/indexer.routes";
 import { challengeService } from "../modules/challenge/challenge.service";
 import {
   ChallengeIdParamSchema,
@@ -27,31 +28,45 @@ export function registerRoutes(app: Express) {
 
   api.get("/ready", async (_req, res) => {
     const report = await getRuntimeDependencyReport();
-    const isReady = report.storage.status !== "failed" && report.matchmaking.status !== "failed";
+    const isReady =
+      report.storage.status !== "failed" &&
+      report.matchmaking.status !== "failed";
     return res.status(isReady ? 200 : 503).json({
       ok: isReady,
       dependencies: report,
     });
   });
 
+  // Mount the Indexer REST APIs (Unit 1)
+  api.use("/indexer", indexerRoutes);
+
   api.post("/challenges", async (req, res) => {
     const body = CreateChallengeSchema.parse(req.body);
     const walletAddress = getWalletAddress(req);
-    const challenge = await challengeService.createChallenge(walletAddress, body);
+    const challenge = await challengeService.createChallenge(
+      walletAddress,
+      body,
+    );
     return res.status(201).json({ challenge });
   });
 
   api.post("/challenges/:challengeId/accept", async (req, res) => {
     const { challengeId } = ChallengeIdParamSchema.parse(req.params);
     const walletAddress = getWalletAddress(req);
-    const challenge = await challengeService.acceptChallenge(challengeId, walletAddress);
+    const challenge = await challengeService.acceptChallenge(
+      challengeId,
+      walletAddress,
+    );
     return res.json({ challenge });
   });
 
   api.post("/challenges/:challengeId/cancel", async (req, res) => {
     const { challengeId } = ChallengeIdParamSchema.parse(req.params);
     const walletAddress = getWalletAddress(req);
-    const challenge = await challengeService.cancelChallenge(challengeId, walletAddress);
+    const challenge = await challengeService.cancelChallenge(
+      challengeId,
+      walletAddress,
+    );
     return res.json({ challenge });
   });
 
