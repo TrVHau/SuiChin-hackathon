@@ -1,4 +1,10 @@
-import { createContext, useContext, ReactNode, useEffect, useState } from "react";
+import {
+  createContext,
+  useContext,
+  ReactNode,
+  useEffect,
+  useState,
+} from "react";
 import { useSuiProfile } from "@/hooks/useSuiProfile";
 
 interface PlayerData {
@@ -20,11 +26,14 @@ interface GameContextType {
   playerData: PlayerData | null;
   loading: boolean;
   hasProfile: boolean;
-  createProfile: (onSuccess?: () => void, onError?: () => void) => Promise<void>;
+  createProfile: (
+    onSuccess?: () => void,
+    onError?: () => void,
+  ) => Promise<void>;
   reportResult: (
     isWin: boolean,
     onDone?: () => void,
-    onError?: () => void
+    onError?: () => void,
   ) => void;
   refreshProfile: () => Promise<void>;
 }
@@ -45,15 +54,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [authResolved, setAuthResolved] = useState(false);
 
   useEffect(() => {
+    if (loading) return; // Wait until useSuiProfile completes its initial fetch
+
     if (account) {
       setAuthResolved(true);
       return;
     }
 
     // Give wallet auto-connect a short window on hard refresh before redirecting.
-    const timer = setTimeout(() => setAuthResolved(true), 1500);
+    const timer = setTimeout(() => setAuthResolved(true), 2500);
     return () => clearTimeout(timer);
-  }, [account]);
+  }, [account, loading]);
 
   const playerData: PlayerData | null = profile
     ? {
@@ -81,9 +92,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     refreshProfile,
   };
 
-  return (
-    <GameContext.Provider value={value}>{children}</GameContext.Provider>
-  );
+  return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 }
 
 export function useGame() {

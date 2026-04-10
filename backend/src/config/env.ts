@@ -19,6 +19,7 @@ const EnvSchema = z.object({
   SUI_CLI_CONFIG_PATH: z.string().optional(),
   SUI_CLI_GAS_BUDGET: z.coerce.number().int().positive().default(100_000_000),
   SUI_ORACLE_SENDER: z.string().optional(),
+  ADMIN_SECRET_KEY: z.string().default("suisecret1234567890abcdef"),
 });
 
 export const env = EnvSchema.parse(process.env);

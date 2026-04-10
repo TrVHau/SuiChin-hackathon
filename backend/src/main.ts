@@ -17,7 +17,7 @@ async function bootstrap() {
   logger.info("Initializing PvP Socket.io Gateway...");
   const io = new Server(server, {
     cors: {
-      origin: env.CORS_ORIGIN || "*",
+      origin: env.CORS_ORIGINS || "*",
     },
   });
   new PvpGateway(io);

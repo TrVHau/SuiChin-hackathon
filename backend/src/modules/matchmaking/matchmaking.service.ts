@@ -24,7 +24,7 @@ export interface PvPRoom {
   createdAt: Date;
 }
 
-export class MatchmakingService {
+export class PvPStateService {
   private activeRooms: Map<string, PvPRoom> = new Map();
   private readonly GRACE_PERIOD_MS = 30000; // 30 seconds
 
@@ -217,7 +217,7 @@ export class MatchmakingService {
   }
 }
 
-export const matchmakingService = new MatchmakingService();
+export const pvpStateService = new PvPStateService();
 import { env } from "../../config/env";
 import { getRedisClient } from "../../infra/cache/redis";
 

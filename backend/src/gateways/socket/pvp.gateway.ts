@@ -1,5 +1,5 @@
 import { Server, Socket } from 'socket.io';
-import { matchmakingService, RoomState } from '../../modules/matchmaking/matchmaking.service';
+import { pvpStateService, RoomState } from '../../modules/matchmaking/matchmaking.service';
 import { logger } from '../../shared/logger';
 
 export class PvpGateway {
@@ -19,9 +19,9 @@ export class PvpGateway {
           const { roomId, walletAddress } = data;
           socket.join(roomId);
           
-          let room = matchmakingService.handleReconnection(roomId, walletAddress, socket.id);
+          let room = pvpStateService.handleReconnection(roomId, walletAddress, socket.id);
           if (!room) {
-             room = matchmakingService.createOrJoinRoom(roomId, walletAddress, socket.id);
+             room = pvpStateService.createOrJoinRoom(roomId, walletAddress, socket.id);
           }
 
           logger.info(`Player ${walletAddress} joined room ${roomId}`);
@@ -40,7 +40,7 @@ export class PvpGateway {
       socket.on('select_nft', (data: { roomId: string; walletAddress: string; nftId: string }) => {
         try {
           const { roomId, walletAddress, nftId } = data;
-          const room = matchmakingService.selectNft(roomId, walletAddress, nftId);
+          const room = pvpStateService.selectNft(roomId, walletAddress, nftId);
           
           this.emitToRoom(roomId, 'room_state_update', {
             state: room.state,
@@ -58,13 +58,13 @@ export class PvpGateway {
       });
 
       socket.on('disconnect', () => {
-        matchmakingService.handleDisconnection(socket.id, this.emitToRoom.bind(this));
+        pvpStateService.handleDisconnection(socket.id, this.emitToRoom.bind(this));
       });
     });
   }
 
   private simulateMatchValuation(roomId: string) {
-    const room = matchmakingService.getRoom(roomId);
+    const room = pvpStateService.getRoom(roomId);
     if (!room || room.state !== RoomState.VALUATING_PHASE) return;
 
     // Wait a brief moment to simulate evaluating stats
@@ -79,7 +79,7 @@ export class PvpGateway {
         const winner = players[winnerIndex].walletAddress;
         const loser = players[loserIndex].walletAddress;
 
-        matchmakingService.settleMatch(room, winner, loser, this.emitToRoom.bind(this));
+        pvpStateService.settleMatch(room, winner, loser, this.emitToRoom.bind(this));
     }, 3000);
   }
 

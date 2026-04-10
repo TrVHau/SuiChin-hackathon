@@ -10,6 +10,8 @@ export const PACKAGE_ID =
 export const MARKET_OBJECT_ID = import.meta.env.VITE_MARKET_OBJECT_ID || "";
 export const TREASURY_OBJECT_ID = import.meta.env.VITE_TREASURY_OBJECT_ID || "";
 export const CLOCK_OBJECT_ID = "0x6";
+export const BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
 
 export const RPC_ENDPOINTS = {
   testnet: "https://fullnode.testnet.sui.io:443",
