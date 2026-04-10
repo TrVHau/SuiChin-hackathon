@@ -184,15 +184,15 @@ export class PvPStateService {
     this.settleMatch(room, winner, offlineWallet, emitToRoom);
   }
 
-  public settleMatch(
+  public async settleMatch(
     room: PvPRoom,
     winner: string,
     loser: string,
-    emitToRoom: (roomId: string, event: string, data: any) => void,
+    emitToRoom: (roomId: string, event: string, payload: any) => void,
   ) {
     try {
       const { signature, signatureBytes } =
-        cryptoService.generateMatchSignature(
+        await cryptoService.generateMatchSignature(
           room.id,
           winner,
           loser,

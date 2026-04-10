@@ -47,19 +47,13 @@ export class IndexerService {
    * Real-time WebSocket connection to ingest blockchain events live
    */
   private async startWebSocketListener() {
-    await suiClient.subscribeEvent({
-      filter: { Package: PACKAGE_ID },
-      onMessage: async (event) => {
-        try {
-          await this.processEvent(event);
-        } catch (error) {
-          logger.error(
-            { error, digest: event.id.txDigest },
-            "Failed to process real-time event.",
-          );
-        }
-      },
-    });
+    /* 
+    WebSocket subscriptions in @mysten/sui v2 require GraphQL Client configuration. 
+    Falling back entirely to Chron Job catch-ups instead. 
+    */
+    logger.info(
+      "Real-time WebSocket subscriptions skipped, relying on Cron Job.",
+    );
   }
 
   /**
@@ -99,9 +93,12 @@ export class IndexerService {
 
       while (hasNextPage) {
         const result = await suiClient.queryEvents({
-          query: { Package: PACKAGE_ID },
-          cursor: cursor as any, // Cast specific typing matching
-          limit: 50,
+          query: {
+            MoveEventModule: {
+              package: PACKAGE_ID,
+              module: "nft_valuation_lobby",
+            },
+          },
           order: "ascending", // MUST process chronologically
         });
 
