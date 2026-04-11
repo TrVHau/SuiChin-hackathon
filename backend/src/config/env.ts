@@ -20,6 +20,10 @@ const EnvSchema = z.object({
   SUI_CLI_GAS_BUDGET: z.coerce.number().int().positive().default(100_000_000),
   SUI_ORACLE_SENDER: z.string().optional(),
   ADMIN_SECRET_KEY: z.string().default("suisecret1234567890abcdef"),
+  LOBBY_PACKAGE_ID: z.string().optional(),
+  LOBBY_CONFIG_OBJECT_ID: z.string().optional(),
+  LOBBY_SIGNER_SECRET_KEY: z.string().optional(),
+  LOBBY_SETTLEMENT_TTL_MS: z.coerce.number().int().positive().default(120_000),
 });
 
 export const env = EnvSchema.parse(process.env);

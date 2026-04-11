@@ -342,6 +342,36 @@ export function buildAddValuationLobbySignerTx(input: {
   return tx;
 }
 
+export function buildSettleValuationLobbyRoomTx(input: {
+  roomId: string;
+  winner: string;
+  loser: string;
+  matchDigest: number[];
+  nonce: number | bigint;
+  deadlineMs: number | bigint;
+  signature: number[];
+  signerPubkey: number[];
+}): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${LOBBY_PACKAGE_ID}::nft_valuation_lobby::settle_room_with_signature`,
+    arguments: [
+      tx.object(LOBBY_CONFIG_OBJECT_ID),
+      tx.object(input.roomId),
+      tx.pure.address(input.winner),
+      tx.pure.address(input.loser),
+      tx.pure.vector("u8", input.matchDigest),
+      tx.pure.u64(input.nonce),
+      tx.pure.u64(input.deadlineMs),
+      tx.pure.vector("u8", input.signature),
+      tx.pure.vector("u8", input.signerPubkey),
+      tx.object(CLOCK_OBJECT_ID),
+    ],
+  });
+
+  return tx;
+}
+
 export function base64SignatureToBytes(signatureBytes: string): number[] {
   return base64ToBytes(signatureBytes);
 }

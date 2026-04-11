@@ -25,6 +25,7 @@ interface SubmitResultAck {
   finalized?: {
     winnerWallet: string | null;
     txDigest: string | null;
+    settlementPayload?: SettlementPayload | null;
   };
   error?: string;
 }
@@ -49,6 +50,18 @@ interface MatchFinalizedEvent {
   challengeId: string;
   winnerWallet: string | null;
   txDigest: string | null;
+  settlementPayload?: SettlementPayload | null;
+}
+
+export interface SettlementPayload {
+  roomId: string;
+  winner: string;
+  loser: string;
+  matchDigest: number[];
+  nonce: number;
+  deadlineMs: number;
+  signature: number[];
+  signerPubkey: number[];
 }
 
 interface MatchTurnEvent {
@@ -88,7 +101,9 @@ export interface PvPState {
   round: number;
   scores: [number, number];
   resultTx: string | null;
+  settleTx: string | null;
   winner: string | null;
+  settlementPayload: SettlementPayload | null;
   submittedResult: MatchResult | null;
   currentTurnWallet: string | null;
   myTurn: boolean;
@@ -111,7 +126,9 @@ const INITIAL_STATE: PvPState = {
   round: 1,
   scores: [0, 0],
   resultTx: null,
+  settleTx: null,
   winner: null,
+  settlementPayload: null,
   submittedResult: null,
   currentTurnWallet: null,
   myTurn: false,
@@ -151,6 +168,8 @@ export function usePvP(_profileId: string | undefined) {
         submittedResult: null,
         winner: null,
         resultTx: null,
+        settleTx: null,
+        settlementPayload: null,
       }));
 
       toast.success("Da tim thay doi thu. Bat dau tran!");
@@ -164,7 +183,7 @@ export function usePvP(_profileId: string | undefined) {
   );
 
   const joinQueue = useCallback(
-    (wager: number) => {
+    (wager: number, roomId?: string) => {
       if (!account?.address) {
         toast.error("Vui long ket noi vi");
         return;
@@ -188,7 +207,7 @@ export function usePvP(_profileId: string | undefined) {
       socketRef.current = socket;
 
       socket.on("connect", () => {
-        socket.emit("queue.join", { wager }, (ack: QueueJoinAck) => {
+        socket.emit("queue.join", { wager, roomId }, (ack: QueueJoinAck) => {
           if (!ack.ok) {
             toast.error(ack.error ?? "queue.join failed");
             setPvP((prev) => ({ ...prev, status: "error" }));
@@ -196,7 +215,11 @@ export function usePvP(_profileId: string | undefined) {
           }
 
           if (!ack.result?.matched) {
-            setPvP((prev) => ({ ...prev, status: "waiting" }));
+            setPvP((prev) => ({
+              ...prev,
+              status: "waiting",
+              roomId: ack.result?.roomId ?? roomId ?? prev.roomId,
+            }));
             return;
           }
 
@@ -227,6 +250,7 @@ export function usePvP(_profileId: string | undefined) {
             status: "resolved",
             winner: event.winnerWallet,
             resultTx: event.txDigest,
+            settlementPayload: event.settlementPayload ?? null,
           };
         });
 
@@ -337,6 +361,7 @@ export function usePvP(_profileId: string | undefined) {
               status: "resolved",
               winner: ack.finalized?.winnerWallet ?? null,
               resultTx: ack.finalized?.txDigest ?? null,
+              settlementPayload: ack.finalized?.settlementPayload ?? null,
             }));
             return;
           }
@@ -389,8 +414,17 @@ export function usePvP(_profileId: string | undefined) {
         status: "resolved",
         winner: winnerWallet,
         resultTx: null,
+        settlementPayload: null,
       };
     });
+  }, []);
+
+  const setSettleTx = useCallback((txDigest: string) => {
+    setPvP((prev) => ({
+      ...prev,
+      settleTx: txDigest,
+      settlementPayload: null,
+    }));
   }, []);
 
   useEffect(() => {
@@ -399,5 +433,13 @@ export function usePvP(_profileId: string | undefined) {
     };
   }, [safeDisconnect]);
 
-  return { pvp, joinQueue, leaveQueue, reportRound, submitShot, resolveLocalMatch };
+  return {
+    pvp,
+    joinQueue,
+    leaveQueue,
+    reportRound,
+    submitShot,
+    resolveLocalMatch,
+    setSettleTx,
+  };
 }

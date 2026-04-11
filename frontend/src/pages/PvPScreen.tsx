@@ -1,17 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { AlertCircle, ShieldCheck, Swords, Users } from "lucide-react";
+import { AlertCircle, Landmark, Swords, Users } from "lucide-react";
 import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import PageHeader from "@/components/common/PageHeader";
 import { useGame } from "@/providers/GameContext";
 import { usePvP } from "@/hooks/usePvP";
 import { useOwnedNFTs } from "@/hooks/useOwnedNFTs";
 import {
-  buildAddValuationLobbySignerTx,
   buildCancelValuationLobbyRoomTx,
   buildCreateValuationLobbyRoomTx,
   buildJoinValuationLobbyRoomTx,
+  buildSettleValuationLobbyRoomTx,
 } from "@/lib/sui-client";
 import {
   PvpMatchedCard,
@@ -29,9 +29,8 @@ import {
 export default function PvPScreen() {
   const navigate = useNavigate();
   const { account, playerData, profile } = useGame();
-  const { pvp, joinQueue, leaveQueue, reportRound, submitShot } = usePvP(
-    profile?.objectId,
-  );
+  const { pvp, joinQueue, leaveQueue, reportRound, submitShot, setSettleTx } =
+    usePvP(profile?.objectId);
 
   const suiClient = useSuiClient();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
@@ -45,11 +44,7 @@ export default function PvPScreen() {
   const [createdRoomId, setCreatedRoomId] = useState<string | null>(null);
   const [joinRoomId, setJoinRoomId] = useState("");
   const [escrowSubmitting, setEscrowSubmitting] = useState(false);
-  const [adminCapId, setAdminCapId] = useState<string | null>(null);
-  const [signerInput, setSignerInput] = useState("signer_1");
-  const [activeLobbySigner, setActiveLobbySigner] = useState<number[] | null>(
-    null,
-  );
+  const [settleSubmitting, setSettleSubmitting] = useState(false);
 
   const handleBack = () => navigate("/dashboard");
   const handleLeave = () => {
@@ -73,128 +68,14 @@ export default function PvPScreen() {
     return selectedLobbyNFTPoints + coinPoints;
   }, [escrowCoinMist, selectedLobbyNFTPoints]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadSignerAndAdminCap = async () => {
-      try {
-        const [obj, ownedCaps] = await Promise.all([
-          suiClient.getObject({
-            id: LOBBY_CONFIG_OBJECT_ID,
-            options: { showContent: true },
-          }),
-          account?.address
-            ? suiClient.getOwnedObjects({
-                owner: account.address,
-                filter: {
-                  StructType: `${LOBBY_PACKAGE_ID}::nft_valuation_lobby_config::LobbyAdminCap`,
-                },
-              })
-            : Promise.resolve({ data: [] }),
-        ]);
-
-        const fields = (
-          obj.data?.content as { fields?: Record<string, unknown> } | undefined
-        )?.fields;
-        const rawSigners = fields?.active_signer_pubkeys;
-
-        const collectByteVectors = (value: unknown): number[][] => {
-          if (Array.isArray(value)) {
-            if (
-              value.length > 0 &&
-              value.every((item) => typeof item === "number")
-            ) {
-              return [value as number[]];
-            }
-            return value.flatMap((item) => collectByteVectors(item));
-          }
-
-          if (value && typeof value === "object") {
-            const record = value as Record<string, unknown>;
-            if ("fields" in record) return collectByteVectors(record.fields);
-            if ("value" in record) return collectByteVectors(record.value);
-            return Object.values(record).flatMap((item) =>
-              collectByteVectors(item),
-            );
-          }
-
-          return [];
-        };
-
-        const signers = collectByteVectors(rawSigners);
-        if (!cancelled) {
-          setActiveLobbySigner(signers[0] ?? null);
-          setAdminCapId(ownedCaps.data?.[0]?.data?.objectId ?? null);
-        }
-      } catch (error) {
-        console.warn("Unable to load active signer from LobbyConfig", error);
-        if (!cancelled) {
-          setActiveLobbySigner(null);
-          setAdminCapId(null);
-        }
-      }
-    };
-
-    void loadSignerAndAdminCap();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [account?.address, suiClient]);
-
   const handleJoin = () => {
-    if (!createdRoomId && !joinRoomId.trim()) {
+    const selectedRoomId = createdRoomId ?? joinRoomId.trim();
+    if (!selectedRoomId) {
       toast.error("Tạo room hoặc nhập Room ID trước khi vào queue realtime.");
       return;
     }
 
-    joinQueue(0);
-  };
-
-  const addActiveSigner = async () => {
-    if (escrowSubmitting) return;
-    if (!adminCapId) {
-      toast.error("Ví hiện tại không có LobbyAdminCap để add signer.");
-      return;
-    }
-    if (!signerInput.trim()) {
-      toast.error("Nhập signer pubkey trước khi add.");
-      return;
-    }
-
-    setEscrowSubmitting(true);
-    toast.loading("Đang add active signer pubkey...", {
-      id: "lobby-add-signer",
-    });
-
-    const tx = buildAddValuationLobbySignerTx({
-      adminCapId,
-      signerPubkey: signerInput.trim(),
-    });
-
-    signAndExecute(
-      { transaction: tx },
-      {
-        onSuccess: async () => {
-          setActiveLobbySigner(
-            Array.from(new TextEncoder().encode(signerInput.trim())),
-          );
-          toast.success("Đã add active signer pubkey thành công.", {
-            id: "lobby-add-signer",
-          });
-          setEscrowSubmitting(false);
-        },
-        onError: (error) => {
-          toast.error(
-            `Add signer thất bại: ${String(error?.message ?? error)}`,
-            {
-              id: "lobby-add-signer",
-            },
-          );
-          setEscrowSubmitting(false);
-        },
-      },
-    );
+    joinQueue(0, selectedRoomId);
   };
 
   const handleLocalFinish = (winnerWallet: string | null) => {
@@ -234,12 +115,6 @@ export default function PvPScreen() {
       toast.error("Chưa cấu hình LOBBY_CONFIG_OBJECT_ID.");
       return;
     }
-    if (!activeLobbySigner) {
-      toast.error(
-        "LobbyConfig chưa có active signer pubkey. Cần admin add signer trước.",
-      );
-      return;
-    }
     if (selectedLobbyNfts.length === 0) {
       toast.error("Chọn ít nhất một NFT để khóa vào phòng.");
       return;
@@ -260,7 +135,6 @@ export default function PvPScreen() {
       targetPoints: escrowTargetPoints,
       coinMist: escrowCoinMist,
       deadlineMs,
-      signerPubkey: activeLobbySigner,
     });
 
     signAndExecute(
@@ -274,6 +148,9 @@ export default function PvPScreen() {
             );
             const roomId = String(parsed?.room_id ?? "");
             setCreatedRoomId(roomId || null);
+            if (roomId) {
+              setJoinRoomId(roomId);
+            }
             toast.success(
               roomId
                 ? `Đã tạo phòng escrow on-chain: ${roomId.slice(0, 16)}...`
@@ -330,6 +207,11 @@ export default function PvPScreen() {
               result.digest,
               `${LOBBY_PACKAGE_ID}::nft_valuation_lobby::RoomJoined`,
             );
+            const joinedRoomId = String(parsed?.room_id ?? joinRoomId.trim());
+            if (joinedRoomId) {
+              setCreatedRoomId(joinedRoomId);
+              setJoinRoomId(joinedRoomId);
+            }
             toast.success(
               parsed?.room_id
                 ? `Đã join phòng escrow: ${String(parsed.room_id).slice(0, 16)}...`
@@ -393,6 +275,50 @@ export default function PvPScreen() {
   const isMe = (address: string) =>
     Boolean(account?.address && address === account.address);
 
+  const settleOnChain = async () => {
+    const payload = pvp.settlementPayload;
+    if (!payload) {
+      toast.error("Backend chưa cung cấp settlement payload.");
+      return;
+    }
+    if (!pvp.winner || !isMe(pvp.winner)) {
+      toast.error("Chỉ winner mới được settle on-chain.");
+      return;
+    }
+
+    setSettleSubmitting(true);
+    toast.loading("Đang submit settle on-chain...", { id: "lobby-settle" });
+
+    const tx = buildSettleValuationLobbyRoomTx({
+      roomId: payload.roomId,
+      winner: payload.winner,
+      loser: payload.loser,
+      matchDigest: payload.matchDigest,
+      nonce: payload.nonce,
+      deadlineMs: payload.deadlineMs,
+      signature: payload.signature,
+      signerPubkey: payload.signerPubkey,
+    });
+
+    signAndExecute(
+      { transaction: tx },
+      {
+        onSuccess: (result) => {
+          setSettleTx(result.digest);
+          toast.success("Settle on-chain thành công.", { id: "lobby-settle" });
+          setSettleSubmitting(false);
+        },
+        onError: (error) => {
+          toast.error(
+            `Settle on-chain thất bại: ${String(error?.message ?? error)}`,
+            { id: "lobby-settle" },
+          );
+          setSettleSubmitting(false);
+        },
+      },
+    );
+  };
+
   const renderContent = () => {
     if (pvp.status === "idle" || pvp.status === "error") {
       return (
@@ -438,15 +364,24 @@ export default function PvPScreen() {
     }
 
     if (pvp.status === "resolved") {
-      return <PvpResolvedCard pvp={pvp} isMe={isMe} onBack={handleLeave} />;
+      return (
+        <PvpResolvedCard
+          pvp={pvp}
+          isMe={isMe}
+          onBack={handleLeave}
+          onSettle={settleOnChain}
+          settling={settleSubmitting}
+          settleDisabled={settleSubmitting || Boolean(pvp.settleTx)}
+        />
+      );
     }
 
     return null;
   };
 
   return (
-    <div className="min-h-screen bg-sunny-gradient pb-20 relative">
-      <div className="max-w-6xl mx-auto px-4 pt-6">
+    <div className="min-h-screen pb-20 relative bg-[radial-gradient(circle_at_10%_20%,#fff4d6,transparent_40%),radial-gradient(circle_at_90%_0%,#d7f7f0,transparent_35%),linear-gradient(145deg,#fffdf6_0%,#fff4c9_45%,#ffe3c2_100%)]">
+      <div className="max-w-7xl mx-auto px-4 pt-6">
         <PageHeader
           title="PvP Arena"
           emoji="⚔️"
@@ -465,56 +400,63 @@ export default function PvPScreen() {
         />
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 pb-20">
-        <div className="grid grid-cols-1 xl:grid-cols-[1.25fr_0.75fr] gap-6">
+      <div className="max-w-7xl mx-auto px-4 pb-20">
+        <div className="mb-6 rounded-[28px] border border-amber-200 bg-white/75 backdrop-blur p-5 shadow-[0_20px_50px_rgba(238,174,77,0.16)]">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+            <div className="rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 border border-amber-200 px-4 py-3">
+              <p className="text-xs font-bold tracking-wider uppercase text-amber-700">
+                Trạng thái
+              </p>
+              <p className="text-lg font-black text-amber-950 capitalize">
+                {pvp.status}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-gradient-to-br from-cyan-100 to-teal-100 border border-teal-200 px-4 py-3">
+              <p className="text-xs font-bold tracking-wider uppercase text-teal-800">
+                Room escrow
+              </p>
+              <p className="text-xs font-black text-teal-950 break-all">
+                {createdRoomId ?? (joinRoomId.trim() || "Chưa chọn")}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-gradient-to-br from-sky-100 to-indigo-100 border border-sky-200 px-4 py-3">
+              <p className="text-xs font-bold tracking-wider uppercase text-sky-800">
+                Đối thủ
+              </p>
+              <p className="text-xs font-black text-sky-950 break-all">
+                {pvp.opponent ?? "Đang chờ"}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-gradient-to-br from-rose-100 to-pink-100 border border-rose-200 px-4 py-3">
+              <p className="text-xs font-bold tracking-wider uppercase text-rose-800">
+                Settlement
+              </p>
+              <p className="text-xs font-black text-rose-950 break-all">
+                {pvp.settleTx ? "On-chain done" : "Chưa settle"}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6">
           <div className="space-y-6">
-            <div className="bg-white rounded-4xl border-8 border-red-300 shadow-2xl p-6 md:p-8">
+            <div className="bg-white/90 backdrop-blur rounded-[32px] border border-red-200 shadow-[0_20px_50px_rgba(239,68,68,0.12)] p-6 md:p-8">
               <div className="flex flex-wrap items-center gap-3 mb-4">
-                <span className="inline-flex items-center gap-2 rounded-full bg-red-50 border border-red-200 px-4 py-2 text-sm font-bold text-red-700">
+                <span className="inline-flex items-center gap-2 rounded-full bg-red-100 border border-red-200 px-4 py-2 text-sm font-bold text-red-700">
                   <Swords className="size-4" />
                   Realtime PvP
                 </span>
-                <span className="inline-flex items-center gap-2 rounded-full bg-sky-50 border border-sky-200 px-4 py-2 text-sm font-bold text-sky-700">
-                  <ShieldCheck className="size-4" />
-                  Backend finalize
+                <span className="inline-flex items-center gap-2 rounded-full bg-emerald-100 border border-emerald-200 px-4 py-2 text-sm font-bold text-emerald-700">
+                  <Landmark className="size-4" />
+                  Escrow + settle on-chain
                 </span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div className="rounded-3xl border-4 border-gray-100 bg-gray-50 p-4">
-                  <p className="text-xs font-bold text-gray-500 uppercase mb-1">
-                    Trạng thái
-                  </p>
-                  <p className="font-black text-xl text-gray-900 capitalize">
-                    {pvp.status}
-                  </p>
-                </div>
-                <div className="rounded-3xl border-4 border-gray-100 bg-gray-50 p-4">
-                  <p className="text-xs font-bold text-gray-500 uppercase mb-1">
-                    Mô hình cược
-                  </p>
-                  <p className="font-black text-sm text-gray-900">
-                    Escrow tổng giá trị NFT + SUI
-                  </p>
-                  <p className="mt-1 text-xs text-gray-500">
-                    Queue realtime không dùng mức cược Chun cố định nữa.
-                  </p>
-                </div>
-                <div className="rounded-3xl border-4 border-gray-100 bg-gray-50 p-4">
-                  <p className="text-xs font-bold text-gray-500 uppercase mb-1">
-                    Đối thủ
-                  </p>
-                  <p className="font-black text-sm text-gray-900 break-all">
-                    {pvp.opponent ?? "Chưa có"}
-                  </p>
-                </div>
               </div>
 
               {renderContent()}
             </div>
 
             {(pvp.status === "playing" || pvp.status === "submitting") && (
-              <div className="bg-white rounded-4xl border-4 border-sky-200 shadow-xl p-5">
+              <div className="bg-white/85 backdrop-blur rounded-[28px] border border-cyan-200 shadow-[0_12px_30px_rgba(34,211,238,0.15)] p-5">
                 <div className="flex items-center gap-3 mb-3">
                   <AlertCircle className="size-5 text-sky-600" />
                   <h3 className="font-black text-lg text-gray-900">
@@ -531,7 +473,7 @@ export default function PvPScreen() {
           </div>
 
           <aside className="space-y-6">
-            <div className="bg-white rounded-4xl border-8 border-playful-blue shadow-2xl p-6">
+            <div className="bg-white/90 backdrop-blur rounded-[28px] border border-sky-200 shadow-[0_18px_40px_rgba(14,116,144,0.14)] p-6">
               <div className="flex items-center gap-3 mb-4">
                 <Users className="size-6 text-playful-blue" />
                 <h3 className="font-black text-2xl text-gray-900">
@@ -566,19 +508,20 @@ export default function PvPScreen() {
                 </p>
               </div>
 
-              <div className="mt-5 rounded-3xl bg-sky-50 border-2 border-sky-200 p-4">
+              <div className="mt-5 rounded-3xl bg-gradient-to-br from-sky-50 to-cyan-50 border border-sky-200 p-4">
                 <p className="text-xs font-bold text-sky-700 uppercase mb-1">
                   Ghi chú
                 </p>
                 <p className="text-sm text-sky-900 font-semibold leading-6">
                   PvP hiện dùng queue socket realtime cho phần ghép trận. Cơ chế
-                  contract valuation lobby mới là lớp escrow/settlement theo
-                  tổng giá trị NFT + Chun/SUI, đã được đồng bộ trong spec.
+                  valuation lobby là lớp escrow/settlement theo tổng giá trị NFT
+                  + SUI. Signer được backend đọc từ env, không cần thao tác
+                  admin trên UI nữa.
                 </p>
               </div>
             </div>
 
-            <div className="bg-white rounded-4xl border-8 border-playful-green shadow-2xl p-6 md:p-8">
+            <div className="bg-white/90 backdrop-blur rounded-[28px] border border-emerald-200 shadow-[0_18px_40px_rgba(16,185,129,0.16)] p-6 md:p-8">
               <div className="flex items-center gap-3 mb-4">
                 <span className="text-4xl">⛓️</span>
                 <div>
@@ -589,37 +532,6 @@ export default function PvPScreen() {
                     Khóa NFT + SUI vào BetRoom trước khi vào trận.
                   </p>
                 </div>
-              </div>
-
-              <div className="mb-5 rounded-3xl border-2 border-sky-200 bg-sky-50 p-4">
-                <p className="text-xs font-bold text-sky-700 uppercase mb-1">
-                  Trạng thái signer
-                </p>
-                <p className="text-sm text-sky-900 font-semibold leading-6">
-                  {activeLobbySigner
-                    ? "LobbyConfig đã có active signer. Có thể tạo room escrow."
-                    : "LobbyConfig chưa có active signer pubkey. Cần admin add signer trước."}
-                </p>
-                {!activeLobbySigner && (
-                  <div className="mt-3 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2">
-                    <input
-                      value={signerInput}
-                      onChange={(event) => setSignerInput(event.target.value)}
-                      placeholder="Signer pubkey dạng text"
-                      className="rounded-2xl border-2 border-sky-200 bg-white px-4 py-3 font-semibold text-gray-900"
-                    />
-                    <button
-                      onClick={addActiveSigner}
-                      disabled={!adminCapId || escrowSubmitting}
-                      className="rounded-2xl bg-sky-500 px-4 py-3 font-black text-white disabled:opacity-50"
-                    >
-                      Add signer (admin)
-                    </button>
-                  </div>
-                )}
-                <p className="mt-2 text-xs text-sky-700 font-semibold break-all">
-                  Admin cap hiện tại: {adminCapId ?? "Không có trong ví này"}
-                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
@@ -668,7 +580,7 @@ export default function PvPScreen() {
                 </label>
               </div>
 
-              <div className="mb-5 rounded-3xl border-2 border-gray-200 bg-gray-50 p-4 text-sm font-semibold text-gray-700">
+              <div className="mb-5 rounded-3xl border border-amber-200 bg-amber-50/70 p-4 text-sm font-semibold text-amber-900">
                 Tổng điểm NFT hiện chọn:{" "}
                 <span className="font-black text-gray-900">
                   {selectedLobbyNFTPoints}
@@ -726,7 +638,7 @@ export default function PvPScreen() {
                 <button
                   onClick={createLobbyRoom}
                   disabled={escrowSubmitting}
-                  className="flex-1 rounded-2xl bg-playful-green px-5 py-4 font-black text-white shadow-lg disabled:opacity-50"
+                  className="flex-1 rounded-2xl bg-emerald-500 hover:bg-emerald-600 px-5 py-4 font-black text-white shadow-lg transition-colors disabled:opacity-50"
                 >
                   Tạo phòng escrow
                 </button>
@@ -739,7 +651,7 @@ export default function PvPScreen() {
                 <button
                   onClick={joinLobbyRoom}
                   disabled={escrowSubmitting}
-                  className="flex-1 rounded-2xl bg-playful-purple px-5 py-4 font-black text-white shadow-lg disabled:opacity-50"
+                  className="flex-1 rounded-2xl bg-cyan-600 hover:bg-cyan-700 px-5 py-4 font-black text-white shadow-lg transition-colors disabled:opacity-50"
                 >
                   Join phòng escrow
                 </button>
@@ -763,7 +675,7 @@ export default function PvPScreen() {
               </div>
             </div>
 
-            <div className="bg-white rounded-4xl border-4 border-gray-200 shadow-xl p-6">
+            <div className="bg-white/90 backdrop-blur rounded-[28px] border border-gray-200 shadow-xl p-6">
               <h3 className="font-black text-xl text-gray-900 mb-3">
                 Danh sách Chun của bạn
               </h3>

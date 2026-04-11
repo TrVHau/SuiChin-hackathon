@@ -26,9 +26,9 @@ build/
 *.local
 
 # Environment variables
-.env # removed from ignore to allow push
-.env.local
-.env.*.local
+.env
+.env.*
+!.env.example
 
 # OS files
 .DS_Store

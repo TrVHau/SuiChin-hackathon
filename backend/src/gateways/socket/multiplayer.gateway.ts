@@ -3,9 +3,11 @@ import { Server, type Socket } from "socket.io";
 import { z } from "zod";
 import { corsOrigins } from "../../config/env";
 import { challengeService } from "../../modules/challenge/challenge.service";
+import { settlementPayloadService } from "../../modules/challenge/settlement-payload.service";
 import { SubmitResultSchema } from "../../modules/challenge/challenge.schemas";
 import type { ChallengeResultRecord } from "../../modules/challenge/challenge.types";
 import { matchmakingService } from "../../modules/matchmaking/matchmaking.service";
+import { logger } from "../../shared/logger";
 
 function getWalletFromSocket(socket: Socket): string {
   return String(socket.data.walletAddress ?? "");
@@ -38,6 +40,7 @@ function resolveWinnerWallet(results: ChallengeResultRecord[]): string | null {
 
 const QueueJoinPayloadSchema = z.object({
   wager: z.coerce.number().int().min(0).max(1_000_000).default(0),
+  roomId: z.string().trim().min(1).optional(),
 });
 
 const MatchShotPayloadSchema = z.object({
@@ -57,6 +60,8 @@ export function attachMultiplayerGateway(server: HttpServer) {
   const roomByChallenge = new Map<string, string>();
   const currentTurnByChallenge = new Map<string, string>();
   const shotSequenceByChallenge = new Map<string, number>();
+  const pendingWalletByEscrowRoom = new Map<string, string>();
+  const pendingEscrowRoomByWallet = new Map<string, string>();
 
   namespace.use((socket, next) => {
     const walletAddress = socket.handshake.auth?.walletAddress;
@@ -82,8 +87,73 @@ export function attachMultiplayerGateway(server: HttpServer) {
               : payloadOrAck;
           const parsedPayload = QueueJoinPayloadSchema.parse(payload);
           const wager = parsedPayload.wager;
+          const requestedRoomId = parsedPayload.roomId;
 
           const walletAddress = getWalletFromSocket(socket);
+
+          if (requestedRoomId) {
+            const pendingWallet = pendingWalletByEscrowRoom.get(requestedRoomId);
+
+            if (!pendingWallet || pendingWallet === walletAddress) {
+              pendingWalletByEscrowRoom.set(requestedRoomId, walletAddress);
+              pendingEscrowRoomByWallet.set(walletAddress, requestedRoomId);
+              ack?.({
+                ok: true,
+                result: {
+                  matched: false,
+                  roomId: requestedRoomId,
+                  wager,
+                },
+              });
+              return;
+            }
+
+            const opponentWallet = pendingWallet;
+            pendingWalletByEscrowRoom.delete(requestedRoomId);
+            pendingEscrowRoomByWallet.delete(opponentWallet);
+            pendingEscrowRoomByWallet.delete(walletAddress);
+
+            const challenge = await challengeService.createChallenge(opponentWallet, {
+              mode: "REALTIME",
+              opponentWallet: walletAddress,
+              stakeEnabled: false,
+              stakeAmount: 0,
+            });
+            await challengeService.acceptChallenge(challenge.id, walletAddress);
+
+            challengeByRoom.set(requestedRoomId, challenge.id);
+            roomByChallenge.set(challenge.id, requestedRoomId);
+
+            joinWalletSocketsToRoom(namespace, walletAddress, requestedRoomId);
+            joinWalletSocketsToRoom(namespace, opponentWallet, requestedRoomId);
+            namespace.to(requestedRoomId).emit("match.start", {
+              roomId: requestedRoomId,
+              players: [walletAddress, opponentWallet],
+              challengeId: challenge.id,
+              wager,
+            });
+
+            const firstTurnWallet = challenge.challengerWallet;
+            currentTurnByChallenge.set(challenge.id, firstTurnWallet);
+            shotSequenceByChallenge.set(challenge.id, 0);
+            namespace.to(requestedRoomId).emit("match.turn", {
+              challengeId: challenge.id,
+              currentTurnWallet: firstTurnWallet,
+            });
+
+            ack?.({
+              ok: true,
+              result: {
+                matched: true,
+                roomId: requestedRoomId,
+                opponentWallet,
+                wager,
+                challengeId: challenge.id,
+              },
+            });
+            return;
+          }
+
           const result = await matchmakingService.joinQueue(walletAddress, wager);
           if (result.matched && result.roomId && result.opponentWallet) {
             const challenge = await challengeService.createChallenge(result.opponentWallet, {
@@ -136,8 +206,27 @@ export function attachMultiplayerGateway(server: HttpServer) {
 
     socket.on("queue.leave", async (ack?: (payload: unknown) => void) => {
       const walletAddress = getWalletFromSocket(socket);
+      const pendingRoomId = pendingEscrowRoomByWallet.get(walletAddress);
+      if (pendingRoomId) {
+        pendingEscrowRoomByWallet.delete(walletAddress);
+        if (pendingWalletByEscrowRoom.get(pendingRoomId) === walletAddress) {
+          pendingWalletByEscrowRoom.delete(pendingRoomId);
+        }
+      }
       const result = await matchmakingService.leaveQueue(walletAddress);
       ack?.({ ok: true, result });
+    });
+
+    socket.on("disconnect", () => {
+      const walletAddress = getWalletFromSocket(socket);
+      const pendingRoomId = pendingEscrowRoomByWallet.get(walletAddress);
+      if (pendingRoomId) {
+        pendingEscrowRoomByWallet.delete(walletAddress);
+        if (pendingWalletByEscrowRoom.get(pendingRoomId) === walletAddress) {
+          pendingWalletByEscrowRoom.delete(pendingRoomId);
+        }
+      }
+      void matchmakingService.leaveQueue(walletAddress);
     });
 
     socket.on("match.shot.submit", async (payload: unknown, ack?: (payload: unknown) => void) => {
@@ -228,10 +317,18 @@ export function attachMultiplayerGateway(server: HttpServer) {
         const results = await challengeService.listResults(parsed.challengeId);
         let winnerWallet = resolveWinnerWallet(results);
         let txDigest: string | null = null;
+        let loserWallet: string | null = null;
+        let settlementPayload: unknown = null;
 
         try {
           const finalized = await challengeService.finalizeChallenge(parsed.challengeId, winnerWallet);
           winnerWallet = finalized.challenge.winnerWallet;
+          if (winnerWallet && finalized.challenge.opponentWallet) {
+            loserWallet =
+              winnerWallet === finalized.challenge.challengerWallet
+                ? finalized.challenge.opponentWallet
+                : finalized.challenge.challengerWallet;
+          }
           txDigest = finalized.chainResult.digest;
         } catch (err) {
           const existing = await challengeService.getChallenge(parsed.challengeId);
@@ -239,6 +336,34 @@ export function attachMultiplayerGateway(server: HttpServer) {
             throw err;
           }
           winnerWallet = existing.winnerWallet;
+          if (winnerWallet && existing.opponentWallet) {
+            loserWallet =
+              winnerWallet === existing.challengerWallet
+                ? existing.opponentWallet
+                : existing.challengerWallet;
+          }
+        }
+
+        if (roomId && winnerWallet && loserWallet) {
+          try {
+            const digestBytes = Array.from(new TextEncoder().encode(parsed.challengeId));
+            settlementPayload = await settlementPayloadService.buildPayload({
+              roomId,
+              winner: winnerWallet,
+              loser: loserWallet,
+              matchDigest: digestBytes,
+            });
+          } catch (error) {
+            logger.warn(
+              {
+                challengeId: parsed.challengeId,
+                roomId,
+                error,
+              },
+              "Failed to build valuation lobby settlement payload",
+            );
+            settlementPayload = null;
+          }
         }
 
         if (roomId) {
@@ -246,6 +371,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
             challengeId: parsed.challengeId,
             winnerWallet,
             txDigest,
+            settlementPayload,
           });
         }
 
@@ -262,6 +388,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
           finalized: {
             winnerWallet,
             txDigest,
+            settlementPayload,
           },
         });
       } catch (err) {
