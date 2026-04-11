@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { AlertCircle, Landmark, Swords, Users } from "lucide-react";
@@ -45,6 +45,12 @@ export default function PvPScreen() {
   const [joinRoomId, setJoinRoomId] = useState("");
   const [escrowSubmitting, setEscrowSubmitting] = useState(false);
   const [settleSubmitting, setSettleSubmitting] = useState(false);
+  const [activeLobbySigner, setActiveLobbySigner] = useState<number[] | null>(
+    null,
+  );
+  const [signerState, setSignerState] = useState<
+    "loading" | "ready" | "missing" | "error"
+  >("loading");
 
   const handleBack = () => navigate("/dashboard");
   const handleLeave = () => {
@@ -67,6 +73,65 @@ export default function PvPScreen() {
     const coinPoints = Number(escrowCoinMist / 100_000_000n);
     return selectedLobbyNFTPoints + coinPoints;
   }, [escrowCoinMist, selectedLobbyNFTPoints]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSigner = async () => {
+      try {
+        const obj = await suiClient.getObject({
+          id: LOBBY_CONFIG_OBJECT_ID,
+          options: { showContent: true },
+        });
+
+        const fields = (
+          obj.data?.content as { fields?: Record<string, unknown> } | undefined
+        )?.fields;
+
+        const collectByteVectors = (value: unknown): number[][] => {
+          if (Array.isArray(value)) {
+            if (
+              value.length > 0 &&
+              value.every((item) => typeof item === "number")
+            ) {
+              return [value as number[]];
+            }
+            return value.flatMap((item) => collectByteVectors(item));
+          }
+
+          if (value && typeof value === "object") {
+            const record = value as Record<string, unknown>;
+            if ("fields" in record) return collectByteVectors(record.fields);
+            if ("value" in record) return collectByteVectors(record.value);
+            if ("vec" in record) return collectByteVectors(record.vec);
+            return Object.values(record).flatMap((item) =>
+              collectByteVectors(item),
+            );
+          }
+
+          return [];
+        };
+
+        const signers = collectByteVectors(fields?.active_signer_pubkeys);
+        if (!cancelled) {
+          setActiveLobbySigner(signers[0] ?? null);
+          setSignerState(signers.length > 0 ? "ready" : "missing");
+        }
+      } catch (error) {
+        console.warn("Unable to load active signer from LobbyConfig", error);
+        if (!cancelled) {
+          setActiveLobbySigner(null);
+          setSignerState("error");
+        }
+      }
+    };
+
+    void loadSigner();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [suiClient]);
 
   const handleJoin = () => {
     const selectedRoomId = createdRoomId ?? joinRoomId.trim();
@@ -115,6 +180,22 @@ export default function PvPScreen() {
       toast.error("Chưa cấu hình LOBBY_CONFIG_OBJECT_ID.");
       return;
     }
+    if (signerState === "loading") {
+      toast.error(
+        "Đang tải dữ liệu signer từ LobbyConfig. Vui lòng thử lại sau.",
+      );
+      return;
+    }
+    if (signerState === "missing") {
+      toast.error(
+        "LobbyConfig chưa có active signer on-chain. Cần add signer một lần bằng admin cap trước khi tạo room.",
+      );
+      return;
+    }
+    if (signerState === "error" || !activeLobbySigner) {
+      toast.error("Không đọc được active signer từ LobbyConfig.");
+      return;
+    }
     if (selectedLobbyNfts.length === 0) {
       toast.error("Chọn ít nhất một NFT để khóa vào phòng.");
       return;
@@ -135,6 +216,7 @@ export default function PvPScreen() {
       targetPoints: escrowTargetPoints,
       coinMist: escrowCoinMist,
       deadlineMs,
+      signerPubkey: activeLobbySigner ?? undefined,
     });
 
     signAndExecute(
@@ -515,8 +597,11 @@ export default function PvPScreen() {
                 <p className="text-sm text-sky-900 font-semibold leading-6">
                   PvP hiện dùng queue socket realtime cho phần ghép trận. Cơ chế
                   valuation lobby là lớp escrow/settlement theo tổng giá trị NFT
-                  + SUI. Signer được backend đọc từ env, không cần thao tác
-                  admin trên UI nữa.
+                  + SUI. Active signer được đọc từ LobbyConfig on-chain, không
+                  cần thao tác admin trên UI nữa.
+                </p>
+                <p className="mt-2 text-xs font-black text-sky-700 break-all">
+                  Active signer state: {signerState}
                 </p>
               </div>
             </div>

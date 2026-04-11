@@ -8,6 +8,7 @@
     "start": "node --experimental-specifier-resolution=node dist/main.js",
     "test": "tsx src/tests/run-tests.ts",
     "test:build": "npm run build && tsx src/tests/run-tests.ts",
+    "admin:add-lobby-signer": "tsx src/scripts/add-lobby-signer.ts",
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down",
     "infra:logs": "docker compose logs -f --tail=200",
