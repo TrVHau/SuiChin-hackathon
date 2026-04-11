@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useOwnedNFTs, type CuonChunNFT } from "@/hooks/useOwnedNFTs";
 import { useRedeemChunFlow } from "@/hooks/useRedeemChunFlow";
+import { useRecycleFusionFlow } from "@/hooks/useRecycleFusionFlow";
+import { useGame } from "@/providers/GameContext";
 import PageHeader from "@/components/common/PageHeader";
 import RefreshButton from "@/components/common/RefreshButton";
 import {
@@ -15,6 +17,7 @@ import {
 
 export default function InventoryScreen() {
   const navigate = useNavigate();
+  const { playerData } = useGame();
   const handleBack = () => navigate("/dashboard");
   const handleOpenMarketplace = () => navigate("/marketplace");
   const handleOpenTradeUp = () => navigate("/trade-up");
@@ -33,9 +36,21 @@ export default function InventoryScreen() {
   });
 
   const [tierFilter, setTierFilter] = useState<TierFilter>("all");
+  const {
+    recycleNft,
+    recycleScrap,
+    fuseFirstTwentyScraps,
+    busyNftId,
+    busyScrapId,
+    fusing,
+  } = useRecycleFusionFlow(playerData?.objectId, () => {
+    refetch();
+  });
 
   const filteredNFTs =
-    tierFilter === "all" ? cuonChuns : cuonChuns.filter((n) => n.tier === tierFilter);
+    tierFilter === "all"
+      ? cuonChuns
+      : cuonChuns.filter((n) => n.tier === tierFilter);
   const totalItems = cuonChuns.length + scraps.length + badges.length;
 
   const handleRefresh = () => {
@@ -57,7 +72,12 @@ export default function InventoryScreen() {
           subtitle={`${totalItems} vat pham`}
           backBorderClass="border-playful-blue"
           backIconClass="text-playful-blue"
-          rightSlot={<RefreshButton onClick={handleRefresh} loading={loading || treasurySyncing} />}
+          rightSlot={
+            <RefreshButton
+              onClick={handleRefresh}
+              loading={loading || treasurySyncing}
+            />
+          }
         />
 
         {loading && totalItems === 0 ? (
@@ -74,13 +94,23 @@ export default function InventoryScreen() {
               onOpenMarketplace={handleOpenMarketplace}
               onOpenTradeUp={handleOpenTradeUp}
               onRedeem={handleRedeemNFT}
+              onRecycleNft={recycleNft}
+              isRecyclingNft={(objectId) => busyNftId === objectId}
               isRedeeming={isRedeeming}
               getRedeemLabel={getRedeemLabel}
-              isRedeemDisabled={(tier) => !treasuryConfigured || !getRedeemPreview(tier).canRedeem}
+              isRedeemDisabled={(tier) =>
+                !treasuryConfigured || !getRedeemPreview(tier).canRedeem
+              }
               getRedeemDisabledReason={(tier) => getRedeemPreview(tier).reason}
             />
 
-            <InventoryScrapSection scraps={scraps} />
+            <InventoryScrapSection
+              scraps={scraps}
+              onRecycleScrap={recycleScrap}
+              onFuseScraps={fuseFirstTwentyScraps}
+              fusing={fusing}
+              recyclingScrapId={busyScrapId}
+            />
 
             <InventoryBadgeSection badges={badges} />
           </div>

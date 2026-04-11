@@ -10,6 +10,26 @@ router.get(
   indexerController.getLeaderboard.bind(indexerController),
 );
 router.get(
+  "/players/:user_address/profile",
+  indexerController.getPlayerProfileSummary.bind(indexerController),
+);
+router.get(
+  "/players/:user_address/inventory",
+  indexerController.getPlayerInventorySummary.bind(indexerController),
+);
+router.get(
+  "/crafts/:user_address/history",
+  indexerController.getCraftHistory.bind(indexerController),
+);
+router.get(
+  "/rooms/:roomId",
+  indexerController.getRoomProof.bind(indexerController),
+);
+router.get(
+  "/proofs/:roomId",
+  indexerController.getRoomProof.bind(indexerController),
+);
+router.get(
   "/matches/:user_address",
   indexerController.getMatchHistory.bind(indexerController),
 );

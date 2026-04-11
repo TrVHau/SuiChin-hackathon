@@ -1,4 +1,7 @@
 import { env } from "../../config/env";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
 
 type PrismaLikeClient = Record<string, any>;
 

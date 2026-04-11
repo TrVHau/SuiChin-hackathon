@@ -7,8 +7,24 @@ export const NETWORK = (import.meta.env.VITE_SUI_NETWORK || "devnet") as
 export const PACKAGE_ID =
   import.meta.env.VITE_SUI_PACKAGE_ID ||
   "0xc3af7f46fe6846cd24010156ef6354858bf20908ecc6711f9389dc1e71df290a";
+export const LOBBY_PACKAGE_ID =
+  import.meta.env.VITE_LOBBY_PACKAGE_ID || PACKAGE_ID;
+export const LOBBY_CONFIG_OBJECT_ID =
+  import.meta.env.VITE_LOBBY_CONFIG_OBJECT_ID ||
+  "0x97768e538486e200e486a8833c195f15e94c60c92aec4de4ecfe517e93ba64a1";
+export const LOBBY_SIGNER_PUBKEY =
+  import.meta.env.VITE_LOBBY_SIGNER_PUBKEY || "signer_1";
+export const LOBBY_DEFAULT_TARGET_POINTS =
+  Number(import.meta.env.VITE_LOBBY_DEFAULT_TARGET_POINTS || 1000);
+export const LOBBY_DEFAULT_COIN_MIST = BigInt(
+  import.meta.env.VITE_LOBBY_DEFAULT_COIN_MIST || "100000000",
+);
 export const MARKET_OBJECT_ID = import.meta.env.VITE_MARKET_OBJECT_ID || "";
 export const TREASURY_OBJECT_ID = import.meta.env.VITE_TREASURY_OBJECT_ID || "";
+export const CRAFT_CONFIG_OBJECT_ID =
+  import.meta.env.VITE_CRAFT_CONFIG_OBJECT_ID ||
+  "0x937b7360b90015ceea3346b3c49a4e91621fd56d33437233e768af3c6ffd6f2f";
+export const RANDOM_OBJECT_ID = import.meta.env.VITE_RANDOM_OBJECT_ID || "0x8";
 export const CLOCK_OBJECT_ID = "0x6";
 export const BACKEND_URL =
   import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";

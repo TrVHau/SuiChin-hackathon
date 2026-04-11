@@ -22,10 +22,10 @@ export class CryptoService {
   private initializeKeypair(): Ed25519Keypair {
     const secretKey = env.ADMIN_SECRET_KEY; // Managed by config/env.ts with Zod
     if (!secretKey) {
-      logger.error(
-        "ADMIN_SECRET_KEY is missing. PvP Gateway crypto service cannot start.",
+      logger.warn(
+        "ADMIN_SECRET_KEY is missing. Falling back to ephemeral keypair for this process.",
       );
-      throw new Error("Fatal: Missing ADMIN_SECRET_KEY in environment.");
+      return new Ed25519Keypair();
     }
 
     try {
@@ -42,8 +42,10 @@ export class CryptoService {
 
       return Ed25519Keypair.fromSecretKey(secretBytes);
     } catch (e: any) {
-      logger.error(`Failed to initialize Ed25519Keypair: ${e.message}`);
-      throw new Error("Fatal: Invalid ADMIN_SECRET_KEY format.");
+      logger.warn(
+        `Failed to initialize Ed25519Keypair from ADMIN_SECRET_KEY. Using ephemeral keypair instead. Reason: ${e.message}`,
+      );
+      return new Ed25519Keypair();
     }
   }
 

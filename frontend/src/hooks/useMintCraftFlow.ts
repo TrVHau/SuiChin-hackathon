@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useSuiClient, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
-import { buildCraftChunTx } from "@/lib/sui-client";
+import {
+  buildCraftChunTx,
+  buildCraftChunWithRandomnessTx,
+} from "@/lib/sui-client";
 import { useGame } from "@/providers/GameContext";
 import {
   TREASURY_OBJECT_ID,
+  CRAFT_CONFIG_OBJECT_ID,
   PACKAGE_ID,
   computeCraftCost,
 } from "@/config/sui.config";
@@ -75,7 +79,9 @@ export function useMintCraftFlow() {
     suiClient
       .getObject({ id: TREASURY_OBJECT_ID, options: { showContent: true } })
       .then((obj) => {
-        const fields = (obj.data?.content as { fields?: Record<string, unknown> })?.fields;
+        const fields = (
+          obj.data?.content as { fields?: Record<string, unknown> }
+        )?.fields;
         const total = Number(fields?.total_crafts ?? 0);
         setCraftCost(computeCraftCost(total));
       })
@@ -90,8 +96,9 @@ export function useMintCraftFlow() {
   const cfg = useMemo(
     () =>
       craftResult
-        ? MINT_TIER_CONFIG[craftResult.tier as keyof typeof MINT_TIER_CONFIG] ??
-          MINT_TIER_CONFIG[0]
+        ? (MINT_TIER_CONFIG[
+            craftResult.tier as keyof typeof MINT_TIER_CONFIG
+          ] ?? MINT_TIER_CONFIG[0])
         : null,
     [craftResult],
   );
@@ -102,13 +109,34 @@ export function useMintCraftFlow() {
       options: { showEvents: true, showEffects: true, showObjectChanges: true },
     });
 
-    const status = (txBlock.effects as { status?: { status?: string; error?: string } } | undefined)
-      ?.status;
+    const status = (
+      txBlock.effects as
+        | { status?: { status?: string; error?: string } }
+        | undefined
+    )?.status;
     if (status?.status === "failure") {
       throw new Error(status.error ?? "Transaction failed");
     }
 
-    const event = txBlock.events?.find((e) => e.type === `${PACKAGE_ID}::craft::CraftResult`);
+    const finalizedEvent = txBlock.events?.find(
+      (e) => e.type === `${PACKAGE_ID}::craft_actions::CraftResultFinalized`,
+    );
+    if (finalizedEvent?.parsedJson) {
+      const parsed = finalizedEvent.parsedJson as {
+        tier: number;
+        is_success: boolean;
+        random_value: number;
+      };
+      return {
+        tier: Number(parsed.tier),
+        success: Boolean(parsed.is_success),
+        roll: Number(parsed.random_value) - 1,
+      };
+    }
+
+    const event = txBlock.events?.find(
+      (e) => e.type === `${PACKAGE_ID}::craft_actions::CraftResult`,
+    );
     if (event?.parsedJson) {
       const { tier, success, roll } = event.parsedJson as {
         tier: number;
@@ -122,7 +150,9 @@ export function useMintCraftFlow() {
       };
     }
 
-    const createdObjects = (txBlock.objectChanges ?? []).filter((change) => change.type === "created");
+    const createdObjects = (txBlock.objectChanges ?? []).filter(
+      (change) => change.type === "created",
+    );
 
     const createdScrap = createdObjects.find((change) =>
       String(change.objectType ?? "").includes("::scrap::Scrap"),
@@ -135,14 +165,18 @@ export function useMintCraftFlow() {
       String(change.objectType ?? "").includes("::cuon_chun::CuonChunNFT"),
     );
     if (createdNft) {
-      const createdObjectId = "objectId" in createdNft ? String(createdNft.objectId) : "";
+      const createdObjectId =
+        "objectId" in createdNft ? String(createdNft.objectId) : "";
       if (createdObjectId) {
         const nftObj = await suiClient.getObject({
           id: createdObjectId,
           options: { showContent: true },
         });
-        const fields = (nftObj.data?.content as { fields?: Record<string, unknown> } | undefined)
-          ?.fields;
+        const fields = (
+          nftObj.data?.content as
+            | { fields?: Record<string, unknown> }
+            | undefined
+        )?.fields;
         const tier = Number(fields?.tier ?? 1);
         return { tier, success: true, roll: -1 };
       }
@@ -152,14 +186,27 @@ export function useMintCraftFlow() {
     throw new Error("Khong doc duoc ket qua craft tren chain");
   };
 
-  const readLiveCraftState = async (): Promise<{ liveChun: number; liveCost: number }> => {
+  const readLiveCraftState = async (): Promise<{
+    liveChun: number;
+    liveCost: number;
+  }> => {
     const [profileObj, treasuryObj] = await Promise.all([
-      suiClient.getObject({ id: resolvedProfileId, options: { showContent: true } }),
-      suiClient.getObject({ id: TREASURY_OBJECT_ID, options: { showContent: true } }),
+      suiClient.getObject({
+        id: resolvedProfileId,
+        options: { showContent: true },
+      }),
+      suiClient.getObject({
+        id: TREASURY_OBJECT_ID,
+        options: { showContent: true },
+      }),
     ]);
 
-    const profileFields = (profileObj.data?.content as { fields?: Record<string, unknown> })?.fields;
-    const treasuryFields = (treasuryObj.data?.content as { fields?: Record<string, unknown> })?.fields;
+    const profileFields = (
+      profileObj.data?.content as { fields?: Record<string, unknown> }
+    )?.fields;
+    const treasuryFields = (
+      treasuryObj.data?.content as { fields?: Record<string, unknown> }
+    )?.fields;
 
     const liveChun = Number(profileFields?.chun_raw ?? 0);
     const totalCrafts = Number(treasuryFields?.total_crafts ?? 0);
@@ -191,7 +238,9 @@ export function useMintCraftFlow() {
     setCrafting(true);
     toast.loading("Dang craft Cuon Chun NFT...", { id: "craft" });
 
-    const tx = buildCraftChunTx(resolvedProfileId, TREASURY_OBJECT_ID);
+    const tx = CRAFT_CONFIG_OBJECT_ID
+      ? buildCraftChunWithRandomnessTx(resolvedProfileId, TREASURY_OBJECT_ID)
+      : buildCraftChunTx(resolvedProfileId, TREASURY_OBJECT_ID);
 
     signAndExecute(
       { transaction: tx },
@@ -210,16 +259,22 @@ export function useMintCraftFlow() {
             }
 
             const resolvedCfg =
-              MINT_TIER_CONFIG[data.tier as keyof typeof MINT_TIER_CONFIG] ?? MINT_TIER_CONFIG[0];
+              MINT_TIER_CONFIG[data.tier as keyof typeof MINT_TIER_CONFIG] ??
+              MINT_TIER_CONFIG[0];
             const rollText = data.roll >= 0 ? ` (roll: ${data.roll})` : "";
 
             if (data.success) {
-              toast.success(`${resolvedCfg.headline}${rollText}`, { id: "craft" });
+              toast.success(`${resolvedCfg.headline}${rollText}`, {
+                id: "craft",
+              });
             } else {
-              toast.error(`${resolvedCfg.headline}${rollText}`, { id: "craft" });
+              toast.error(`${resolvedCfg.headline}${rollText}`, {
+                id: "craft",
+              });
             }
           } catch (err) {
-            const message = err instanceof Error ? err.message : "Unknown error";
+            const message =
+              err instanceof Error ? err.message : "Unknown error";
             toast.error(`Craft that bai: ${message}`, { id: "craft" });
             try {
               const { liveChun, liveCost } = await readLiveCraftState();
@@ -239,11 +294,15 @@ export function useMintCraftFlow() {
           setCrafting(false);
           const message = String(err?.message ?? "");
           if (message.includes("103")) {
-            toast.error("Craft that bai: Khong du Chun Raw (Abort 103)", { id: "craft" });
+            toast.error("Craft that bai: Khong du Chun Raw (Abort 103)", {
+              id: "craft",
+            });
             return;
           }
           if (message.includes("500")) {
-            toast.error("Craft that bai: Khong du 0.1 SUI nap vao pool", { id: "craft" });
+            toast.error("Craft that bai: Khong du 0.1 SUI nap vao pool", {
+              id: "craft",
+            });
             return;
           }
           toast.error(`Craft that bai: ${message}`, { id: "craft" });

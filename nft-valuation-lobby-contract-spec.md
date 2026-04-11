@@ -1,16 +1,18 @@
 # Đặc Tả Contract: NFT Valuation Lobby PvP Escrow (Sui)
 
+Tài liệu này đã được đồng bộ theo contract hiện tại trong `contract/sources/nft_valuation_lobby.move` và `contract/sources/nft_valuation_lobby_config.move`.
+
 ## 1. Mục tiêu chức năng
 
 Thiết kế cơ chế PvP 2 người chơi theo mô hình cược theo tổng giá trị điểm, không bắt buộc hai bên phải cược cùng loại tài sản.
 
 Nguyên tắc chính:
 
-- Mỗi trận có một mức Total Stake (điểm mục tiêu), ví dụ 1000 điểm.
-- Người chơi có thể nạp hỗn hợp NFT và coin (Chun/SUI) miễn tổng điểm đạt đúng hoặc vượt ngưỡng tối thiểu theo luật.
-- Tài sản của cả hai bên bị khóa on-chain trong escrow trước khi trận bắt đầu.
+- Mỗi trận có một mức `target_points`.
+- Người chơi có thể nạp hỗn hợp NFT `CuonChunNFT` và coin SUI miễn tổng điểm đạt luật định.
+- Tài sản của cả hai bên bị khóa on-chain trong `BetRoom` trước khi trận bắt đầu.
 - Kết quả trận được backend game ký số và contract chỉ chấp nhận kết quả có chữ ký hợp lệ.
-- Settlement phải atomic: người thắng nhận toàn bộ pool theo quy tắc, người thua nhận consolation scrap, hệ thống trích platform fee.
+- Settlement là atomic: người thắng nhận toàn bộ pool theo quy tắc, người thua nhận `Scrap`, hệ thống trích platform fee.
 
 ## 2. Giá trị Web3 cần thể hiện
 
@@ -18,195 +20,201 @@ Mục tiêu trình bày với hội đồng và người không rành blockchain
 
 - Ownership thật: tài sản được khóa và giải ngân bởi smart contract, không phụ thuộc niềm tin vào server.
 - Minh bạch: điều kiện thắng thua và phân phối tài sản được thực thi on-chain.
-- Chống quỵt kèo: không thể rút tài sản giữa trận khi trạng thái đã Active.
-- Chống giả mạo kết quả: chỉ chấp nhận thông điệp có chữ ký backend hợp lệ.
+- Chống quỵt kèo: không thể rút tài sản giữa trận khi trạng thái đã `ACTIVE`.
+- Chống giả mạo kết quả: chỉ chấp nhận thông điệp có chữ ký backend hợp lệ và signer nằm trong whitelist.
 
 ## 3. Luồng nghiệp vụ tổng quan
 
-### Bước 1: Create and Deposit (A tạo phòng)
+### Bước 1: Create and Deposit
 
 - A chọn NFT cược và số coin bù.
-- Contract định giá tất cả tài sản theo bảng quy đổi điểm.
-- Nếu tổng điểm không đạt yêu cầu Total Stake của phía A, giao dịch bị reject.
-- Nếu hợp lệ, tạo BetRoom ở trạng thái Waiting và khóa tài sản A vào escrow.
+- Contract định giá tất cả tài sản theo bảng quy đổi điểm trong `LobbyConfig`.
+- Nếu tổng điểm không đạt yêu cầu `target_points`, giao dịch bị reject.
+- Nếu hợp lệ, tạo `BetRoom` ở trạng thái `WAITING` và khóa tài sản A vào escrow.
 
-### Bước 2: Match and Deposit (B tham gia)
+### Bước 2: Match and Deposit
 
-- B nạp tài sản (NFT, coin, hoặc mix) sao cho đạt điều kiện đối ứng theo luật điểm.
-- Contract kiểm tra và khóa tài sản B vào cùng BetRoom.
-- Chuyển trạng thái BetRoom từ Waiting sang Active.
-- Từ thời điểm Active, cấm rút tài sản đơn phương.
+- B nạp tài sản (NFT, coin, hoặc mix) sao cho đạt điều kiện theo luật điểm.
+- Contract kiểm tra và khóa tài sản B vào cùng `BetRoom`.
+- Chuyển trạng thái `BetRoom` từ `WAITING` sang `ACTIVE`.
+- Từ thời điểm `ACTIVE`, không còn luồng cancel đơn phương.
 
 ### Bước 3: Off-chain Battle
 
-- Trận đấu chạy off-chain trên Node.js + Socket.io để đảm bảo realtime.
-- Backend lưu vết dữ liệu trận (turns, shots, timeout, disconnect).
+- Trận đấu chạy off-chain trên Node.js + Socket.IO để đảm bảo realtime.
+- Backend lưu vết dữ liệu trận như turns, shots, timeout, disconnect.
 
 ### Bước 4: Settlement by Signed Result
 
-- Backend ký thông điệp kết quả gồm room_id, winner, nonce, deadline.
-- Contract verify chữ ký bằng public key đã cấu hình.
+- Backend ký thông điệp kết quả gồm `room_id`, `winner`, `loser`, `match_digest`, `nonce`, `deadline_ms`.
+- Contract verify chữ ký bằng public key đã cấu hình và nằm trong whitelist.
 - Nếu hợp lệ:
-- Phân phối toàn bộ escrow cho winner theo quy tắc.
-- Mint scrap an ủi cho loser.
-- Trích platform fee về treasury.
-- Đặt trạng thái BetRoom thành Settled.
+  - Phân phối toàn bộ escrow cho winner theo quy tắc.
+  - Mint `Scrap` cho loser.
+  - Trích platform fee về treasury.
+  - Đặt trạng thái `BetRoom` thành `SETTLED`.
+
+### Bước 5: Emergency refund
+
+- Nếu room đã `ACTIVE` nhưng quá hạn mà chưa settle được, contract cho phép emergency refund sau thời gian chờ cấu hình.
+- Refund này tách biệt với luồng settle bình thường.
 
 ## 4. Thiết kế object và dữ liệu on-chain
 
-Đề xuất object chính:
+### 4.1 `BetRoom` (shared object)
 
-### 4.1 BetRoom (shared object)
+- `id: UID`
+- `creator: address`
+- `joiner: option<address>`
+- `target_points: u64`
+- `status: u8` với các giá trị:
+  - `0 = WAITING`
+  - `1 = ACTIVE`
+  - `2 = SETTLED`
+  - `3 = CANCELLED`
+  - `4 = EMERGENCY_REFUNDED`
+- `created_at_ms: u64`
+- `activated_at_ms: option<u64>`
+- `deadline_ms: u64`
+- `signer_pubkey: vector<u8>`
+- `escrow_snapshot_hash: vector<u8>`
+- `nonce: u64`
+- `creator_coin: Balance<SUI>`
+- `joiner_coin: Balance<SUI>`
+- `creator_nft_ids: vector<ID>`
+- `joiner_nft_ids: vector<ID>`
+- `creator_points: u64`
+- `joiner_points: u64`
+- `fee_bps: u16`
 
-- room_id: ID
-- creator: address
-- joiner: option<address>
-- target_points: u64
-- status: u8 (Waiting, Active, Settled, Cancelled, EmergencyRefunded)
-- created_at_ms: u64
-- activated_at_ms: option<u64>
-- deadline_ms: u64
-- server_pubkey_id: u64 hoặc object ref
-- escrow_snapshot_hash: vector<u8> (optional, phục vụ audit)
-- nonce: u64 (chống replay settlement)
+### 4.2 `LobbyConfig` (admin controlled shared object)
 
-### 4.2 Escrow Vault (nội bộ room)
+- `tier_points_bronze: u64`
+- `tier_points_silver: u64`
+- `tier_points_gold: u64`
+- `coin_point_rate: u64`
+- `platform_fee_bps: u16`
+- `emergency_refund_delay_ms: u64`
+- `active_signer_pubkeys: vector<vector<u8>>`
+- `paused: bool`
+- `strict_equal_points: bool`
+- `chain_id: u8`
+- `treasury: address`
+- `event_version: u64`
 
-- creator_coin_amount: u64
-- joiner_coin_amount: u64
-- creator_nft_ids: vector<ID>
-- joiner_nft_ids: vector<ID>
-- creator_points: u64
-- joiner_points: u64
-- fee_bps: u16
+### 4.3 Admin cap
 
-### 4.3 Config object (admin controlled)
+- `LobbyAdminCap` được dùng để gọi các hàm admin set pause, fee, signer, treasury, chain id, và rule điểm.
 
-- tier_points_bronze: u64
-- tier_points_silver: u64
-- tier_points_gold: u64
-- coin_point_rate: u64
-- platform_fee_bps: u16 (giới hạn max ví dụ <= 300 = 3%)
-- emergency_refund_delay_ms: u64 (ví dụ 24h)
-- active_signer_pubkeys: vector<vector<u8>>
-- paused: bool
-
-## 5. Luật định giá (Valuation Rules)
+## 5. Luật định giá
 
 Bắt buộc triển khai trực tiếp trong contract:
 
 - Bronze NFT = 100 điểm
 - Silver NFT = 250 điểm
 - Gold NFT = 1000 điểm
-- Coin quy đổi điểm theo coin_point_rate
+- Coin quy đổi điểm theo `coin_point_rate`
 
 Quy tắc kiểm tra:
 
-- Tổng điểm ký quỹ từng bên phải >= target_points hoặc == target_points theo mode được chọn.
-- Khuyến nghị mode mặc định: >= target_points, phần vượt không hoàn trong phòng cược chuẩn.
-- Nếu muốn công bằng tuyệt đối: thêm mode strict_equal_points (cả hai phải bằng đúng).
+- Mặc định: tổng điểm mỗi bên phải `>= target_points`.
+- Nếu bật `strict_equal_points = true`, mỗi bên phải đúng bằng `target_points`.
+- Contract hiện không yêu cầu 2 bên phải nạp cùng loại tài sản.
 
-## 6. API/hàm contract bắt buộc
+## 6. API/hàm contract hiện có
 
-### 6.1 Quản trị
+### 6.1 Khởi tạo / test setup
 
-- init_config(...)
-- set_point_rules(...)
-- set_platform_fee(...)
-- add_signer_pubkey(...)
-- remove_signer_pubkey(...)
-- set_pause(...)
+- `nft_valuation_lobby::test_init(ctx)`
+- `nft_valuation_lobby_config::test_init(ctx)`
 
-### 6.2 Phòng cược
+### 6.2 Quản trị
 
-- create_room_with_deposit(
-  target_points,
-  nft_inputs,
-  coin_input,
-  selected_signer,
-  deadline_ms
-  )
-- join_room_with_deposit(
-  room_id,
-  nft_inputs,
-  coin_input
-  )
-- cancel_waiting_room(room_id)
+- `set_pause(config, cap, paused)`
+- `set_point_rules(config, cap, bronze_points, silver_points, gold_points)`
+- `set_coin_point_rate(config, cap, coin_point_rate)`
+- `set_platform_fee(config, cap, platform_fee_bps)`
+- `set_emergency_refund_delay(config, cap, delay_ms)`
+- `set_chain_id(config, cap, chain_id)`
+- `set_treasury(config, cap, treasury)`
+- `set_strict_equal_points(config, cap, strict_equal_points)`
+- `add_signer_pubkey(config, cap, signer_pubkey)`
+- `remove_signer_pubkey(config, cap, signer_pubkey)`
 
-### 6.3 Settlement
+### 6.3 Phòng cược
 
-- settle_room_with_signature(
-  room_id,
-  winner,
-  loser,
-  match_digest,
-  nonce,
-  deadline_ms,
-  signature,
-  signer_pubkey
-  )
+- `create_room_with_deposit(config, target_points, nfts, coin_input, selected_signer, deadline_ms, clock, ctx)`
+- `join_room_with_deposit(config, room, nfts, coin_input, clock, ctx)`
+- `cancel_waiting_room(config, room, clock, ctx)`
 
-### 6.4 Emergency
+### 6.4 Settlement
 
-- emergency_refund(room_id) (admin hoặc dual-consent)
-- confirm_refund_by_player(room_id) (nếu dùng cơ chế 2 chữ ký người chơi)
+- `settle_room_with_signature(config, room, winner, loser, match_digest, nonce, deadline_ms, signature, signer_pubkey, clock, ctx)`
+
+### 6.5 Emergency
+
+- `emergency_refund(config, room, clock, ctx)`
+
+### 6.6 Helper getters
+
+- `status(room)`
+- `creator(room)`
+- `target_points(room)`
+- `creator_points(room)`
+- `joiner_points(room)`
+- `platform_fee_bps(config)`
+- `chain_id(config)`
 
 ## 7. Verify chữ ký và anti-tampering
 
-7.1 Cấu trúc thông điệp ký (Message to Sign)
-Để chống giả mạo và dùng lại chữ ký (Replay Attack), Backend và Contract phải thống nhất một chuỗi byte (bcs serialized) theo thứ tự sau:
-intent_scope: 1 byte (Dùng để phân biệt đây là chữ ký giao dịch game, tránh bị lấy chữ ký này ký cho giao dịch khác trên ví).
-chain_id: Để phân biệt Testnet/Mainnet.
+### 7.1 Cấu trúc thông điệp ký
 
-package_id: ID của contract này (Chống cross-protocol replay).
+Backend và contract phải thống nhất thông điệp ký theo đúng struct `SettlementMessage`:
 
-room_id: ID của phòng đấu cụ thể.
+- `intent_scope: u8` với giá trị hiện tại là `1`
+- `chain_id: u8`
+- `package_id: address` với giá trị `@suichin`
+- `room_id: ID`
+- `winner: address`
+- `loser: address`
+- `match_digest: vector<u8>`
+- `nonce: u64`
+- `deadline_ms: u64`
 
-winner & loser: Địa chỉ ví 2 bên.
+### 7.2 Logic thực thi trong Move
 
-match_digest: Mã băm (hash) của log trận đấu từ Server.
+Trong `settle_room_with_signature` contract đang làm đúng các bước sau:
 
-nonce: Số thứ tự trận đấu (lấy từ Object BetRoom).
+- Kiểm tra trạng thái: `room.status == ACTIVE`.
+- Kiểm tra thời gian: `clock::timestamp_ms(clock) < deadline_ms`.
+- Kiểm tra nonce: `nonce == room.nonce`.
+- Kiểm tra `signer_pubkey == room.signer_pubkey`.
+- Kiểm tra signer nằm trong whitelist `active_signer_pubkeys`.
+- Reconstruct message bằng `bcs`.
+- Verify bằng `sui::ed25519::ed25519_verify(&signature, &signer_pubkey, &msg)`.
 
-deadline_ms: Thời gian hết hạn của chữ ký này.
+### 7.3 Chặn replay
 
-7.2 Logic thực thi trong Move (Yêu cầu cho Dev)
-Bạn Dev cần thực hiện chính xác các bước sau trong hàm settle_bet:
-
-Kiểm tra trạng thái: assert!(room.status == ACTIVE, EInvalidStatus);
-
-Kiểm tra thời gian: assert!(clock::now_ms(clock) < deadline_ms, EExpiredSignature);
-
-Kiểm tra Nonce: assert!(nonce == room.nonce, EInvalidNonce); (Đảm bảo chữ ký này dành riêng cho lượt đấu hiện tại).
-
-Reconstruct Message: Sử dụng thư viện bcs để gộp các trường dữ liệu trên thành một vector<u8>.
-
-Verify: \* Sử dụng: sui::ed25519::ed25519_verify(&signature, &server_pubkey, &message_bytes).
-
-Nếu trả về false, lập tức abort giao dịch.
-
-7.3 Chặn Replay (Post-settlement)
-Sau khi verify thành công và chuyển tiền, phải cập nhật room.status = SETTLED.
-
-Tăng room.nonce = room.nonce + 1.
-
-Lưu ý: Việc chuyển trạng thái sang SETTLED là bước quan trọng nhất để chữ ký đó không bao giờ dùng lại được nữa cho phòng này.
+- Sau khi verify và chuyển tài sản, contract đặt `room.status = SETTLED`.
+- Contract tăng `room.nonce = room.nonce + 1`.
+- Đây là guard chính để cùng một chữ ký không thể dùng lại cho room đó.
 
 ## 8. Settlement economics
 
-Thứ tự xử lý settlement:
+Thứ tự xử lý settlement hiện tại:
 
-- Tính gross_pool = toàn bộ coin trong escrow + NFT escrow.
-- Tính platform_fee = coin_pool \* fee_bps / 10_000.
-- Chuyển fee về treasury.
+- Gộp toàn bộ coin của creator và joiner thành pool.
+- Tính `fee_paid = gross_pool * fee_bps / 10_000`.
+- Chuyển fee về `treasury`.
 - Chuyển coin còn lại cho winner.
 - Chuyển toàn bộ NFT escrow cho winner.
-- Mint scrap cho loser (1-2 scrap theo rule cố định hoặc theo pool tier).
+- Mint `Scrap` cho loser thông qua `scrap::mint_for(loser, ctx)`.
 
 Lưu ý:
 
-- Nếu pool chứa nhiều loại asset, không để partial transfer fail giữa chừng.
-- Bắt buộc atomic toàn giao dịch.
+- Fee hiện chỉ áp trên coin pool.
+- NFT không bị chia nhỏ, toàn bộ NFT của room đi về winner.
+- Tất cả xử lý phải atomic trong một transaction.
 
 ## 9. Edge cases bắt buộc xử lý
 
@@ -217,55 +225,45 @@ Lưu ý:
 
 ### 9.2 Không có người join
 
-- A được cancel khi room còn Waiting.
-- Hoàn trả đúng toàn bộ tài sản ban đầu.
+- Room ở trạng thái `WAITING` có thể bị cancel bởi creator.
+- Tài sản được trả về đúng chủ ban đầu.
 
 ### 9.3 Server sự cố
 
-- Sau emergency_refund_delay_ms (ví dụ 24h), cho phép emergency refund.
-- Hai phương án:
-- Admin refund (nhanh, tập trung).
-- Dual-consent refund từ cả 2 player (phi tập trung hơn).
+- Sau `emergency_refund_delay_ms`, cho phép emergency refund.
+- Hiện contract dùng một luồng emergency refund chung, không phải dual-consent.
 
 ### 9.4 Lệch loại tài sản cược
 
-- Hợp lệ nếu tổng điểm đáp ứng target_points.
+- Hợp lệ nếu tổng điểm đáp ứng `target_points`.
 - Không yêu cầu cùng tier giữa 2 bên.
 
 ### 9.5 Replay attack chữ ký
 
-- Chặn bằng nonce + deadline + room status guard.
+- Chặn bằng `nonce + deadline + room status + signer whitelist`.
 
 ### 9.6 Double settlement
 
-- Chặn bằng status == Active trước khi settle.
+- Chặn bằng guard `room.status == ACTIVE` trước khi settle.
 
-## 10. Event schema đề xuất
+## 10. Event schema thực tế
 
-Phải emit event đầy đủ để backend/indexer/FE truy vết:
+Contract hiện emit các event sau:
 
-- RoomCreated { room_id, creator, target_points, creator_points }
-- RoomJoined { room_id, joiner, joiner_points }
-- RoomActivated { room_id, activated_at_ms }
-- RoomCancelled { room_id, by, reason }
-- RoomSettled {
-  room_id,
-  winner,
-  loser,
-  fee_paid,
-  creator_points,
-  joiner_points,
-  match_digest
-  }
-- EmergencyRefunded { room_id, refund_mode }
+- `RoomCreated { version, room_id, creator, target_points, creator_points, deadline_ms, timestamp_ms }`
+- `RoomJoined { version, room_id, joiner, joiner_points, timestamp_ms }`
+- `RoomActivated { version, room_id, activated_at_ms }`
+- `RoomCancelled { version, room_id, by, reason, timestamp_ms }`
+- `RoomSettled { version, room_id, winner, loser, fee_paid, creator_points, joiner_points, match_digest, timestamp_ms }`
+- `EmergencyRefunded { version, room_id, refund_mode, timestamp_ms }`
 
 ## 11. Security checklist cho dev contract
 
 - Validate ownership NFT trước khi nạp escrow.
 - Validate coin amount không overflow, không underflow.
-- Fee bps bị chặn max cứng (ví dụ <= 300).
+- Fee bps bị chặn max cứng ở `MAX_PLATFORM_FEE_BPS = 300`.
 - Không cho settle nếu signer không thuộc whitelist pubkey.
-- Không cho cancel khi room đã Active.
+- Không cho cancel khi room đã `ACTIVE`.
 - Không cho emergency refund khi chưa đủ thời gian.
 - Không để object bị orphan do luồng lỗi giữa chừng.
 
@@ -273,50 +271,50 @@ Phải emit event đầy đủ để backend/indexer/FE truy vết:
 
 Backend phải cung cấp:
 
-- room_id on-chain mapping với match_id off-chain.
-- match_digest (hash biên bản trận).
-- winner/loser address.
-- signer key rotation policy.
-- retry policy gửi settle transaction.
+- Mapping `room_id` on-chain với match id off-chain.
+- `match_digest` là hash biên bản trận.
+- `winner` và `loser` address.
+- `signer_pubkey` đúng với key whitelist trên chain.
+- Retry policy gửi settlement transaction.
 
 Khuyến nghị:
 
 - Lưu signed payload đầy đủ ở backend để audit.
 - Có idempotency key khi gọi settle để giảm duplicate tx.
 
-## 13. Test matrix bắt buộc
+## 13. Test matrix nên bám theo contract hiện tại
 
 ### 13.1 Unit tests (Move)
 
-- create_room success/fail theo points.
-- join_room success/fail theo points.
-- cancel only waiting.
-- settle valid signature.
-- settle invalid signature.
-- settle wrong nonce.
-- settle expired deadline.
-- settle twice rejected.
-- emergency refund before/after timeout.
+- create room success/fail theo points.
+- join room success/fail theo points.
+- cancel chỉ cho room waiting.
+- settle với signature hợp lệ.
+- settle với signature sai.
+- settle với nonce sai.
+- settle với deadline hết hạn.
+- settle lặp lại phải bị reject.
+- emergency refund trước/sau timeout.
 
 ### 13.2 Integration tests
 
-- A: NFT+coin, B: coin-only, settle success.
-- A: gold-only, B: many assets mix, settle success.
-- Fee and scrap mint correctness.
+- A: NFT + coin, B: coin-only, settle success.
+- A: gold-only, B: mix nhiều tài sản, settle success.
+- Fee và scrap mint đúng.
 
 ### 13.3 Adversarial tests
 
 - forged signer key.
-- replay same signature twice.
-- malicious join with mismatched asset metadata.
+- replay cùng một signature hai lần.
+- malicious join với metadata tài sản không hợp lệ.
 
 ## 14. Definition of Done
 
 Hoàn thành khi đạt đủ:
 
-- Có object BetRoom + Config + escrow flow hoạt động.
+- Có object `BetRoom` + `LobbyConfig` + escrow flow hoạt động.
 - Có verify chữ ký backend thành công và chặn giả mạo.
-- Có settlement atomic (winner payout + fee + loser scrap).
+- Có settlement atomic gồm winner payout, fee, và loser scrap.
 - Có emergency refund flow.
 - Event đầy đủ cho indexer/FE.
 - Test pass cho tất cả case ở mục 13.
@@ -325,21 +323,23 @@ Hoàn thành khi đạt đủ:
 
 Phase 1:
 
-- Waiting/Active/Settled, create/join/cancel/settle với 1 signer.
+- Waiting / Active / Settled.
+- Create / join / cancel / settle với 1 signer.
 
 Phase 2:
 
-- Emergency refund + dual-consent mode.
+- Emergency refund.
+- Hệ signer rotation nếu cần mở rộng.
 
 Phase 3:
 
-- Signer rotation + governance + monitoring hooks.
+- Governance / monitoring hooks / indexer mở rộng.
 
 ## 16. Tóm tắt bàn giao cho dev contract
 
 Dev contract cần tập trung 4 nhóm việc:
 
-- Định giá tài sản (NFT tier + coin points) trong Move.
-- Escrow multi-asset cho cả hai bên trong cùng BetRoom.
+- Định giá tài sản trong Move bằng tier points và coin points.
+- Escrow multi-asset cho cả hai bên trong cùng `BetRoom`.
 - Verify chữ ký Ed25519 của backend để chốt kết quả.
-- Settlement atomic có fee và mint scrap cho loser.
+- Settlement atomic có fee và mint `Scrap` cho loser.

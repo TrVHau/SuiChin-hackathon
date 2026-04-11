@@ -8,7 +8,11 @@ interface PvpResolvedCardProps {
   onBack: () => void;
 }
 
-export default function PvpResolvedCard({ pvp, isMe, onBack }: PvpResolvedCardProps) {
+export default function PvpResolvedCard({
+  pvp,
+  isMe,
+  onBack,
+}: PvpResolvedCardProps) {
   return (
     <motion.div
       initial={{ scale: 0.8, opacity: 0 }}
@@ -17,10 +21,16 @@ export default function PvpResolvedCard({ pvp, isMe, onBack }: PvpResolvedCardPr
     >
       <Trophy className="size-16 text-yellow-500 mx-auto mb-4" />
       <p className="font-black text-3xl text-gray-900 mb-2">
-        {!pvp.winner ? "Hòa trận" : isMe(pvp.winner ?? "") ? "Bạn thắng! 🏆" : "Bạn thua 💀"}
+        {!pvp.winner
+          ? "Hòa trận"
+          : isMe(pvp.winner ?? "")
+            ? "Bạn thắng! 🏆"
+            : "Bạn thua 💀"}
       </p>
       {pvp.resultTx && (
-        <p className="text-xs text-gray-400 break-all mb-6">Tx: {pvp.resultTx.slice(0, 20)}...</p>
+        <p className="text-xs text-gray-400 break-all mb-6">
+          Tx digest: {pvp.resultTx.slice(0, 20)}...
+        </p>
       )}
       <motion.button
         onClick={onBack}

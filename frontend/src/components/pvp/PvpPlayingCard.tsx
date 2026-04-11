@@ -55,7 +55,8 @@ export default function PvpPlayingCard({
       </div>
 
       <p className="text-xs text-gray-500 mt-2">
-        Tran ket thuc khi mot ben bi de. Ket qua luu local, chua ghi on-chain.
+        Tran ket thuc khi mot ben bi de. Ket qua duoc gui len backend de
+        finalize va ghi nhan thong qua settlement flow.
       </p>
     </motion.div>
   );

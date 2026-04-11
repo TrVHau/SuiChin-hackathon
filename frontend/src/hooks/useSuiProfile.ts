@@ -90,6 +90,18 @@ export function useSuiProfile() {
     [suiClient],
   );
 
+  const hasGasCoin = useCallback(
+    async (owner: string): Promise<boolean> => {
+      const coins = await suiClient.getCoins({ owner, coinType: "0x2::sui::SUI" });
+      const totalBalance = coins.data.reduce((sum, coin) => {
+        const balance = Number(coin.balance ?? 0);
+        return Number.isFinite(balance) ? sum + balance : sum;
+      }, 0);
+      return totalBalance > 0;
+    },
+    [suiClient],
+  );
+
   const loadProfile = useCallback(async () => {
     if (!account?.address) return;
 
@@ -136,6 +148,15 @@ export function useSuiProfile() {
         onSuccess?.();
         return;
       }
+
+      const gasReady = await hasGasCoin(account.address);
+      if (!gasReady) {
+        toast.error(
+          "Tai khoan chua co SUI gas coin. Hay claim faucet hoac nap SUI truoc khi tao profile.",
+        );
+        onError?.();
+        return;
+      }
     } catch (error) {
       console.error("Pre-create profile check failed:", error);
       // Continue to create if check fails unexpectedly.
@@ -155,7 +176,18 @@ export function useSuiProfile() {
         },
         onError: (error) => {
           console.error("Create profile error:", error);
-          toast.error("Tao profile that bai");
+          const message = String(error?.message ?? "");
+          if (message.includes("No valid gas coins")) {
+            toast.error(
+              "Khong co gas coin hop le. Hay claim faucet hoac dung vi da nap SUI.",
+            );
+          } else if (message.includes("JWK not found") || message.includes("Invalid user signature")) {
+            toast.error(
+              "Chu ky zkLogin khong hop le hoac JWK chua sync. Hay dang nhap lai Google/Twitch/Facebook va thu lai.",
+            );
+          } else {
+            toast.error(`Tao profile that bai: ${message || "unknown error"}`);
+          }
           onError?.();
         },
       },

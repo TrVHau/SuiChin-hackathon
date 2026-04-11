@@ -1,10 +1,10 @@
 import { suiClient } from "./sui-client";
-import { PrismaClient } from "@prisma/client";
+import { getPrismaClient } from "../db/prisma";
 import { env } from "../../config/env";
 import { logger } from "../../shared/logger";
 import cron from "node-cron";
 
-const prisma = new PrismaClient();
+const prisma = getPrismaClient() as Record<string, any>;
 
 // The package ID to filter out events
 const PACKAGE_ID = env.SUI_PACKAGE_ID || "";
@@ -109,13 +109,14 @@ export class IndexerService {
 
         hasNextPage = result.hasNextPage;
         if (result.nextCursor && result.data.length > 0) {
-          cursor = result.nextCursor;
+          const nextCursor = result.nextCursor;
+          cursor = nextCursor;
           // Update DB sync state
           await prisma.syncState.update({
             where: { id: 1 },
             data: {
-              cursorTxDigest: cursor.txDigest,
-              cursorEventSeq: cursor.eventSeq,
+              cursorTxDigest: nextCursor.txDigest,
+              cursorEventSeq: nextCursor.eventSeq,
             },
           });
         }
