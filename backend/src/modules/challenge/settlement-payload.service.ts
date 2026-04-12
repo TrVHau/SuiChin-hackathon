@@ -3,6 +3,7 @@ import { decodeSuiPrivateKey } from "@mysten/sui/cryptography";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { fromBase64, normalizeSuiAddress } from "@mysten/sui/utils";
 import { env } from "../../config/env";
+import { logger } from "../../shared/logger";
 import { suiClient } from "../../infra/chain/sui-client";
 
 const SETTLEMENT_INTENT_SCOPE = 1;
@@ -61,20 +62,32 @@ function collectByteVectors(value: unknown): number[][] {
 
 function parseEd25519Keypair(secretKeyValue: string): Ed25519Keypair {
   if (!secretKeyValue) {
-    throw new Error("Missing signer secret key");
+    logger.warn(
+      "Missing LOBBY_SIGNER_SECRET_KEY/ADMIN_SECRET_KEY. Using ephemeral settlement keypair.",
+    );
+    return new Ed25519Keypair();
   }
 
-  if (secretKeyValue.startsWith("suiprivkey")) {
-    const decoded = decodeSuiPrivateKey(secretKeyValue);
-    if (decoded.scheme !== "ED25519") {
-      throw new Error(`Expected ED25519 key, got ${decoded.scheme}`);
+  try {
+    if (secretKeyValue.startsWith("suiprivkey")) {
+      const decoded = decodeSuiPrivateKey(secretKeyValue);
+      if (decoded.scheme !== "ED25519") {
+        throw new Error(`Expected ED25519 key, got ${decoded.scheme}`);
+      }
+      return Ed25519Keypair.fromSecretKey(decoded.secretKey);
     }
-    return Ed25519Keypair.fromSecretKey(decoded.secretKey);
-  }
 
-  const raw = fromBase64(secretKeyValue);
-  const normalized = raw.length === 33 && raw[0] === 0x00 ? raw.slice(1) : raw;
-  return Ed25519Keypair.fromSecretKey(normalized);
+    const raw = fromBase64(secretKeyValue);
+    const normalized =
+      raw.length === 33 && raw[0] === 0x00 ? raw.slice(1) : raw;
+    return Ed25519Keypair.fromSecretKey(normalized);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.warn(
+      `Failed to initialize settlement keypair from configured secret. Using ephemeral keypair instead. Reason: ${message}`,
+    );
+    return new Ed25519Keypair();
+  }
 }
 
 async function getRoomData(roomId: string): Promise<ParsedRoomData> {
@@ -194,4 +207,11 @@ export class SettlementPayloadService {
   }
 }
 
-export const settlementPayloadService = new SettlementPayloadService();
+let settlementPayloadServiceInstance: SettlementPayloadService | null = null;
+
+export function getSettlementPayloadService(): SettlementPayloadService {
+  if (!settlementPayloadServiceInstance) {
+    settlementPayloadServiceInstance = new SettlementPayloadService();
+  }
+  return settlementPayloadServiceInstance;
+}

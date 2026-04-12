@@ -8,6 +8,7 @@ const prisma = getPrismaClient() as Record<string, any>;
 
 // The package ID to filter out events
 const PACKAGE_ID = env.SUI_PACKAGE_ID || "";
+const EVENT_MODULES = ["craft_actions", "nft_valuation_lobby"] as const;
 
 export class IndexerService {
   private isCatchingUp = false;
@@ -74,51 +75,34 @@ export class IndexerService {
     this.isCatchingUp = true;
 
     try {
-      let syncState = await prisma.syncState.findFirst({ where: { id: 1 } });
-      if (!syncState) {
-        // Initialize if not present
-        syncState = await prisma.syncState.create({
-          data: { id: 1, cursorTxDigest: "", cursorEventSeq: "" },
-        });
-      }
+      for (const moduleName of EVENT_MODULES) {
+        let cursor: { txDigest: string; eventSeq: string } | null = null;
 
-      let hasNextPage = true;
-      let cursor =
-        syncState.cursorTxDigest && syncState.cursorEventSeq
-          ? {
-              txDigest: syncState.cursorTxDigest,
-              eventSeq: syncState.cursorEventSeq,
-            }
-          : null;
-
-      while (hasNextPage) {
-        const result = await suiClient.queryEvents({
-          query: {
-            MoveEventModule: {
-              package: PACKAGE_ID,
-              module: "nft_valuation_lobby",
+        while (true) {
+          const result = await suiClient.queryEvents({
+            query: {
+              MoveEventModule: {
+                package: PACKAGE_ID,
+                module: moduleName,
+              },
             },
-          },
-          order: "ascending", // MUST process chronologically
-        });
-
-        // Batch process the events
-        for (const event of result.data) {
-          await this.processEvent(event);
-        }
-
-        hasNextPage = result.hasNextPage;
-        if (result.nextCursor && result.data.length > 0) {
-          const nextCursor = result.nextCursor;
-          cursor = nextCursor;
-          // Update DB sync state
-          await prisma.syncState.update({
-            where: { id: 1 },
-            data: {
-              cursorTxDigest: nextCursor.txDigest,
-              cursorEventSeq: nextCursor.eventSeq,
-            },
+            order: "ascending",
+            limit: 50,
+            cursor: cursor ?? undefined,
           });
+
+          for (const event of result.data) {
+            await this.processEvent(event);
+          }
+
+          if (!result.hasNextPage || !result.nextCursor) {
+            break;
+          }
+
+          cursor = {
+            txDigest: result.nextCursor.txDigest,
+            eventSeq: result.nextCursor.eventSeq,
+          };
         }
       }
     } catch (error) {
@@ -135,27 +119,50 @@ export class IndexerService {
   private async processEvent(event: any) {
     const eventType = event.type.split("::").pop();
     const payload = event.parsedJson || {};
+    const timestampMs = BigInt(event.timestampMs || Date.now());
 
     // Ignore insertion if TxDigest+EventSeq exists using ON CONFLICT DO NOTHING trickery
     // We achieve this logically via `create` catching P2002 error
     try {
       switch (eventType) {
         case "CraftResult":
+        case "CraftResultFinalized": {
+          const playerAddress = payload.player || payload.actor;
+          const itemMintedId = String(
+            payload.nft_minted_id ??
+              payload.item_id ??
+              payload.craft_id ??
+              event.id.txDigest,
+          );
+          const itemType =
+            payload.item_type ||
+            (payload.is_success === false || Number(payload.tier ?? 0) === 0
+              ? "SCRAP"
+              : `TIER_${Number(payload.tier ?? 0)}`);
+
           await prisma.craftEvent.create({
             data: {
               txDigest: event.id.txDigest,
               eventSeq: event.id.eventSeq,
-              playerAddress: payload.player,
-              itemMintedId: payload.item_id,
-              itemType: payload.item_type,
-              timestampMs: BigInt(event.timestampMs || Date.now()),
+              playerAddress,
+              itemMintedId,
+              itemType,
+              timestampMs,
             },
           });
-          logger.info(`Indexed CraftEvent: ${payload.item_id}`);
+          logger.info(`Indexed CraftEvent: ${itemMintedId}`);
+          break;
+        }
+
+        case "CraftRequested":
+        case "CraftRandomnessFulfilled":
+          logger.debug(
+            { eventType, payload },
+            "Observed craft lifecycle event",
+          );
           break;
 
         case "RoomSettled":
-          // Extract info from payload
           await prisma.matchEvent.create({
             data: {
               txDigest: event.id.txDigest,
@@ -164,10 +171,21 @@ export class IndexerService {
               winnerAddress: payload.winner,
               loserAddress: payload.loser,
               pointChange: payload.point_change || 10, // Example point metric
-              timestampMs: BigInt(event.timestampMs || Date.now()),
+              timestampMs,
             },
           });
           logger.info(`Indexed MatchEvent: Room ${payload.room_id} Settled`);
+          break;
+
+        case "RecycleRewardIssued":
+          logger.info(
+            {
+              burnedAssetId: payload.burned_asset_id,
+              burnedAssetType: payload.burned_asset_type,
+              rewardChun: payload.reward_chun,
+            },
+            "Observed recycle reward event",
+          );
           break;
 
         case "ScrapFused":
@@ -175,13 +193,38 @@ export class IndexerService {
             data: {
               txDigest: event.id.txDigest,
               eventSeq: event.id.eventSeq,
-              playerAddress: payload.player,
-              inputItemIds: payload.destroyed_items || [],
-              outputItemId: payload.new_item_id,
-              timestampMs: BigInt(event.timestampMs || Date.now()),
+              playerAddress: payload.player || payload.actor,
+              inputItemIds: Array.isArray(payload.destroyed_items)
+                ? payload.destroyed_items
+                : [],
+              outputItemId: payload.new_item_id || payload.minted_nft_id,
+              timestampMs,
             },
           });
-          logger.info(`Indexed FusionEvent: Yielded ${payload.new_item_id}`);
+          logger.info(
+            `Indexed FusionEvent: Yielded ${payload.new_item_id || payload.minted_nft_id}`,
+          );
+          break;
+
+        case "ScrapsFused":
+          await prisma.fusionEvent.create({
+            data: {
+              txDigest: event.id.txDigest,
+              eventSeq: event.id.eventSeq,
+              playerAddress: payload.player || payload.actor,
+              inputItemIds: [],
+              outputItemId: payload.minted_nft_id,
+              timestampMs,
+            },
+          });
+          logger.info(`Indexed FusionEvent: Yielded ${payload.minted_nft_id}`);
+          break;
+
+        case "InventoryChanged":
+          logger.debug(
+            { action: payload.action, amount: payload.amount },
+            "Observed inventory change event",
+          );
           break;
 
         default:

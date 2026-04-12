@@ -1,9 +1,9 @@
 import type { Server as HttpServer } from "node:http";
 import { Server, type Socket } from "socket.io";
 import { z } from "zod";
-import { corsOrigins } from "../../config/env";
+import { corsOrigins, env } from "../../config/env";
 import { challengeService } from "../../modules/challenge/challenge.service";
-import { settlementPayloadService } from "../../modules/challenge/settlement-payload.service";
+import { getSettlementPayloadService } from "../../modules/challenge/settlement-payload.service";
 import { SubmitResultSchema } from "../../modules/challenge/challenge.schemas";
 import type { ChallengeResultRecord } from "../../modules/challenge/challenge.types";
 import { matchmakingService } from "../../modules/matchmaking/matchmaking.service";
@@ -344,10 +344,12 @@ export function attachMultiplayerGateway(server: HttpServer) {
           }
         }
 
-        if (roomId && winnerWallet && loserWallet) {
+        const settlementSecret = env.LOBBY_SIGNER_SECRET_KEY ?? env.ADMIN_SECRET_KEY;
+
+        if (roomId && winnerWallet && loserWallet && settlementSecret) {
           try {
             const digestBytes = Array.from(new TextEncoder().encode(parsed.challengeId));
-            settlementPayload = await settlementPayloadService.buildPayload({
+            settlementPayload = await getSettlementPayloadService().buildPayload({
               roomId,
               winner: winnerWallet,
               loser: loserWallet,
