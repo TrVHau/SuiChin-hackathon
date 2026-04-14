@@ -2,14 +2,14 @@
 # this file contains metadata from ephemeral publications
 # this file should not be committed to source control
 
-build-env = "devnet"
-chain-id = "609cb156"
+build-env = "testnet"
+chain-id = "8e04bdd1"
 
 [[published]]
 source = { local = "/mnt/c/code/blockchain/SuiChin-hackathon/contract" }
-published-at = "0xc3af7f46fe6846cd24010156ef6354858bf20908ecc6711f9389dc1e71df290a"
-original-id = "0xc3af7f46fe6846cd24010156ef6354858bf20908ecc6711f9389dc1e71df290a"
+published-at = "0x318c56af25e8aecbefc5c647a46d3d19dd655da31b91d9841ac4265ba0ec1fdd"
+original-id = "0x318c56af25e8aecbefc5c647a46d3d19dd655da31b91d9841ac4265ba0ec1fdd"
 version = 1
 toolchain-version = "1.69.0"
 build-config = { flavor = "sui", edition = "2024" }
-upgrade-capability = "0xcd6b2d69a86788441af97c2dec2c0b1c70f2fd4ffa2e666cae25f1f33b3f61d5"
+upgrade-capability = "0x6627ae110affdbfc543410debd1e77a2b203db303257781a7f83657883976c87"

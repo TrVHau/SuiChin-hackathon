@@ -25,6 +25,55 @@ function base64ToBytes(value: string): number[] {
   return Array.from(bytes);
 }
 
+function parseSignerPubkeyInput(value: string): number[] {
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (
+        Array.isArray(parsed) &&
+        parsed.every(
+          (item) =>
+            typeof item === "number" && Number.isInteger(item) && item >= 0 && item <= 255,
+        )
+      ) {
+        return parsed as number[];
+      }
+    } catch {
+      // fall back to other formats
+    }
+  }
+
+  const compact = trimmed.replace(/\s+/g, "");
+  if (/^\d+(,\d+)+$/.test(compact)) {
+    const parsed = compact.split(",").map(Number);
+    if (parsed.every((item) => Number.isInteger(item) && item >= 0 && item <= 255)) {
+      return parsed;
+    }
+  }
+
+  if (/^0x[0-9a-fA-F]+$/.test(trimmed) && (trimmed.length - 2) % 2 === 0) {
+    const bytes: number[] = [];
+    for (let index = 2; index < trimmed.length; index += 2) {
+      bytes.push(Number.parseInt(trimmed.slice(index, index + 2), 16));
+    }
+    return bytes;
+  }
+
+  if (/^[A-Za-z0-9+/]+={0,2}$/.test(compact) && compact.length % 4 === 0) {
+    try {
+      const decoded = base64ToBytes(compact);
+      if (decoded.length > 0) return decoded;
+    } catch {
+      // fall back to utf-8 text encoding
+    }
+  }
+
+  return textToBytes(trimmed);
+}
+
 export function buildInitProfileTx(): Transaction {
   const tx = new Transaction();
   tx.moveCall({
@@ -268,7 +317,7 @@ export function buildCreateValuationLobbyRoomTx(input: {
   const [coinInput] = tx.splitCoins(tx.gas, [input.coinMist]);
   const signerPubkeyBytes = Array.isArray(input.signerPubkey)
     ? input.signerPubkey
-    : textToBytes(input.signerPubkey ?? LOBBY_SIGNER_PUBKEY);
+    : parseSignerPubkeyInput(input.signerPubkey ?? LOBBY_SIGNER_PUBKEY);
 
   tx.moveCall({
     target: `${LOBBY_PACKAGE_ID}::nft_valuation_lobby::create_room_with_deposit`,
@@ -328,7 +377,7 @@ export function buildAddValuationLobbySignerTx(input: {
   const tx = new Transaction();
   const signerPubkeyBytes = Array.isArray(input.signerPubkey)
     ? input.signerPubkey
-    : textToBytes(input.signerPubkey);
+    : parseSignerPubkeyInput(input.signerPubkey);
 
   tx.moveCall({
     target: `${LOBBY_PACKAGE_ID}::nft_valuation_lobby::add_signer_pubkey`,

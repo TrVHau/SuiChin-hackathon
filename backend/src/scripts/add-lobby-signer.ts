@@ -67,12 +67,14 @@ async function main() {
     ],
   });
 
-  const txDigest = tx.getDigest();
-
-  await keypair.signAndExecuteTransaction({
+  const response = await keypair.signAndExecuteTransaction({
     transaction: tx,
     client: suiClient,
   });
+  const txDigest =
+    response.$kind === "Transaction"
+      ? response.Transaction.digest
+      : response.FailedTransaction?.digest ?? null;
 
   console.log(
     JSON.stringify(

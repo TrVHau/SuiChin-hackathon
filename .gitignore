@@ -1,58 +1,58 @@
-# GitHub workflows
-.github/
-
-# Editor
+# Workspace metadata
 .vscode/
 .idea/
+.github/
 .aidlc-rule-details/
 .copilot/
+aidlc/
 aidlc-docs/
 AGENTS.md
-# Move build outputs
-contract/build/
-
-# Node
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-# Build outputs
-dist/
-dist-ssr/
-build/
-*.local
-
-# Environment variables
-.env
-.env.*
-!.env.example
 
 # OS files
 .DS_Store
 Thumbs.db
 
-# Editor files
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-*.swp
-*~
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+debug*.log
 
-# Temp files
+# Temp and cache
 *.tmp
 *.temp
+*~
 .cache/
-
-# Test coverage
+**/.cache/
 coverage/
+**/coverage/
 *.lcov
 
-# Debug logs
-debug*.log
-# Ignore aidlc folder
-aidlc/
+# Node artifacts
+node_modules/
+**/node_modules/
+dist/
+dist-ssr/
+build/
+**/dist/
+**/dist-ssr/
+**/build/
+*.local
+
+# Environment files
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+!**/.env.*.example
+
+# Move artifacts
+contract/build/
+contract/Publish*.toml
+contract/Pub*.toml
+contract/publish.latest.json

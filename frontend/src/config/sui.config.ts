@@ -6,14 +6,15 @@ export const NETWORK = (import.meta.env.VITE_SUI_NETWORK || "devnet") as
 
 export const PACKAGE_ID =
   import.meta.env.VITE_SUI_PACKAGE_ID ||
-  "0xc3af7f46fe6846cd24010156ef6354858bf20908ecc6711f9389dc1e71df290a";
+  "0x318c56af25e8aecbefc5c647a46d3d19dd655da31b91d9841ac4265ba0ec1fdd";
 export const LOBBY_PACKAGE_ID =
   import.meta.env.VITE_LOBBY_PACKAGE_ID || PACKAGE_ID;
 export const LOBBY_CONFIG_OBJECT_ID =
   import.meta.env.VITE_LOBBY_CONFIG_OBJECT_ID ||
-  "0x97768e538486e200e486a8833c195f15e94c60c92aec4de4ecfe517e93ba64a1";
+  "0x1209ee0ba8cf4bbe0c0f4f979f19c6e97c6a5b8cfb079034a1d0e8381d0e546a";
 export const LOBBY_SIGNER_PUBKEY =
-  import.meta.env.VITE_LOBBY_SIGNER_PUBKEY || "signer_1";
+  import.meta.env.VITE_LOBBY_SIGNER_PUBKEY ||
+  "AM0K19eocENUQLaqfPXy5BCZ/+Iwki1bYo/6rwiDSX/X";
 export const LOBBY_DEFAULT_TARGET_POINTS =
   Number(import.meta.env.VITE_LOBBY_DEFAULT_TARGET_POINTS || 1000);
 export const LOBBY_DEFAULT_COIN_MIST = BigInt(
@@ -23,7 +24,7 @@ export const MARKET_OBJECT_ID = import.meta.env.VITE_MARKET_OBJECT_ID || "";
 export const TREASURY_OBJECT_ID = import.meta.env.VITE_TREASURY_OBJECT_ID || "";
 export const CRAFT_CONFIG_OBJECT_ID =
   import.meta.env.VITE_CRAFT_CONFIG_OBJECT_ID ||
-  "0x937b7360b90015ceea3346b3c49a4e91621fd56d33437233e768af3c6ffd6f2f";
+  "0x0a77361b14dcb7d4b87cd0838ce0e7fe9b22a34dbfaf0ac1ff63fe2bc47bb735";
 export const RANDOM_OBJECT_ID = import.meta.env.VITE_RANDOM_OBJECT_ID || "0x8";
 export const CLOCK_OBJECT_ID = "0x6";
 export const BACKEND_URL =
