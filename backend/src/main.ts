@@ -24,8 +24,15 @@ async function bootstrap() {
 
   server.listen(env.PORT, () => {
     logger.info({ port: env.PORT }, "Backend started");
-    // Start background indexer globally connected to Devnet/Testnet
-    indexerService.start();
+    // Only run indexer when persistence backend is Prisma/Postgres.
+    if (env.BACKEND_STORAGE === "prisma") {
+      indexerService.start();
+    } else {
+      logger.info(
+        { backendStorage: env.BACKEND_STORAGE },
+        "Skipping indexer start because BACKEND_STORAGE is not prisma",
+      );
+    }
   });
 }
 

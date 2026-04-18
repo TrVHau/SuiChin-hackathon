@@ -10,6 +10,7 @@ import { useOwnedNFTs } from "@/hooks/useOwnedNFTs";
 import {
   buildCancelValuationLobbyRoomTx,
   buildCreateValuationLobbyRoomTx,
+  buildEmergencyRefundValuationLobbyRoomTx,
   buildJoinValuationLobbyRoomTx,
   buildSettleValuationLobbyRoomTx,
 } from "@/lib/sui-client";
@@ -45,6 +46,10 @@ export default function PvPScreen() {
   const [joinRoomId, setJoinRoomId] = useState("");
   const [escrowSubmitting, setEscrowSubmitting] = useState(false);
   const [settleSubmitting, setSettleSubmitting] = useState(false);
+  const [roomStatus, setRoomStatus] = useState<number | null>(null);
+  const [roomDeadlineMs, setRoomDeadlineMs] = useState<number | null>(null);
+  const [emergencyRefundDelayMs, setEmergencyRefundDelayMs] = useState(0);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [activeLobbySigner, setActiveLobbySigner] = useState<number[] | null>(
     null,
   );
@@ -53,7 +58,58 @@ export default function PvPScreen() {
   >("loading");
 
   const handleBack = () => navigate("/dashboard");
-  const handleLeave = () => {
+
+  const cancelLobbyRoomTx = async (roomId: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      const tx = buildCancelValuationLobbyRoomTx(roomId);
+      signAndExecute(
+        { transaction: tx },
+        {
+          onSuccess: () => {
+            setCreatedRoomId(null);
+            setJoinRoomId("");
+            toast.success("Đã hủy phòng escrow on-chain và hoàn tài sản.", {
+              id: "lobby-cancel",
+            });
+            resolve(true);
+          },
+          onError: (error) => {
+            toast.error(
+              `Hủy phòng thất bại: ${String(error?.message ?? error)}`,
+              {
+                id: "lobby-cancel",
+              },
+            );
+            resolve(false);
+          },
+        },
+      );
+    });
+  };
+
+  const handleLeave = async () => {
+    const canAutoCancel =
+      pvp.status === "idle" ||
+      pvp.status === "error" ||
+      pvp.status === "connecting" ||
+      pvp.status === "waiting";
+
+    if (createdRoomId && canAutoCancel) {
+      setEscrowSubmitting(true);
+      toast.loading("Đang hủy room escrow trước khi thoát...", {
+        id: "lobby-cancel",
+      });
+      const cancelled = await cancelLobbyRoomTx(createdRoomId);
+      setEscrowSubmitting(false);
+      if (!cancelled) {
+        return;
+      }
+    } else if (createdRoomId && !canAutoCancel) {
+      toast.info(
+        "Room đang active/đã ghép trận, không thể hủy trực tiếp. Hãy settle hoặc emergency refund on-chain.",
+      );
+    }
+
     leaveQueue();
     navigate("/dashboard");
   };
@@ -73,6 +129,14 @@ export default function PvPScreen() {
     const coinPoints = Number(escrowCoinMist / 100_000_000n);
     return selectedLobbyNFTPoints + coinPoints;
   }, [escrowCoinMist, selectedLobbyNFTPoints]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -115,6 +179,7 @@ export default function PvPScreen() {
         const signers = collectByteVectors(fields?.active_signer_pubkeys);
         if (!cancelled) {
           setActiveLobbySigner(signers[0] ?? null);
+          setEmergencyRefundDelayMs(Number(fields?.emergency_refund_delay_ms ?? 0));
           setSignerState(signers.length > 0 ? "ready" : "missing");
         }
       } catch (error) {
@@ -132,6 +197,51 @@ export default function PvPScreen() {
       cancelled = true;
     };
   }, [suiClient]);
+
+  useEffect(() => {
+    if (!createdRoomId) {
+      setRoomStatus(null);
+      setRoomDeadlineMs(null);
+      return;
+    }
+
+    let disposed = false;
+
+    const loadRoom = async () => {
+      try {
+        const roomObject = await suiClient.getObject({
+          id: createdRoomId,
+          options: { showContent: true },
+        });
+
+        const fields = (
+          roomObject.data?.content as
+            | { fields?: Record<string, unknown> }
+            | undefined
+        )?.fields;
+
+        if (!disposed && fields) {
+          setRoomStatus(Number(fields.status ?? 0));
+          setRoomDeadlineMs(Number(fields.deadline_ms ?? 0));
+        }
+      } catch {
+        if (!disposed) {
+          setRoomStatus(null);
+          setRoomDeadlineMs(null);
+        }
+      }
+    };
+
+    void loadRoom();
+    const intervalId = window.setInterval(() => {
+      void loadRoom();
+    }, 5000);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+    };
+  }, [createdRoomId, suiClient]);
 
   const handleJoin = () => {
     const selectedRoomId = createdRoomId ?? joinRoomId.trim();
@@ -329,29 +439,8 @@ export default function PvPScreen() {
 
     setEscrowSubmitting(true);
     toast.loading("Đang hủy phòng escrow...", { id: "lobby-cancel" });
-
-    const tx = buildCancelValuationLobbyRoomTx(createdRoomId);
-    signAndExecute(
-      { transaction: tx },
-      {
-        onSuccess: () => {
-          setCreatedRoomId(null);
-          toast.success("Đã hủy phòng escrow on-chain.", {
-            id: "lobby-cancel",
-          });
-          setEscrowSubmitting(false);
-        },
-        onError: (error) => {
-          toast.error(
-            `Hủy phòng thất bại: ${String(error?.message ?? error)}`,
-            {
-              id: "lobby-cancel",
-            },
-          );
-          setEscrowSubmitting(false);
-        },
-      },
-    );
+    await cancelLobbyRoomTx(createdRoomId);
+    setEscrowSubmitting(false);
   };
 
   const isMe = (address: string) =>
@@ -400,6 +489,78 @@ export default function PvPScreen() {
       },
     );
   };
+
+  const emergencyRefundOnChain = async () => {
+    if (!createdRoomId) {
+      toast.error("Không có room on-chain để emergency refund.");
+      return;
+    }
+
+    setEscrowSubmitting(true);
+    toast.loading("Đang gọi emergency refund on-chain...", {
+      id: "lobby-emergency-refund",
+    });
+
+    const tx = buildEmergencyRefundValuationLobbyRoomTx(createdRoomId);
+    signAndExecute(
+      { transaction: tx },
+      {
+        onSuccess: () => {
+          toast.success("Emergency refund thành công. Tài sản đã hoàn về ví.", {
+            id: "lobby-emergency-refund",
+          });
+          setEscrowSubmitting(false);
+          setCreatedRoomId(null);
+          setJoinRoomId("");
+          setRoomStatus(null);
+          setRoomDeadlineMs(null);
+        },
+        onError: (error) => {
+          const message = String(error?.message ?? error);
+          if (message.includes("714")) {
+            toast.error(
+              "Chưa đến thời điểm emergency refund theo config on-chain.",
+              { id: "lobby-emergency-refund" },
+            );
+          } else if (message.includes("702")) {
+            toast.error(
+              "Room không ở trạng thái ACTIVE nên không thể emergency refund.",
+              { id: "lobby-emergency-refund" },
+            );
+          } else {
+            toast.error(`Emergency refund thất bại: ${message}`, {
+              id: "lobby-emergency-refund",
+            });
+          }
+          setEscrowSubmitting(false);
+        },
+      },
+    );
+  };
+
+  const roomStatusLabel =
+    roomStatus === 0
+      ? "WAITING"
+      : roomStatus === 1
+        ? "ACTIVE"
+        : roomStatus === 2
+          ? "SETTLED"
+          : roomStatus === 3
+            ? "CANCELLED"
+            : roomStatus === 4
+              ? "EMERGENCY_REFUNDED"
+              : "UNKNOWN";
+
+  const emergencyRefundReadyAt =
+    roomDeadlineMs && emergencyRefundDelayMs
+      ? roomDeadlineMs + emergencyRefundDelayMs
+      : null;
+  const emergencyRefundRemainingMs = emergencyRefundReadyAt
+    ? Math.max(0, emergencyRefundReadyAt - nowMs)
+    : 0;
+  const emergencyRefundRemainingMin = Math.ceil(
+    emergencyRefundRemainingMs / 60_000,
+  );
 
   const renderContent = () => {
     if (pvp.status === "idle" || pvp.status === "error") {
@@ -750,11 +911,30 @@ export default function PvPScreen() {
                   </span>
                 </span>
                 {createdRoomId && (
+                  <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-black text-gray-700">
+                    Status: {roomStatusLabel}
+                  </span>
+                )}
+                {createdRoomId && (
                   <button
                     onClick={cancelLobbyRoom}
                     className="rounded-full border-2 border-red-200 bg-red-50 px-4 py-2 font-black text-red-700"
                   >
                     Hủy phòng
+                  </button>
+                )}
+                {createdRoomId && roomStatus === 1 && (
+                  <button
+                    onClick={emergencyRefundOnChain}
+                    disabled={
+                      escrowSubmitting ||
+                      Boolean(emergencyRefundReadyAt && emergencyRefundRemainingMs > 0)
+                    }
+                    className="rounded-full border-2 border-amber-300 bg-amber-50 px-4 py-2 font-black text-amber-800 disabled:opacity-60"
+                  >
+                    {emergencyRefundReadyAt && emergencyRefundRemainingMs > 0
+                      ? `Emergency refund sau ${emergencyRefundRemainingMin} phút`
+                      : "Emergency refund"}
                   </button>
                 )}
               </div>

@@ -1,13 +1,60 @@
 import { CheckCircle, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
-import { ConnectButton, useCurrentAccount } from "@mysten/dapp-kit";
+import {
+  ConnectButton,
+  useConnectWallet,
+  useCurrentAccount,
+  useWallets,
+} from "@mysten/dapp-kit";
+import { isEnokiWallet } from "@mysten/enoki";
+import { toast } from "sonner";
 import { useLoginHandler } from "@/hooks/useLoginHandler";
 import { useGame } from "@/providers/GameContext";
+import {
+  ENOKI_FACEBOOK_CLIENT_ID,
+  ENOKI_GOOGLE_CLIENT_ID,
+  ENOKI_PUBLIC_API_KEY,
+  ENOKI_TWITCH_CLIENT_ID,
+} from "@/config/sui.config";
 
 export default function LoginScreen() {
   const account = useCurrentAccount();
   const { loading } = useGame();
   const { handleLogin } = useLoginHandler();
+  const { mutate: connectWallet, isPending: connectingWallet } =
+    useConnectWallet();
+  const enokiWallets = useWallets().filter(isEnokiWallet);
+
+  const socialLoginEnabled =
+    Boolean(ENOKI_PUBLIC_API_KEY) &&
+    Boolean(
+      ENOKI_GOOGLE_CLIENT_ID ||
+      ENOKI_FACEBOOK_CLIENT_ID ||
+      ENOKI_TWITCH_CLIENT_ID,
+    );
+
+  const connectEnokiProvider = (provider: "google" | "facebook" | "twitch") => {
+    const wallet = enokiWallets.find((item) => item.provider === provider);
+    if (!wallet) {
+      toast.error(
+        "Nhà cung cấp này chưa sẵn sàng. Kiểm tra lại cấu hình Enoki.",
+      );
+      return;
+    }
+
+    connectWallet(
+      { wallet },
+      {
+        onError: (error) => {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Không thể đăng nhập social";
+          toast.error(message);
+        },
+      },
+    );
+  };
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center px-4 bg-sunny-gradient">
@@ -76,8 +123,52 @@ export default function LoginScreen() {
           className="w-full flex flex-col gap-5"
         >
           {!account ? (
-            <div className="w-full">
-              <ConnectButton className="!w-full !h-20 !rounded-full !shadow-2xl !border-4 !border-white !bg-gradient-to-r !from-playful-blue !to-playful-purple" />
+            <div className="w-full flex flex-col gap-4">
+              {socialLoginEnabled ? (
+                <>
+                  {ENOKI_GOOGLE_CLIENT_ID ? (
+                    <button
+                      type="button"
+                      disabled={connectingWallet}
+                      onClick={() => connectEnokiProvider("google")}
+                      className="w-full h-14 rounded-full shadow-lg border-4 border-white bg-white text-gray-900 font-bold disabled:opacity-60"
+                    >
+                      {connectingWallet
+                        ? "Đang mở Google..."
+                        : "Đăng nhập với Google"}
+                    </button>
+                  ) : null}
+                  {ENOKI_FACEBOOK_CLIENT_ID ? (
+                    <button
+                      type="button"
+                      disabled={connectingWallet}
+                      onClick={() => connectEnokiProvider("facebook")}
+                      className="w-full h-14 rounded-full shadow-lg border-4 border-white bg-[#1877F2] text-white font-bold disabled:opacity-60"
+                    >
+                      {connectingWallet
+                        ? "Đang mở Facebook..."
+                        : "Đăng nhập với Facebook"}
+                    </button>
+                  ) : null}
+                  {ENOKI_TWITCH_CLIENT_ID ? (
+                    <button
+                      type="button"
+                      disabled={connectingWallet}
+                      onClick={() => connectEnokiProvider("twitch")}
+                      className="w-full h-14 rounded-full shadow-lg border-4 border-white bg-[#9146FF] text-white font-bold disabled:opacity-60"
+                    >
+                      {connectingWallet
+                        ? "Đang mở Twitch..."
+                        : "Đăng nhập với Twitch"}
+                    </button>
+                  ) : null}
+                </>
+              ) : null}
+
+              <ConnectButton
+                className="!w-full !h-20 !rounded-full !shadow-2xl !border-4 !border-white !bg-gradient-to-r !from-playful-blue !to-playful-purple"
+                walletFilter={(wallet) => !isEnokiWallet(wallet)}
+              />
             </div>
           ) : (
             <motion.button
@@ -101,7 +192,9 @@ export default function LoginScreen() {
           <div className="bg-white border-4 border-playful-green rounded-3xl p-4 flex items-center justify-center gap-3 shadow-lg">
             <CheckCircle className="size-7 text-playful-green" />
             <p className="font-bold text-base text-gray-900">
-              {account ? `Đã kết nối: ${account.address.slice(0, 6)}...${account.address.slice(-4)}` : "Kết nối ví để bắt đầu!"}
+              {account
+                ? `Đã kết nối: ${account.address.slice(0, 6)}...${account.address.slice(-4)}`
+                : "Kết nối ví để bắt đầu!"}
             </p>
           </div>
         </motion.div>

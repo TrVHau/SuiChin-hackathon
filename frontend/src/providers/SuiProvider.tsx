@@ -1,6 +1,18 @@
-import { SuiClientProvider, WalletProvider } from "@mysten/dapp-kit";
+import {
+  SuiClientProvider,
+  WalletProvider,
+  useSuiClientContext,
+} from "@mysten/dapp-kit";
+import { registerEnokiWallets } from "@mysten/enoki";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { NETWORK } from "@/config/sui.config";
+import { useEffect } from "react";
+import {
+  ENOKI_FACEBOOK_CLIENT_ID,
+  ENOKI_GOOGLE_CLIENT_ID,
+  ENOKI_PUBLIC_API_KEY,
+  ENOKI_TWITCH_CLIENT_ID,
+  NETWORK,
+} from "@/config/sui.config";
 import "@mysten/dapp-kit/dist/index.css";
 
 const queryClient = new QueryClient();
@@ -22,12 +34,47 @@ const networks = {
   localnet: { url: getFullnodeUrl("localnet") },
 };
 
+function RegisterEnokiWallets() {
+  const { client, network } = useSuiClientContext();
+
+  useEffect(() => {
+    if (!ENOKI_PUBLIC_API_KEY) return;
+
+    const providers: Record<string, { clientId: string }> = {};
+    if (ENOKI_GOOGLE_CLIENT_ID) {
+      providers.google = { clientId: ENOKI_GOOGLE_CLIENT_ID };
+    }
+    if (ENOKI_FACEBOOK_CLIENT_ID) {
+      providers.facebook = { clientId: ENOKI_FACEBOOK_CLIENT_ID };
+    }
+    if (ENOKI_TWITCH_CLIENT_ID) {
+      providers.twitch = { clientId: ENOKI_TWITCH_CLIENT_ID };
+    }
+
+    if (Object.keys(providers).length === 0) return;
+
+    const { unregister } = registerEnokiWallets({
+      apiKey: ENOKI_PUBLIC_API_KEY,
+      providers: providers as any,
+      network: network as any,
+      client: client as any,
+    });
+
+    return () => {
+      unregister();
+    };
+  }, [client, network]);
+
+  return null;
+}
+
 export function SuiProvider({ children }: { children: React.ReactNode }) {
-  console.log(' SuiProvider rendering with NETWORK:', NETWORK);
-  
+  console.log(" SuiProvider rendering with NETWORK:", NETWORK);
+
   return (
     <QueryClientProvider client={queryClient}>
       <SuiClientProvider networks={networks as any} defaultNetwork={NETWORK}>
+        <RegisterEnokiWallets />
         <WalletProvider autoConnect>{children}</WalletProvider>
       </SuiClientProvider>
     </QueryClientProvider>

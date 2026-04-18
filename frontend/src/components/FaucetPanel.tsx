@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useFaucet } from "@/hooks/useFaucet";
 import { FAUCET_COOLDOWN_MS, FAUCET_MAX_STACK } from "@/config/sui.config";
@@ -13,14 +14,30 @@ export default function FaucetPanel({
   lastFaucetMs,
   onSuccess,
 }: FaucetPanelProps) {
-  const { claimFaucet, pendingFaucet, claiming, faucetSupport } = useFaucet(profileId);
-  const pendingRaw = pendingFaucet(lastFaucetMs);
+  const { claimFaucet, claiming, faucetSupport } = useFaucet(profileId);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  const elapsedMs = Math.max(0, nowMs - lastFaucetMs);
+  const pendingRaw = Math.min(
+    Math.floor(elapsedMs / FAUCET_COOLDOWN_MS),
+    FAUCET_MAX_STACK,
+  );
   const pending = Number.isFinite(pendingRaw) ? pendingRaw : 0;
 
   const nextMs = lastFaucetMs + FAUCET_COOLDOWN_MS;
-  const remainingMin = Math.max(0, Math.ceil((nextMs - Date.now()) / 60_000));
+  const remainingMin = Math.max(0, Math.ceil((nextMs - nowMs) / 60_000));
+  const cooldownHours = Math.max(1, Math.round(FAUCET_COOLDOWN_MS / 3_600_000));
   const clampedStack = Math.max(0, Math.min(pending, FAUCET_MAX_STACK));
-  const rawProgress = FAUCET_MAX_STACK > 0 ? (clampedStack / FAUCET_MAX_STACK) * 100 : 0;
+  const rawProgress =
+    FAUCET_MAX_STACK > 0 ? (clampedStack / FAUCET_MAX_STACK) * 100 : 0;
   const stackProgress = clampedStack > 0 ? Math.max(6, rawProgress) : 0;
 
   return (
@@ -33,9 +50,12 @@ export default function FaucetPanel({
         />
       </div>
 
-      <h3 className="font-display font-black text-3xl text-gray-900 mb-2">Faucet Chun</h3>
+      <h3 className="font-display font-black text-3xl text-gray-900 mb-2">
+        Faucet Chun
+      </h3>
       <p className="text-gray-700 font-semibold text-lg mb-4">
-        Moi 1 phut nhan duoc 1 Chun, toi da {FAUCET_MAX_STACK} stack.
+        Moi {cooldownHours} gio nhan duoc 1 Chun, toi da {FAUCET_MAX_STACK}{" "}
+        stack.
       </p>
 
       <div className="mb-4">
@@ -49,7 +69,8 @@ export default function FaucetPanel({
           />
         </div>
         <p className="mt-2 text-sm font-bold text-gray-500">
-          Stack: {Math.min(pending, FAUCET_MAX_STACK)} / {FAUCET_MAX_STACK} ({Math.round(stackProgress)}%)
+          Stack: {Math.min(pending, FAUCET_MAX_STACK)} / {FAUCET_MAX_STACK} (
+          {Math.round(stackProgress)}%)
         </p>
       </div>
 
