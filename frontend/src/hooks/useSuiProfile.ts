@@ -13,6 +13,8 @@ import {
 import {
   ACHIEVEMENT_MILESTONES,
   MAX_DELTA_CHUN,
+  NETWORK,
+  PACKAGE_ID,
   PLAYER_PROFILE_TYPE,
 } from "@/config/sui.config";
 import { useGameStore } from "@/stores/gameStore";
@@ -58,6 +60,18 @@ export function useSuiProfile() {
   const [profile, setProfile] = useState<PlayerProfileData | null>(null);
   const [loading, setLoading] = useState(false);
   const [hasProfile, setHasProfile] = useState(false);
+  const [suiBalanceMist, setSuiBalanceMist] = useState(0);
+
+  const isPackageAvailable = useCallback(async (): Promise<boolean> => {
+    try {
+      await suiClient.getNormalizedMoveModulesByPackage({
+        package: PACKAGE_ID,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }, [suiClient]);
 
   const fetchProfiles = useCallback(
     async (owner: string): Promise<PlayerProfileData[]> => {
@@ -92,7 +106,10 @@ export function useSuiProfile() {
 
   const hasGasCoin = useCallback(
     async (owner: string): Promise<boolean> => {
-      const coins = await suiClient.getCoins({ owner, coinType: "0x2::sui::SUI" });
+      const coins = await suiClient.getCoins({
+        owner,
+        coinType: "0x2::sui::SUI",
+      });
       const totalBalance = coins.data.reduce((sum, coin) => {
         const balance = Number(coin.balance ?? 0);
         return Number.isFinite(balance) ? sum + balance : sum;
@@ -102,11 +119,37 @@ export function useSuiProfile() {
     [suiClient],
   );
 
+  const loadSuiBalance = useCallback(
+    async (owner?: string) => {
+      if (!owner) {
+        setSuiBalanceMist(0);
+        return;
+      }
+
+      try {
+        const coins = await suiClient.getCoins({
+          owner,
+          coinType: "0x2::sui::SUI",
+        });
+        const totalBalance = coins.data.reduce((sum, coin) => {
+          const balance = Number(coin.balance ?? 0);
+          return Number.isFinite(balance) ? sum + balance : sum;
+        }, 0);
+        setSuiBalanceMist(totalBalance);
+      } catch (error) {
+        console.error("Error loading SUI balance:", error);
+        setSuiBalanceMist(0);
+      }
+    },
+    [suiClient],
+  );
+
   const loadProfile = useCallback(async () => {
     if (!account?.address) return;
 
     setLoading(true);
     try {
+      await loadSuiBalance(account.address);
       const profiles = await fetchProfiles(account.address);
 
       if (profiles.length === 0) {
@@ -126,9 +169,12 @@ export function useSuiProfile() {
     } finally {
       setLoading(false);
     }
-  }, [account?.address, fetchProfiles, setStoreProfile]);
+  }, [account?.address, fetchProfiles, loadSuiBalance, setStoreProfile]);
 
-  const createProfile = async (onSuccess?: () => void, onError?: () => void) => {
+  const createProfile = async (
+    onSuccess?: () => void,
+    onError?: () => void,
+  ) => {
     if (!account?.address) {
       toast.error("Vui long ket noi vi");
       onError?.();
@@ -137,6 +183,15 @@ export function useSuiProfile() {
 
     setLoading(true);
     try {
+      const packageReady = await isPackageAvailable();
+      if (!packageReady) {
+        toast.error(
+          `Package ${PACKAGE_ID} chua duoc deploy tren ${NETWORK} fullnode hien tai. Hay deploy lai contract hoac cap nhat PACKAGE_ID dung.`,
+        );
+        onError?.();
+        return;
+      }
+
       // Guard against duplicate creation: check on-chain one more time right before init.
       const existing = await fetchProfiles(account.address);
       if (existing.length > 0) {
@@ -175,13 +230,28 @@ export function useSuiProfile() {
           }, 1500);
         },
         onError: (error) => {
-          console.error("Create profile error:", error);
+          const rawMessage = String(error?.message ?? "");
+          if (rawMessage.includes("Dependent package not found on-chain")) {
+            console.warn(
+              "Create profile blocked: package not found on current network",
+            );
+          } else {
+            console.error("Create profile error:", error);
+          }
+
           const message = String(error?.message ?? "");
-          if (message.includes("No valid gas coins")) {
+          if (message.includes("Dependent package not found on-chain")) {
+            toast.error(
+              `Khong tim thay package ${PACKAGE_ID} tren ${NETWORK}. Co the contract chua deploy hoac ban dang dung sai PACKAGE_ID.`,
+            );
+          } else if (message.includes("No valid gas coins")) {
             toast.error(
               "Khong co gas coin hop le. Hay claim faucet hoac dung vi da nap SUI.",
             );
-          } else if (message.includes("JWK not found") || message.includes("Invalid user signature")) {
+          } else if (
+            message.includes("JWK not found") ||
+            message.includes("Invalid user signature")
+          ) {
             toast.error(
               "Chu ky zkLogin khong hop le hoac JWK chua sync. Hay dang nhap lai Google/Twitch/Facebook va thu lai.",
             );
@@ -267,6 +337,7 @@ export function useSuiProfile() {
     } else {
       setProfile(null);
       setHasProfile(false);
+      setSuiBalanceMist(0);
       setStoreProfile(null);
     }
   }, [account?.address, loadProfile, setStoreProfile]);
@@ -276,6 +347,7 @@ export function useSuiProfile() {
     profile,
     loading,
     hasProfile,
+    suiBalanceMist,
     createProfile,
     reportResult,
     claimAchievement,

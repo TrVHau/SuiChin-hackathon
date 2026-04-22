@@ -17,6 +17,7 @@ interface PlayerData {
   staked_chun?: number;
   last_faucet_ms?: number;
   objectId?: string;
+  suiBalanceMist?: number;
 }
 
 interface GameContextType {
@@ -46,6 +47,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     profile,
     loading,
     hasProfile,
+    suiBalanceMist,
     createProfile,
     reportResult,
     refreshProfile,
@@ -77,8 +79,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
         staked_chun: profile.staked_chun,
         last_faucet_ms: profile.last_faucet_ms,
         objectId: profile.objectId,
+        suiBalanceMist,
       }
-    : null;
+    : account
+      ? {
+          chun_raw: 0,
+          wins: 0,
+          losses: 0,
+          streak: 0,
+          address: account.address,
+          last_played_ms: 0,
+          suiBalanceMist,
+        }
+      : null;
 
   const value: GameContextType = {
     account,

@@ -15,7 +15,7 @@ export function useLoginHandler() {
 
   const handleLogin = async () => {
     if (!account) {
-      toast.error("Vui lòng kết nối ví trước");
+      toast.info("Vui lòng kết nối ví để tiếp tục");
       return;
     }
 
@@ -39,8 +39,8 @@ export function useLoginHandler() {
         navigate("/dashboard", { replace: true });
       },
       () => {
-        toast.dismiss("createProfile");
-      }
+        navigate("/dashboard", { replace: true });
+      },
     );
   };
 

@@ -189,13 +189,24 @@ export default function LoginScreen() {
             </motion.button>
           )}
 
-          <div className="bg-white border-4 border-playful-green rounded-3xl p-4 flex items-center justify-center gap-3 shadow-lg">
-            <CheckCircle className="size-7 text-playful-green" />
-            <p className="font-bold text-base text-gray-900">
-              {account
-                ? `Đã kết nối: ${account.address.slice(0, 6)}...${account.address.slice(-4)}`
-                : "Kết nối ví để bắt đầu!"}
-            </p>
+          <div className="bg-white border-4 border-playful-green rounded-3xl p-4 flex flex-col items-center justify-center gap-2 shadow-lg">
+            <div className="flex items-center justify-center gap-3">
+              <CheckCircle className="size-7 text-playful-green" />
+              <p className="font-bold text-base text-gray-900">
+                {account
+                  ? `Đã kết nối: ${account.address.slice(0, 6)}...${account.address.slice(-4)}`
+                  : "Kết nối ví để bắt đầu!"}
+              </p>
+            </div>
+
+            {account ? (
+              <div className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-center">
+                <p className="text-xs font-bold text-gray-500">ID tài khoản</p>
+                <p className="text-xs sm:text-sm font-mono text-gray-800 break-all select-all">
+                  {account.address}
+                </p>
+              </div>
+            ) : null}
           </div>
         </motion.div>
 
