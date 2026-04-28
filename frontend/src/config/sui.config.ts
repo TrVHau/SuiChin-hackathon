@@ -15,8 +15,9 @@ export const LOBBY_CONFIG_OBJECT_ID =
 export const LOBBY_SIGNER_PUBKEY =
   import.meta.env.VITE_LOBBY_SIGNER_PUBKEY ||
   "AM0K19eocENUQLaqfPXy5BCZ/+Iwki1bYo/6rwiDSX/X";
-export const LOBBY_DEFAULT_TARGET_POINTS =
-  Number(import.meta.env.VITE_LOBBY_DEFAULT_TARGET_POINTS || 1000);
+export const LOBBY_DEFAULT_TARGET_POINTS = Number(
+  import.meta.env.VITE_LOBBY_DEFAULT_TARGET_POINTS || 1000,
+);
 export const LOBBY_DEFAULT_COIN_MIST = BigInt(
   import.meta.env.VITE_LOBBY_DEFAULT_COIN_MIST || "100000000",
 );
@@ -57,7 +58,8 @@ export const CRAFT_POOL_CONTRIBUTION_MIST = 100_000_000n;
 export const MAX_DELTA_CHUN = 20;
 export const COOLDOWN_MS = 10_000;
 
-export const FAUCET_COOLDOWN_MS = 60_000;
+// Must stay in sync with `player_profile.move` (FAUCET_COOLDOWN_MS = 7_200_000).
+export const FAUCET_COOLDOWN_MS = 7_200_000;
 export const FAUCET_MAX_STACK = 10;
 
 export const HALVING_INTERVAL = 1_000;
@@ -73,6 +75,15 @@ export const BACKEND_WS_URL =
   import.meta.env.VITE_BACKEND_WS_URL ?? "http://localhost:4000/multiplayer";
 export const BACKEND_REST_URL =
   import.meta.env.VITE_BACKEND_REST_URL ?? "http://localhost:4000";
+
+export const ENOKI_PUBLIC_API_KEY =
+  import.meta.env.VITE_ENOKI_PUBLIC_API_KEY ?? "";
+export const ENOKI_GOOGLE_CLIENT_ID =
+  import.meta.env.VITE_ENOKI_GOOGLE_CLIENT_ID ?? "";
+export const ENOKI_FACEBOOK_CLIENT_ID =
+  import.meta.env.VITE_ENOKI_FACEBOOK_CLIENT_ID ?? "";
+export const ENOKI_TWITCH_CLIENT_ID =
+  import.meta.env.VITE_ENOKI_TWITCH_CLIENT_ID ?? "";
 
 export const ACHIEVEMENT_MILESTONES = {
   BEGINNER: 1,

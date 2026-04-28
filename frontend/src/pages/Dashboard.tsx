@@ -45,6 +45,7 @@ export default function Dashboard() {
         tier2={tier2Count}
         tier3={tier3Count}
         totalPoints={playerData.chun_raw}
+        suiBalanceMist={playerData.suiBalanceMist}
         address={playerData.address}
       />
 

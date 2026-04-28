@@ -370,6 +370,21 @@ export function buildCancelValuationLobbyRoomTx(roomId: string): Transaction {
   return tx;
 }
 
+export function buildEmergencyRefundValuationLobbyRoomTx(
+  roomId: string,
+): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${LOBBY_PACKAGE_ID}::nft_valuation_lobby::emergency_refund`,
+    arguments: [
+      tx.object(LOBBY_CONFIG_OBJECT_ID),
+      tx.object(roomId),
+      tx.object(CLOCK_OBJECT_ID),
+    ],
+  });
+  return tx;
+}
+
 export function buildAddValuationLobbySignerTx(input: {
   adminCapId: string;
   signerPubkey: string | number[];

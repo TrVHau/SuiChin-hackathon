@@ -38,6 +38,10 @@ function resolveWinnerWallet(results: ChallengeResultRecord[]): string | null {
   return null;
 }
 
+function isLikelySuiObjectId(value: string): boolean {
+  return /^0x[0-9a-fA-F]{1,64}$/.test(value.trim());
+}
+
 const QueueJoinPayloadSchema = z.object({
   wager: z.coerce.number().int().min(0).max(1_000_000).default(0),
   roomId: z.string().trim().min(1).optional(),
@@ -346,7 +350,13 @@ export function attachMultiplayerGateway(server: HttpServer) {
 
         const settlementSecret = env.LOBBY_SIGNER_SECRET_KEY ?? env.ADMIN_SECRET_KEY;
 
-        if (roomId && winnerWallet && loserWallet && settlementSecret) {
+        if (
+          roomId &&
+          winnerWallet &&
+          loserWallet &&
+          settlementSecret &&
+          isLikelySuiObjectId(roomId)
+        ) {
           try {
             const digestBytes = Array.from(new TextEncoder().encode(parsed.challengeId));
             settlementPayload = await getSettlementPayloadService().buildPayload({

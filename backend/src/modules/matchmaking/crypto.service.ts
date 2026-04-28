@@ -1,4 +1,5 @@
 import { bcs } from "@mysten/sui/bcs";
+import { decodeSuiPrivateKey } from "@mysten/sui/cryptography";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { fromBase64 } from "@mysten/sui/utils";
 import { env } from "../../config/env";
@@ -29,12 +30,16 @@ export class CryptoService {
     }
 
     try {
-      // Assuming the key is provided in raw bech32/base64 string based on Sui CLI export
-      // Many times Sui's CLI gives keys starting with `suiprivkey...` or raw base64.
-      // If it's pure Base64 for the 32 byte secret:
-      const raw = fromBase64(secretKey);
+      if (secretKey.startsWith("suiprivkey")) {
+        const decoded = decodeSuiPrivateKey(secretKey);
+        if (decoded.scheme !== "ED25519") {
+          throw new Error(`Expected ED25519 key, got ${decoded.scheme}`);
+        }
+        return Ed25519Keypair.fromSecretKey(decoded.secretKey);
+      }
 
-      // Usually Sui exported keys are 33 bytes (flag + 32 bytes secret)
+      // Support raw/base64 export formats.
+      const raw = fromBase64(secretKey);
       let secretBytes = raw;
       if (raw.length === 33 && raw[0] === 0x00) {
         secretBytes = raw.slice(1);
