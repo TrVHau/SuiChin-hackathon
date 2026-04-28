@@ -102,6 +102,7 @@ module suichin::marketplace {
     }
 
     /// Mua NFT theo listing_id. Tiền thừa được hoàn trả buyer.
+    #[allow(lint(self_transfer))]
     public fun buy(
         market: &mut Market,
         listing_id: ID,
@@ -141,6 +142,7 @@ module suichin::marketplace {
     }
 
     /// Hủy listing. Chỉ seller gốc mới gọi được.
+    #[allow(lint(self_transfer))]
     public fun cancel(
         market: &mut Market,
         listing_id: ID,

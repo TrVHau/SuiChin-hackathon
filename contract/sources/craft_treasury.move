@@ -226,6 +226,7 @@ module suichin::craft_treasury {
     }
 
     /// Burn an NFT and receive fixed payout from its own tier bucket.
+    #[allow(lint(self_transfer))]
     public fun redeem_chun(
         treasury: &mut Treasury,
         nft: CuonChunNFT,

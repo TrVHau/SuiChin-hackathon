@@ -72,6 +72,7 @@ module suichin::trade_up {
 
     /// Trade-up 8 Bronze → Silver (70%) hoặc Scrap (30%).
     /// Tất cả input bị burn dù thành công hay thất bại.
+    #[allow(lint(self_transfer))]
     public fun trade_up_bronze_to_silver(
         nfts: vector<CuonChunNFT>,
         clock: &Clock,
@@ -115,6 +116,7 @@ module suichin::trade_up {
 
     /// Trade-up 6 Silver → Gold (55%) hoặc Scrap (45%).
     /// Tất cả input bị burn dù thành công hay thất bại.
+    #[allow(lint(self_transfer))]
     public fun trade_up_silver_to_gold(
         nfts: vector<CuonChunNFT>,
         clock: &Clock,

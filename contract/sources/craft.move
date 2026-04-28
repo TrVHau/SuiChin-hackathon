@@ -98,6 +98,7 @@ module suichin::craft {
         craft_actions::craft_chun(profile, treasury_obj, payment, clock, ctx);
     }
 
+    #[allow(lint(public_random))]
     public fun craft_chun_with_randomness(
         profile: &mut PlayerProfile,
         treasury_obj: &mut Treasury,
@@ -167,6 +168,7 @@ module suichin::craft {
         craft_actions::fuse_scraps_for_bronze(config_obj, scraps, clock, ctx);
     }
 
+    #[allow(lint(public_random))]
     public fun fuse_scraps_for_bronze_with_randomness(
         config_obj: &SystemConfig,
         scraps: vector<scrap::Scrap>,

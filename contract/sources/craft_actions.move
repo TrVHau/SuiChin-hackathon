@@ -146,6 +146,7 @@ module suichin::craft_actions {
 
     /// Craft Chun NFT or Scrap using legacy pseudo-random roll.
     /// Requires SUI contribution to treasury on each craft.
+    #[allow(lint(self_transfer))]
     public fun craft_chun(
         profile: &mut PlayerProfile,
         treasury: &mut Treasury,
@@ -228,6 +229,7 @@ module suichin::craft_actions {
     }
 
     /// Native-random craft flow for indexer + VRF-like transparency.
+    #[allow(lint(public_random), lint(self_transfer))]
     public fun craft_chun_with_randomness(
         profile: &mut PlayerProfile,
         treasury: &mut Treasury,
@@ -533,6 +535,7 @@ module suichin::craft_actions {
     }
 
     /// Current economy recipe: 20 Scrap -> 1 Bronze NFT (no extra SUI fee).
+    #[allow(lint(self_transfer))]
     public fun fuse_scraps_for_bronze(
         config: &SystemConfig,
         scraps: vector<scrap::Scrap>,
@@ -576,6 +579,7 @@ module suichin::craft_actions {
     }
 
     /// Optional variant path using native randomness.
+    #[allow(lint(public_random), lint(self_transfer))]
     public fun fuse_scraps_for_bronze_with_randomness(
         config: &SystemConfig,
         scraps: vector<scrap::Scrap>,
