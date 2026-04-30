@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import GameCanvas from "../components/GameCanvas";
 import { useGame } from "@/providers/GameContext";
+import { COOLDOWN_MS } from "@/config/sui.config";
 
 type Phase = "playing" | "submitting";
 
@@ -33,6 +34,14 @@ export default function GameSession() {
     if ((playerData?.chun_raw ?? 0) <= 0) {
       toast.error("Bạn đã hết Chun. Hãy nhận thêm Chun trước khi chơi tiếp.");
       resolvedOnBack();
+      return;
+    }
+
+    const lastPlayedMs = playerData?.last_played_ms ?? 0;
+    const remainingMs =
+      lastPlayedMs > 0 ? COOLDOWN_MS - (Date.now() - lastPlayedMs) : 0;
+    if (remainingMs > 0) {
+      toast.error(`Cooldown chưa hết, thử lại sau ${Math.ceil(remainingMs / 1000)} giây.`);
       return;
     }
 

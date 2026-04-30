@@ -39,8 +39,7 @@ export default function PvPScreen() {
   const [selectedLobbyNfts, setSelectedLobbyNfts] = useState<string[]>([]);
   const [escrowTargetPoints, setEscrowTargetPoints] = useState(
     LOBBY_DEFAULT_TARGET_POINTS,
-  );
-  const [escrowCoinMist, setEscrowCoinMist] = useState(LOBBY_DEFAULT_COIN_MIST);
+  );  const [escrowCoinMist, setEscrowCoinMist] = useState(LOBBY_DEFAULT_COIN_MIST);
   const [escrowDeadlineMinutes, setEscrowDeadlineMinutes] = useState(30);
   const [createdRoomId, setCreatedRoomId] = useState<string | null>(null);
   const [joinRoomId, setJoinRoomId] = useState("");
@@ -48,6 +47,7 @@ export default function PvPScreen() {
   const [settleSubmitting, setSettleSubmitting] = useState(false);
   const [roomStatus, setRoomStatus] = useState<number | null>(null);
   const [roomDeadlineMs, setRoomDeadlineMs] = useState<number | null>(null);
+  const [roomCreator, setRoomCreator] = useState<string | null>(null);
   const [emergencyRefundDelayMs, setEmergencyRefundDelayMs] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [activeLobbySigner, setActiveLobbySigner] = useState<number[] | null>(
@@ -58,6 +58,23 @@ export default function PvPScreen() {
   >("loading");
 
   const handleBack = () => navigate("/dashboard");
+  const sameAddress = (a?: string | null, b?: string | null) =>
+    Boolean(a && b && a.toLowerCase() === b.toLowerCase());
+
+  const validateSelectedLobbyNfts = (): boolean => {
+    const ownedIds = new Set(cuonChuns.map((item) => item.objectId));
+    const invalid = selectedLobbyNfts.filter((id) => !ownedIds.has(id));
+
+    if (invalid.length === 0) {
+      return true;
+    }
+
+    setSelectedLobbyNfts((prev) => prev.filter((id) => ownedIds.has(id)));
+    toast.error(
+      "Một số NFT đã không còn thuộc ví hiện tại (có thể đang bị khóa escrow). Hãy chọn lại NFT.",
+    );
+    return false;
+  };
 
   const cancelLobbyRoomTx = async (roomId: string): Promise<boolean> => {
     return new Promise((resolve) => {
@@ -74,8 +91,23 @@ export default function PvPScreen() {
             resolve(true);
           },
           onError: (error) => {
+            const message = String(error?.message ?? error);
+            if (message.includes("702")) {
+              toast.error("Room không còn ở trạng thái WAITING nên không thể hủy.", {
+                id: "lobby-cancel",
+              });
+              resolve(false);
+              return;
+            }
+            if (message.includes("704")) {
+              toast.error("Chỉ creator của room mới có quyền hủy.", {
+                id: "lobby-cancel",
+              });
+              resolve(false);
+              return;
+            }
             toast.error(
-              `Hủy phòng thất bại: ${String(error?.message ?? error)}`,
+              `Hủy phòng thất bại: ${message}`,
               {
                 id: "lobby-cancel",
               },
@@ -88,26 +120,33 @@ export default function PvPScreen() {
   };
 
   const handleLeave = async () => {
-    const canAutoCancel =
-      pvp.status === "idle" ||
-      pvp.status === "error" ||
-      pvp.status === "connecting" ||
-      pvp.status === "waiting";
-
-    if (createdRoomId && canAutoCancel) {
-      setEscrowSubmitting(true);
-      toast.loading("Đang hủy room escrow trước khi thoát...", {
-        id: "lobby-cancel",
-      });
-      const cancelled = await cancelLobbyRoomTx(createdRoomId);
-      setEscrowSubmitting(false);
-      if (!cancelled) {
+    if (createdRoomId) {
+      if (roomStatus == null) {
+        toast.error("Đang đọc trạng thái room on-chain, vui lòng thử lại sau 2-3 giây.");
         return;
       }
-    } else if (createdRoomId && !canAutoCancel) {
-      toast.info(
-        "Room đang active/đã ghép trận, không thể hủy trực tiếp. Hãy settle hoặc emergency refund on-chain.",
-      );
+
+      if (roomStatus === 0) {
+        if (!sameAddress(roomCreator, account?.address)) {
+          toast.error("Chỉ creator mới có thể hủy room WAITING để hoàn tài sản.");
+          return;
+        }
+
+        setEscrowSubmitting(true);
+        toast.loading("Đang hủy room escrow trước khi thoát...", {
+          id: "lobby-cancel",
+        });
+        const cancelled = await cancelLobbyRoomTx(createdRoomId);
+        setEscrowSubmitting(false);
+        if (!cancelled) {
+          return;
+        }
+      } else if (roomStatus === 1) {
+        toast.error(
+          "Room đang ACTIVE. Không thể thoát an toàn lúc này. Hãy settle hoặc đợi emergency refund để tránh kẹt tài sản.",
+        );
+        return;
+      }
     }
 
     leaveQueue();
@@ -129,6 +168,15 @@ export default function PvPScreen() {
     const coinPoints = Number(escrowCoinMist / 100_000_000n);
     return selectedLobbyNFTPoints + coinPoints;
   }, [escrowCoinMist, selectedLobbyNFTPoints]);
+
+  useEffect(() => {
+    const ownedIds = new Set(cuonChuns.map((item) => item.objectId));
+    setSelectedLobbyNfts((prev) => prev.filter((id) => ownedIds.has(id)));
+  }, [cuonChuns]);
+
+  useEffect(() => {
+    setSelectedLobbyNfts([]);
+  }, [account?.address]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -202,6 +250,7 @@ export default function PvPScreen() {
     if (!createdRoomId) {
       setRoomStatus(null);
       setRoomDeadlineMs(null);
+      setRoomCreator(null);
       return;
     }
 
@@ -223,11 +272,13 @@ export default function PvPScreen() {
         if (!disposed && fields) {
           setRoomStatus(Number(fields.status ?? 0));
           setRoomDeadlineMs(Number(fields.deadline_ms ?? 0));
+          setRoomCreator(typeof fields.creator === "string" ? fields.creator : null);
         }
       } catch {
         if (!disposed) {
           setRoomStatus(null);
           setRoomDeadlineMs(null);
+          setRoomCreator(null);
         }
       }
     };
@@ -242,16 +293,6 @@ export default function PvPScreen() {
       window.clearInterval(intervalId);
     };
   }, [createdRoomId, suiClient]);
-
-  const handleJoin = () => {
-    const selectedRoomId = createdRoomId ?? joinRoomId.trim();
-    if (!selectedRoomId) {
-      toast.error("Tạo room hoặc nhập Room ID trước khi vào queue realtime.");
-      return;
-    }
-
-    joinQueue(0, selectedRoomId);
-  };
 
   const handleLocalFinish = (winnerWallet: string | null) => {
     if (!winnerWallet) {
@@ -310,6 +351,9 @@ export default function PvPScreen() {
       toast.error("Chọn ít nhất một NFT để khóa vào phòng.");
       return;
     }
+    if (!validateSelectedLobbyNfts()) {
+      return;
+    }
     if (estimatedLobbyTotalPoints < escrowTargetPoints) {
       toast.error(
         `Tổng điểm hiện tại ${estimatedLobbyTotalPoints} chưa đủ target ${escrowTargetPoints}.`,
@@ -342,6 +386,10 @@ export default function PvPScreen() {
             setCreatedRoomId(roomId || null);
             if (roomId) {
               setJoinRoomId(roomId);
+              setSelectedLobbyNfts([]);
+              if (pvp.status === "idle" || pvp.status === "error") {
+                joinQueue(0, roomId);
+              }
             }
             toast.success(
               roomId
@@ -380,6 +428,9 @@ export default function PvPScreen() {
       toast.error("Chọn NFT để join phòng.");
       return;
     }
+    if (!validateSelectedLobbyNfts()) {
+      return;
+    }
 
     setEscrowSubmitting(true);
     toast.loading("Đang join phòng escrow on-chain...", { id: "lobby-join" });
@@ -403,6 +454,10 @@ export default function PvPScreen() {
             if (joinedRoomId) {
               setCreatedRoomId(joinedRoomId);
               setJoinRoomId(joinedRoomId);
+              setSelectedLobbyNfts([]);
+              if (pvp.status === "idle" || pvp.status === "error") {
+                joinQueue(0, joinedRoomId);
+              }
             }
             toast.success(
               parsed?.room_id
@@ -434,6 +489,15 @@ export default function PvPScreen() {
   const cancelLobbyRoom = async () => {
     if (!createdRoomId) {
       toast.error("Không có room on-chain để hủy.");
+      return;
+    }
+
+    if (roomStatus !== 0) {
+      toast.error("Chỉ hủy được room ở trạng thái WAITING.");
+      return;
+    }
+    if (!sameAddress(roomCreator, account?.address)) {
+      toast.error("Chỉ creator mới được hủy room WAITING.");
       return;
     }
 
@@ -565,26 +629,65 @@ export default function PvPScreen() {
   const renderContent = () => {
     if (pvp.status === "idle" || pvp.status === "error") {
       return (
-        <div className="rounded-3xl border-4 border-violet-300 bg-violet-50 p-5">
-          <h3 className="font-black text-xl text-gray-900 mb-2">
-            Bắt đầu PvP realtime
-          </h3>
-          <p className="text-sm text-gray-700 font-semibold leading-6 mb-4">
-            PvP hiện không còn cược Chun theo queue. Giá trị cược lấy từ room
-            escrow on-chain (NFT + SUI) ở panel bên phải.
-          </p>
-          <button
-            onClick={handleJoin}
-            className="w-full rounded-2xl bg-red-300 px-5 py-4 font-black text-white shadow-lg"
-          >
-            Tìm trận realtime
-          </button>
+        <div className="relative overflow-hidden rounded-[32px] border border-white/15 bg-[linear-gradient(160deg,rgba(2,6,23,0.98),rgba(30,41,59,0.96)_45%,rgba(15,118,110,0.92))] p-8 text-white shadow-[0_26px_70px_rgba(15,23,42,0.32)]">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.14),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(34,197,94,0.16),transparent_28%)]" />
+          <div className="relative">
+            <p className="text-xs font-black uppercase tracking-[0.35em] text-white/60">
+              Private room only
+            </p>
+            <h3 className="mt-3 text-3xl font-black tracking-tight text-white">
+              Sảnh vào phòng đấu riêng
+            </h3>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/75">
+              Luồng PvP mới chỉ còn room on-chain. Giá trị phòng được tính từ NFT + SUI, sau đó hệ thống mới mở trận realtime bên trong phòng đó.
+            </p>
+
+            <div className="mt-6 grid gap-3 md:grid-cols-3">
+              <div className="rounded-[24px] border border-white/10 bg-white/8 p-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-white/55">
+                  NFT đã chọn
+                </p>
+                <p className="mt-2 text-2xl font-black text-white">
+                  {selectedLobbyNfts.length}
+                </p>
+              </div>
+              <div className="rounded-[24px] border border-white/10 bg-white/8 p-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-white/55">
+                  Tổng điểm
+                </p>
+                <p className="mt-2 text-2xl font-black text-white">
+                  {estimatedLobbyTotalPoints}
+                </p>
+              </div>
+              <div className="rounded-[24px] border border-white/10 bg-white/8 p-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-white/55">
+                  Trạng thái
+                </p>
+                <p className="mt-2 text-2xl font-black text-white">Chờ mở phòng</p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-wrap gap-3 text-sm font-semibold text-white/80">
+              <span className="rounded-full border border-white/12 bg-black/20 px-4 py-2">
+                NFT + SUI = giá trị phòng
+              </span>
+              <span className="rounded-full border border-white/12 bg-black/20 px-4 py-2">
+                Không còn cược Chun ở màn này
+              </span>
+            </div>
+          </div>
         </div>
       );
     }
 
     if (pvp.status === "connecting" || pvp.status === "waiting") {
-      return <PvpSearchingCard wager={pvp.wager} onCancel={handleLeave} />;
+      return (
+        <PvpSearchingCard
+          roomValue={pvp.wager}
+          onCancel={handleLeave}
+          roomId={createdRoomId ?? (joinRoomId.trim() || undefined)}
+        />
+      );
     }
 
     if (pvp.status === "matched") {
@@ -918,6 +1021,7 @@ export default function PvPScreen() {
                 {createdRoomId && (
                   <button
                     onClick={cancelLobbyRoom}
+                    disabled={roomStatus !== 0 || !sameAddress(roomCreator, account?.address)}
                     className="rounded-full border-2 border-red-200 bg-red-50 px-4 py-2 font-black text-red-700"
                   >
                     Hủy phòng
