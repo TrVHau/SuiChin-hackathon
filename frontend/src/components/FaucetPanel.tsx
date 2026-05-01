@@ -25,11 +25,10 @@ export default function FaucetPanel({
     return () => window.clearInterval(intervalId);
   }, []);
 
-  const elapsedMs = Math.max(0, nowMs - lastFaucetMs);
-  const pendingRaw = Math.min(
-    Math.floor(elapsedMs / FAUCET_COOLDOWN_MS),
-    FAUCET_MAX_STACK,
-  );
+  // Normalize lastFaucetMs (on-chain may store seconds)
+  const normalizedLast = lastFaucetMs > 1e12 ? lastFaucetMs : Math.floor(lastFaucetMs * 1000);
+  const elapsedMs = Math.max(0, nowMs - normalizedLast);
+  const pendingRaw = Math.min(Math.floor(elapsedMs / FAUCET_COOLDOWN_MS), FAUCET_MAX_STACK);
   const pending = Number.isFinite(pendingRaw) ? pendingRaw : 0;
 
   const nextMs = lastFaucetMs + FAUCET_COOLDOWN_MS;
@@ -86,9 +85,9 @@ export default function FaucetPanel({
             ? "Dang nhan..."
             : faucetSupport === "unsupported"
               ? "Faucet khong ho tro"
-              : pending > 0
-                ? `Nhan ${pending} Chun`
-                : "Chua den luot claim"}
+                      : pending > 0
+                        ? `Nhan ${pending} Chun` + (pending < FAUCET_MAX_STACK ? ` (toi da ${FAUCET_MAX_STACK})` : "")
+                        : "Chua den luot claim"}
         </motion.button>
         {faucetSupport === "unsupported" && (
           <p className="text-sm text-amber-700 font-semibold mt-2">

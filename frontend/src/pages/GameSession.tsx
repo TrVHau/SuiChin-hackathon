@@ -42,6 +42,8 @@ export default function GameSession() {
       lastPlayedMs > 0 ? COOLDOWN_MS - (Date.now() - lastPlayedMs) : 0;
     if (remainingMs > 0) {
       toast.error(`Cooldown chưa hết, thử lại sau ${Math.ceil(remainingMs / 1000)} giây.`);
+      // Reset the round so the UI doesn't freeze; allow player to retry play.
+      setRoundKey((k) => k + 1);
       return;
     }
 

@@ -325,6 +325,10 @@ export function usePvP(_profileId: string | undefined) {
     setPvP(INITIAL_STATE);
   }, [safeDisconnect]);
 
+  // New room-centric API names (preferred). Keep legacy names for compatibility.
+  const connectRoomSocket = joinQueue;
+  const disconnectRoomSocket = leaveQueue;
+
   const reportRound = useCallback(
     (winnerId: string) => {
       const socket = socketRef.current;
@@ -435,6 +439,10 @@ export function usePvP(_profileId: string | undefined) {
 
   return {
     pvp,
+    // preferred API:
+    connectRoomSocket,
+    disconnectRoomSocket,
+    // legacy aliases (deprecated):
     joinQueue,
     leaveQueue,
     reportRound,

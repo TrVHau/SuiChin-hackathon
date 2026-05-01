@@ -30,8 +30,15 @@ import {
 export default function PvPScreen() {
   const navigate = useNavigate();
   const { account, playerData, profile } = useGame();
-  const { pvp, joinQueue, leaveQueue, reportRound, submitShot, setSettleTx } =
-    usePvP(profile?.objectId);
+  const {
+    pvp,
+    connectRoomSocket,
+    disconnectRoomSocket,
+    // legacy aliases still available on hook: joinQueue, leaveQueue
+    reportRound,
+    submitShot,
+    setSettleTx,
+  } = usePvP(profile?.objectId);
 
   const suiClient = useSuiClient();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
@@ -149,7 +156,7 @@ export default function PvPScreen() {
       }
     }
 
-    leaveQueue();
+    disconnectRoomSocket();
     navigate("/dashboard");
   };
 
@@ -388,7 +395,7 @@ export default function PvPScreen() {
               setJoinRoomId(roomId);
               setSelectedLobbyNfts([]);
               if (pvp.status === "idle" || pvp.status === "error") {
-                joinQueue(0, roomId);
+                connectRoomSocket(0, roomId);
               }
             }
             toast.success(
@@ -456,7 +463,7 @@ export default function PvPScreen() {
               setJoinRoomId(joinedRoomId);
               setSelectedLobbyNfts([]);
               if (pvp.status === "idle" || pvp.status === "error") {
-                joinQueue(0, joinedRoomId);
+                connectRoomSocket(0, joinedRoomId);
               }
             }
             toast.success(
@@ -675,6 +682,29 @@ export default function PvPScreen() {
                 Không còn cược Chun ở màn này
               </span>
             </div>
+            <div className="mt-6">
+              <p className="text-sm font-bold text-white/85 mb-2">Ghép nhanh (Quick Match)</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => connectRoomSocket(100)}
+                  className="rounded-full bg-white/10 px-4 py-2 text-sm font-bold text-white/90 hover:bg-white/20"
+                >
+                  Match 100
+                </button>
+                <button
+                  onClick={() => connectRoomSocket(250)}
+                  className="rounded-full bg-white/10 px-4 py-2 text-sm font-bold text-white/90 hover:bg-white/20"
+                >
+                  Match 250
+                </button>
+                <button
+                  onClick={() => connectRoomSocket(1000)}
+                  className="rounded-full bg-white/10 px-4 py-2 text-sm font-bold text-white/90 hover:bg-white/20"
+                >
+                  Match 1000
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       );
@@ -731,7 +761,7 @@ export default function PvPScreen() {
         <PageHeader
           title="PvP Arena"
           emoji="⚔️"
-          subtitle="Queue realtime + escrow on-chain theo tổng giá trị NFT + SUI"
+          subtitle="Realtime match + escrow on-chain theo tổng giá trị NFT + SUI"
           onBack={handleBack}
           backBorderClass="border-red-300"
           backIconClass="text-red-500"
@@ -859,7 +889,7 @@ export default function PvPScreen() {
                   Ghi chú
                 </p>
                 <p className="text-sm text-sky-900 font-semibold leading-6">
-                  PvP hiện dùng queue socket realtime cho phần ghép trận. Cơ chế
+                  PvP hiện dùng realtime socket cho phần ghép trận. Cơ chế
                   valuation lobby là lớp escrow/settlement theo tổng giá trị NFT
                   + SUI. Active signer được đọc từ LobbyConfig on-chain, không
                   cần thao tác admin trên UI nữa.
