@@ -56,7 +56,7 @@ export const PLAYER_PROFILE_TYPE = `${PACKAGE_ID}::${MODULES.PLAYER_PROFILE}::Pl
 export const CRAFT_CHUN_COST = 10;
 export const CRAFT_POOL_CONTRIBUTION_MIST = 100_000_000n;
 export const MAX_DELTA_CHUN = 20;
-export const COOLDOWN_MS = 10_000;
+export const COOLDOWN_MS = 3_000;
 
 // Must stay in sync with `player_profile.move` (FAUCET_COOLDOWN_MS = 7_200_000).
 export const FAUCET_COOLDOWN_MS = 7_200_000;

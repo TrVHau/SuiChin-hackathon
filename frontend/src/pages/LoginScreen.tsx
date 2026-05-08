@@ -1,12 +1,14 @@
 import { CheckCircle, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
 import {
   ConnectButton,
   useConnectWallet,
   useCurrentAccount,
   useWallets,
 } from "@mysten/dapp-kit";
-import { isEnokiWallet } from "@mysten/enoki";
+import { EnokiClient, createDefaultEncryption, isEnokiWallet } from "@mysten/enoki";
+import { createStore, get, set } from "idb-keyval";
 import { toast } from "sonner";
 import { useLoginHandler } from "@/hooks/useLoginHandler";
 import { useGame } from "@/providers/GameContext";
@@ -15,7 +17,77 @@ import {
   ENOKI_GOOGLE_CLIENT_ID,
   ENOKI_PUBLIC_API_KEY,
   ENOKI_TWITCH_CLIENT_ID,
+  NETWORK,
 } from "@/config/sui.config";
+
+const ENOKI_CALLBACK_PROVIDER_KEY = "suichin:enoki-callback-provider";
+const ENOKI_SESSION_KEY = "zklogin-session";
+const ENOKI_STATE_KEY = "zklogin-state";
+
+type SocialProvider = "google" | "facebook" | "twitch";
+
+function getClientIdForProvider(provider: SocialProvider) {
+  if (provider === "google") return ENOKI_GOOGLE_CLIENT_ID;
+  if (provider === "facebook") return ENOKI_FACEBOOK_CLIENT_ID;
+  return ENOKI_TWITCH_CLIENT_ID;
+}
+
+function inferProviderFromCallback(): SocialProvider {
+  const hash = new URLSearchParams(
+    window.location.hash.startsWith("#")
+      ? window.location.hash.slice(1)
+      : window.location.hash,
+  );
+  const issuer = hash.get("iss") ?? "";
+  if (issuer.includes("facebook")) return "facebook";
+  if (issuer.includes("twitch")) return "twitch";
+  return "google";
+}
+
+async function persistEnokiCallbackSession() {
+  const hash = new URLSearchParams(
+    window.location.hash.startsWith("#")
+      ? window.location.hash.slice(1)
+      : window.location.hash,
+  );
+  const jwt = hash.get("id_token");
+  if (!jwt) return;
+
+  const provider = inferProviderFromCallback();
+  const clientId = getClientIdForProvider(provider);
+  if (!ENOKI_PUBLIC_API_KEY || !clientId) {
+    throw new Error("Missing Enoki API key or OAuth client ID");
+  }
+
+  const enokiClient = new EnokiClient({ apiKey: ENOKI_PUBLIC_API_KEY });
+  const { address, publicKey } = await enokiClient.getZkLogin({ jwt });
+  const stateStore = createStore(`${ENOKI_PUBLIC_API_KEY}_${clientId}`, "enoki");
+  await set(ENOKI_STATE_KEY, JSON.stringify({ address, publicKey }), stateStore);
+
+  const sessionStore = createStore(
+    `${ENOKI_PUBLIC_API_KEY}_${NETWORK}_${clientId}`,
+    "enoki",
+  );
+  const encryptedSession = await get<string>(ENOKI_SESSION_KEY, sessionStore);
+  if (!encryptedSession) {
+    throw new Error("Missing Enoki session started before Google login");
+  }
+
+  const encryption = createDefaultEncryption();
+  const session = JSON.parse(
+    await encryption.decrypt(ENOKI_PUBLIC_API_KEY, encryptedSession),
+  );
+  await set(
+    ENOKI_SESSION_KEY,
+    await encryption.encrypt(
+      ENOKI_PUBLIC_API_KEY,
+      JSON.stringify({ ...session, jwt }),
+    ),
+    sessionStore,
+  );
+
+  window.localStorage.setItem(ENOKI_CALLBACK_PROVIDER_KEY, provider);
+}
 
 export default function LoginScreen() {
   const account = useCurrentAccount();
@@ -23,7 +95,24 @@ export default function LoginScreen() {
   const { handleLogin } = useLoginHandler();
   const { mutate: connectWallet, isPending: connectingWallet } =
     useConnectWallet();
+  const [socialLoginPending, setSocialLoginPending] =
+    useState<SocialProvider | null>(null);
+  const [callbackError, setCallbackError] = useState<string | null>(null);
   const enokiWallets = useWallets().filter(isEnokiWallet);
+  const isEnokiCallbackWindow = useMemo(() => {
+    const search = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(
+      window.location.hash.startsWith("#")
+        ? window.location.hash.slice(1)
+        : window.location.hash,
+    );
+    return (
+      Boolean(window.opener) ||
+      search.has("enoki-callback") ||
+      hash.has("id_token") ||
+      hash.has("iss")
+    );
+  }, []);
 
   const socialLoginEnabled =
     Boolean(ENOKI_PUBLIC_API_KEY) &&
@@ -33,7 +122,11 @@ export default function LoginScreen() {
       ENOKI_TWITCH_CLIENT_ID,
     );
 
-  const connectEnokiProvider = (provider: "google" | "facebook" | "twitch") => {
+  const connectEnokiProvider = (provider: SocialProvider) => {
+    if (connectingWallet || socialLoginPending) {
+      return;
+    }
+
     const wallet = enokiWallets.find((item) => item.provider === provider);
     if (!wallet) {
       toast.error(
@@ -42,10 +135,15 @@ export default function LoginScreen() {
       return;
     }
 
+    setSocialLoginPending(provider);
     connectWallet(
       { wallet },
       {
+        onSuccess: () => {
+          setSocialLoginPending(null);
+        },
         onError: (error) => {
+          setSocialLoginPending(null);
           const message =
             error instanceof Error
               ? error.message
@@ -55,6 +153,91 @@ export default function LoginScreen() {
       },
     );
   };
+
+  useEffect(() => {
+    if (!isEnokiCallbackWindow) return;
+
+    let disposed = false;
+    const completeCallback = async () => {
+      try {
+        await persistEnokiCallbackSession();
+        if (window.opener && !window.opener.closed) {
+          window.opener.location.reload();
+        }
+        window.close();
+      } catch (error) {
+        if (!disposed) {
+          setCallbackError(error instanceof Error ? error.message : String(error));
+        }
+      }
+    };
+
+    void completeCallback();
+    return () => {
+      disposed = true;
+    };
+  }, [isEnokiCallbackWindow]);
+
+  useEffect(() => {
+    if (isEnokiCallbackWindow || account || connectingWallet || socialLoginPending) {
+      return;
+    }
+
+    const pendingProvider = window.localStorage.getItem(
+      ENOKI_CALLBACK_PROVIDER_KEY,
+    ) as SocialProvider | null;
+    if (!pendingProvider) return;
+
+    const wallet = enokiWallets.find((item) => item.provider === pendingProvider);
+    if (!wallet) return;
+
+    setSocialLoginPending(pendingProvider);
+    connectWallet(
+      { wallet, silent: true },
+      {
+        onSuccess: (result) => {
+          setSocialLoginPending(null);
+          if (result.accounts.length > 0) {
+            window.localStorage.removeItem(ENOKI_CALLBACK_PROVIDER_KEY);
+          }
+        },
+        onError: (error) => {
+          setSocialLoginPending(null);
+          window.localStorage.removeItem(ENOKI_CALLBACK_PROVIDER_KEY);
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "Khong the hoan tat dang nhap Enoki",
+          );
+        },
+      },
+    );
+  }, [
+    account,
+    connectWallet,
+    connectingWallet,
+    enokiWallets,
+    isEnokiCallbackWindow,
+    socialLoginPending,
+  ]);
+
+  if (isEnokiCallbackWindow) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center px-4 bg-sunny-gradient">
+        <div className="w-full max-w-sm rounded-3xl border-4 border-white bg-white/90 p-8 text-center shadow-2xl">
+          <Loader2 className="mx-auto mb-4 size-10 animate-spin text-playful-blue" />
+          <h1 className="text-2xl font-black text-gray-900">
+            Dang hoan tat dang nhap
+          </h1>
+          <p className="mt-3 text-sm font-semibold text-gray-600">
+            {callbackError
+              ? `Khong the hoan tat callback: ${callbackError}`
+              : "Neu cua so nay khong tu dong dong, hay quay lai cua so SuiChin chinh."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center px-4 bg-sunny-gradient">
@@ -129,11 +312,11 @@ export default function LoginScreen() {
                   {ENOKI_GOOGLE_CLIENT_ID ? (
                     <button
                       type="button"
-                      disabled={connectingWallet}
+                      disabled={connectingWallet || Boolean(socialLoginPending)}
                       onClick={() => connectEnokiProvider("google")}
                       className="w-full h-14 rounded-full shadow-lg border-4 border-white bg-white text-gray-900 font-bold disabled:opacity-60"
                     >
-                      {connectingWallet
+                      {socialLoginPending === "google"
                         ? "Đang mở Google..."
                         : "Đăng nhập với Google"}
                     </button>
@@ -141,11 +324,11 @@ export default function LoginScreen() {
                   {ENOKI_FACEBOOK_CLIENT_ID ? (
                     <button
                       type="button"
-                      disabled={connectingWallet}
+                      disabled={connectingWallet || Boolean(socialLoginPending)}
                       onClick={() => connectEnokiProvider("facebook")}
                       className="w-full h-14 rounded-full shadow-lg border-4 border-white bg-[#1877F2] text-white font-bold disabled:opacity-60"
                     >
-                      {connectingWallet
+                      {socialLoginPending === "facebook"
                         ? "Đang mở Facebook..."
                         : "Đăng nhập với Facebook"}
                     </button>
@@ -153,11 +336,11 @@ export default function LoginScreen() {
                   {ENOKI_TWITCH_CLIENT_ID ? (
                     <button
                       type="button"
-                      disabled={connectingWallet}
+                      disabled={connectingWallet || Boolean(socialLoginPending)}
                       onClick={() => connectEnokiProvider("twitch")}
                       className="w-full h-14 rounded-full shadow-lg border-4 border-white bg-[#9146FF] text-white font-bold disabled:opacity-60"
                     >
-                      {connectingWallet
+                      {socialLoginPending === "twitch"
                         ? "Đang mở Twitch..."
                         : "Đăng nhập với Twitch"}
                     </button>

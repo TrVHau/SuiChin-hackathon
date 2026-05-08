@@ -244,7 +244,7 @@ class InMemoryMatchmakingService implements MatchmakingService {
   private queuedByWallet = new Map<string, number>();
 
   async joinQueue(walletAddress: string, wager: number): Promise<MatchResult> {
-    const normalizedWager = Math.max(0, Math.floor(wager));
+    const normalizedWager = Math.max(0, Number(wager));
     if (!walletAddress) {
       return { matched: false, wager: normalizedWager };
     }
@@ -315,7 +315,7 @@ class RedisMatchmakingService implements MatchmakingService {
   }
 
   async joinQueue(walletAddress: string, wager: number): Promise<MatchResult> {
-    const normalizedWager = Math.max(0, Math.floor(wager));
+    const normalizedWager = Math.max(0, Number(wager));
     if (!walletAddress) return { matched: false, wager: normalizedWager };
 
     const redis = await this.ensureConnected();

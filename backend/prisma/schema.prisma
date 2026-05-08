@@ -65,10 +65,30 @@ model ChallengeResult {
 // ----------------------------------------------------------------------------
 
 model SyncState {
-  id             Int      @id @default(1) // Singleton pattern
-  cursorTxDigest String
-  cursorEventSeq String
+  moduleName     String   @id
+  cursorTxDigest String?
+  cursorEventSeq String?
   updatedAt      DateTime @updatedAt
+}
+
+model ValuationRoom {
+  challengeId    String   @id
+  tempRoomId     String   @unique
+  suiRoomId      String?  @unique
+  tier           String
+  wagerSui       Float
+  wagerMist      Int
+  creatorWallet  String
+  joinerWallet   String
+  creatorNftJson Json
+  joinerNftJson  Json
+  status         String   @default("AWAITING_DEPOSIT")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([creatorWallet])
+  @@index([joinerWallet])
+  @@index([status])
 }
 
 model CraftEvent {

@@ -3,10 +3,15 @@ import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { vec2 } from "@/game/physics";
 import type { Vector2D } from "@/game/types";
-import { resolveCollision, checkSettledOverlapWin, type Circle } from "@/game/collision";
+import {
+  resolveCollision,
+  checkSettledOverlapWin,
+  type Circle,
+} from "@/game/collision";
 
 export type RoundResult = "win" | "lose" | "draw";
 export type Turn = "player" | "bot";
+export type GameMode = "bot" | "pvp";
 export type GamePhase =
   | "idle"
   | "player-aiming"
@@ -16,11 +21,33 @@ export type GamePhase =
   | "settling"
   | "ended";
 
+export interface PvPShot {
+  side: Turn;
+  velocity: Vector2D;
+  pullLength: number;
+}
+
+export interface PvPRemoteShot {
+  id: string;
+  side: Turn;
+  velocity: Vector2D;
+  pullLength?: number;
+}
+
 export interface GameCanvasProps {
   onWin?: () => void;
   onLose?: () => void;
   onBack: () => void;
   enabled?: boolean;
+  mode?: GameMode;
+  localSide?: Turn;
+  currentTurnSide?: Turn;
+  playerLabel?: string;
+  opponentLabel?: string;
+  showHeader?: boolean;
+  remoteShot?: PvPRemoteShot | null;
+  onShot?: (shot: PvPShot) => void;
+  onRoundResult?: (winnerSide: Turn) => void;
 }
 
 interface ChunState {
@@ -50,7 +77,7 @@ const PHYSICS = {
   BOT_THINK_TIME_MAX: 1200,
   BOT_MIN_POWER: 3,
   BOT_MAX_POWER: 12,
-  BOT_AIM_RANDOMNESS: Math.PI / 4, // Medium-only bot stats.
+  BOT_AIM_RANDOMNESS: Math.PI / 4,
 };
 
 const COLORS = {
@@ -59,10 +86,13 @@ const COLORS = {
   PLAYER: "#ff8904",
   BOT: "#ef4444",
   AIM_LINE: "rgba(255, 255, 255, 0.6)",
-  POWER_BAR_BG: "rgba(0, 0, 0, 0.5)",
 };
 
-function getCanvasPosition(canvas: HTMLCanvasElement, clientX: number, clientY: number): Vector2D {
+function getCanvasPosition(
+  canvas: HTMLCanvasElement,
+  clientX: number,
+  clientY: number,
+): Vector2D {
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
@@ -76,7 +106,11 @@ function isInsideChun(pos: Vector2D, chun: ChunState): boolean {
   return vec2.distance(pos, chun.position) <= chun.radius * 1.5;
 }
 
-function drawChun(ctx: CanvasRenderingContext2D, chun: ChunState, highlighted: boolean): void {
+function drawChun(
+  ctx: CanvasRenderingContext2D,
+  chun: ChunState,
+  highlighted: boolean,
+): void {
   ctx.save();
   ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
   ctx.shadowBlur = 10;
@@ -130,14 +164,29 @@ function drawChun(ctx: CanvasRenderingContext2D, chun: ChunState, highlighted: b
   ctx.restore();
 }
 
-export default function GameCanvas({ onWin, onLose, onBack, enabled = true }: GameCanvasProps) {
+export default function GameCanvas({
+  onWin,
+  onLose,
+  onBack,
+  enabled = true,
+  mode = "bot",
+  localSide = "player",
+  currentTurnSide,
+  playerLabel,
+  opponentLabel,
+  showHeader = true,
+  remoteShot,
+  onShot,
+  onRoundResult,
+}: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>(0);
+  const handledRemoteShotIdRef = useRef<string | null>(null);
   const [canvasSize] = useState({ width: 900, height: 500 });
 
   const phaseRef = useRef<GamePhase>("idle");
   const currentTurnRef = useRef<Turn>("player");
-  const lastAttackerRef = useRef<"player" | "bot" | null>(null);
+  const lastAttackerRef = useRef<Turn | null>(null);
   const settleCountRef = useRef(0);
   const botThinkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -146,14 +195,14 @@ export default function GameCanvas({ onWin, onLose, onBack, enabled = true }: Ga
     velocity: { x: 0, y: 0 },
     radius: PHYSICS.CHUN_RADIUS,
     color: COLORS.PLAYER,
-    label: "YOU",
+    label: playerLabel ?? "YOU",
   });
   const botRef = useRef<ChunState>({
     position: { x: 700, y: 100 },
     velocity: { x: 0, y: 0 },
     radius: PHYSICS.CHUN_RADIUS,
     color: COLORS.BOT,
-    label: "BOT",
+    label: opponentLabel ?? "BOT",
   });
   const dragRef = useRef<DragState>({
     isDragging: false,
@@ -162,9 +211,50 @@ export default function GameCanvas({ onWin, onLose, onBack, enabled = true }: Ga
   });
 
   useEffect(() => {
-    playerRef.current.position = { x: canvasSize.width * 0.25, y: canvasSize.height - 80 };
+    playerRef.current.position = {
+      x: canvasSize.width * 0.25,
+      y: canvasSize.height - 80,
+    };
     botRef.current.position = { x: canvasSize.width * 0.75, y: 80 };
   }, [canvasSize]);
+
+  useEffect(() => {
+    playerRef.current.label =
+      playerLabel ?? (localSide === "player" ? "YOU" : "OPP");
+    botRef.current.label =
+      opponentLabel ??
+      (mode === "bot" ? "BOT" : localSide === "bot" ? "YOU" : "OPP");
+  }, [localSide, mode, opponentLabel, playerLabel]);
+
+  useEffect(() => {
+    if (mode !== "pvp" || !currentTurnSide) return;
+    currentTurnRef.current = currentTurnSide;
+    if (
+      phaseRef.current !== "player-simulating" &&
+      phaseRef.current !== "bot-simulating" &&
+      phaseRef.current !== "settling" &&
+      phaseRef.current !== "ended"
+    ) {
+      phaseRef.current = "idle";
+    }
+  }, [currentTurnSide, mode]);
+
+  useEffect(() => {
+    if (mode !== "pvp" || !remoteShot) return;
+    if (handledRemoteShotIdRef.current === remoteShot.id) return;
+
+    const targetRef = remoteShot.side === "player" ? playerRef : botRef;
+    targetRef.current.velocity = remoteShot.velocity;
+    lastAttackerRef.current = remoteShot.side;
+    phaseRef.current =
+      remoteShot.side === "player" ? "player-simulating" : "bot-simulating";
+    settleCountRef.current = 0;
+    handledRemoteShotIdRef.current = remoteShot.id;
+  }, [mode, remoteShot]);
+
+  const getLocalChun = useCallback(() => {
+    return localSide === "player" ? playerRef.current : botRef.current;
+  }, [localSide]);
 
   const checkSettled = useCallback(() => {
     const p = vec2.length(playerRef.current.velocity);
@@ -173,15 +263,19 @@ export default function GameCanvas({ onWin, onLose, onBack, enabled = true }: Ga
   }, []);
 
   const notifyResult = useCallback(
-    (result: RoundResult) => {
+    (result: RoundResult, winnerSide?: Turn) => {
       phaseRef.current = "ended";
+      if (mode === "pvp" && winnerSide) {
+        onRoundResult?.(winnerSide);
+      }
       if (result === "win") onWin?.();
       else onLose?.();
     },
-    [onLose, onWin],
+    [mode, onLose, onRoundResult, onWin],
   );
 
   const triggerBotTurn = useCallback(() => {
+    if (mode === "pvp") return;
     phaseRef.current = "bot-thinking";
     const delay =
       Math.random() * (PHYSICS.BOT_THINK_TIME_MAX - PHYSICS.BOT_THINK_TIME_MIN) +
@@ -193,16 +287,28 @@ export default function GameCanvas({ onWin, onLose, onBack, enabled = true }: Ga
       const randomAngle = (Math.random() - 0.5) * PHYSICS.BOT_AIM_RANDOMNESS;
       const cos = Math.cos(randomAngle);
       const sin = Math.sin(randomAngle);
-      const rotated = { x: targetDir.x * cos - targetDir.y * sin, y: targetDir.x * sin + targetDir.y * cos };
-      const power = Math.random() * (PHYSICS.BOT_MAX_POWER - PHYSICS.BOT_MIN_POWER) + PHYSICS.BOT_MIN_POWER;
+      const rotated = {
+        x: targetDir.x * cos - targetDir.y * sin,
+        y: targetDir.x * sin + targetDir.y * cos,
+      };
+      const power =
+        Math.random() * (PHYSICS.BOT_MAX_POWER - PHYSICS.BOT_MIN_POWER) +
+        PHYSICS.BOT_MIN_POWER;
       bot.velocity = vec2.scale(rotated, power);
       lastAttackerRef.current = "bot";
       phaseRef.current = "bot-simulating";
       settleCountRef.current = 0;
     }, delay);
-  }, []);
+  }, [mode]);
 
   const switchTurn = useCallback(() => {
+    if (mode === "pvp") {
+      currentTurnRef.current =
+        currentTurnRef.current === "player" ? "bot" : "player";
+      phaseRef.current = "idle";
+      return;
+    }
+
     if (currentTurnRef.current === "player") {
       currentTurnRef.current = "bot";
       triggerBotTurn();
@@ -210,7 +316,7 @@ export default function GameCanvas({ onWin, onLose, onBack, enabled = true }: Ga
       currentTurnRef.current = "player";
       phaseRef.current = "idle";
     }
-  }, [triggerBotTurn]);
+  }, [mode, triggerBotTurn]);
 
   const updatePhysics = useCallback(() => {
     const player = playerRef.current;
@@ -244,8 +350,16 @@ export default function GameCanvas({ onWin, onLose, onBack, enabled = true }: Ga
 
     const dist = vec2.distance(player.position, bot.position);
     if (dist < player.radius + bot.radius) {
-      const p: Circle = { position: player.position, velocity: player.velocity, radius: player.radius };
-      const b: Circle = { position: bot.position, velocity: bot.velocity, radius: bot.radius };
+      const p: Circle = {
+        position: player.position,
+        velocity: player.velocity,
+        radius: player.radius,
+      };
+      const b: Circle = {
+        position: bot.position,
+        velocity: bot.velocity,
+        radius: bot.radius,
+      };
       const collision = resolveCollision(p, b);
       if (collision.collided) {
         player.position = collision.player.position;
@@ -278,35 +392,52 @@ export default function GameCanvas({ onWin, onLose, onBack, enabled = true }: Ga
     [canvasSize],
   );
 
-  const drawAimLine = useCallback((ctx: CanvasRenderingContext2D) => {
-    const drag = dragRef.current;
-    if (!drag.isDragging) return;
-    const player = playerRef.current;
-    const pull = vec2.sub(drag.currentPos, drag.startPos);
-    const pullLength = Math.min(vec2.length(pull), PHYSICS.MAX_PULL_LENGTH);
-    const direction = vec2.normalize(pull);
-    const projectedEnd = vec2.sub(player.position, vec2.scale(direction, pullLength * 1.5));
+  const drawAimLine = useCallback(
+    (ctx: CanvasRenderingContext2D) => {
+      const drag = dragRef.current;
+      if (!drag.isDragging) return;
+      const activeChun = getLocalChun();
+      const pull = vec2.sub(drag.currentPos, drag.startPos);
+      const pullLength = Math.min(vec2.length(pull), PHYSICS.MAX_PULL_LENGTH);
+      const direction = vec2.normalize(pull);
+      const projectedEnd = vec2.sub(
+        activeChun.position,
+        vec2.scale(direction, pullLength * 1.5),
+      );
 
-    ctx.save();
-    ctx.strokeStyle = COLORS.AIM_LINE;
-    ctx.lineWidth = 3;
-    ctx.setLineDash([10, 8]);
-    ctx.beginPath();
-    ctx.moveTo(player.position.x, player.position.y);
-    ctx.lineTo(projectedEnd.x, projectedEnd.y);
-    ctx.stroke();
-    ctx.restore();
-  }, []);
+      ctx.save();
+      ctx.strokeStyle = COLORS.AIM_LINE;
+      ctx.lineWidth = 3;
+      ctx.setLineDash([10, 8]);
+      ctx.beginPath();
+      ctx.moveTo(activeChun.position.x, activeChun.position.y);
+      ctx.lineTo(projectedEnd.x, projectedEnd.y);
+      ctx.stroke();
+      ctx.restore();
+    },
+    [getLocalChun],
+  );
 
   const render = useCallback(
     (ctx: CanvasRenderingContext2D) => {
       drawBackground(ctx);
       const phase = phaseRef.current;
-      drawChun(ctx, botRef.current, false);
-      drawChun(ctx, playerRef.current, phase === "idle" || phase === "player-aiming");
+      const activeSide =
+        mode === "bot" ? "player" : currentTurnSide ?? currentTurnRef.current;
+      drawChun(
+        ctx,
+        botRef.current,
+        activeSide === "bot" && (phase === "idle" || phase === "player-aiming"),
+      );
+      drawChun(
+        ctx,
+        playerRef.current,
+        activeSide === "player" &&
+          (phase === "idle" || phase === "player-aiming"),
+      );
       if (phase === "player-aiming") drawAimLine(ctx);
     },
-    [drawAimLine, drawBackground],
+    [currentTurnSide, drawAimLine, drawBackground, mode],
   );
 
   const gameLoop = useCallback(() => {
@@ -316,18 +447,35 @@ export default function GameCanvas({ onWin, onLose, onBack, enabled = true }: Ga
     if (!ctx) return;
 
     const phase = phaseRef.current;
-    if (phase === "player-simulating" || phase === "bot-simulating" || phase === "settling") {
+    if (
+      phase === "player-simulating" ||
+      phase === "bot-simulating" ||
+      phase === "settling"
+    ) {
       updatePhysics();
       if (checkSettled()) {
         settleCountRef.current += 1;
         if (settleCountRef.current >= PHYSICS.SETTLE_FRAMES) {
           const settled = checkSettledOverlapWin(
-            { position: playerRef.current.position, velocity: playerRef.current.velocity, radius: playerRef.current.radius },
-            { position: botRef.current.position, velocity: botRef.current.velocity, radius: botRef.current.radius },
+            {
+              position: playerRef.current.position,
+              velocity: playerRef.current.velocity,
+              radius: playerRef.current.radius,
+            },
+            {
+              position: botRef.current.position,
+              velocity: botRef.current.velocity,
+              radius: botRef.current.radius,
+            },
             lastAttackerRef.current,
           );
           if (settled !== "none") {
-            notifyResult(settled === "player_wins" ? "win" : "lose");
+            const winnerSide = settled === "player_wins" ? "player" : "bot";
+            const localWon =
+              mode === "bot"
+                ? winnerSide === "player"
+                : winnerSide === localSide;
+            notifyResult(localWon ? "win" : "lose", winnerSide);
           } else {
             switchTurn();
           }
@@ -341,7 +489,15 @@ export default function GameCanvas({ onWin, onLose, onBack, enabled = true }: Ga
 
     render(ctx);
     animationRef.current = requestAnimationFrame(gameLoop);
-  }, [checkSettled, notifyResult, render, switchTurn, updatePhysics]);
+  }, [
+    checkSettled,
+    localSide,
+    mode,
+    notifyResult,
+    render,
+    switchTurn,
+    updatePhysics,
+  ]);
 
   useEffect(() => {
     animationRef.current = requestAnimationFrame(gameLoop);
@@ -352,73 +508,116 @@ export default function GameCanvas({ onWin, onLose, onBack, enabled = true }: Ga
   }, [gameLoop]);
 
   const handlePointerDown = useCallback(
-    (e: React.PointerEvent<HTMLCanvasElement>) => {
+    (event: React.PointerEvent<HTMLCanvasElement>) => {
       const canvas = canvasRef.current;
       if (!canvas || !enabled || phaseRef.current !== "idle") return;
-      const pos = getCanvasPosition(canvas, e.clientX, e.clientY);
-      if (!isInsideChun(pos, playerRef.current)) return;
+      if (mode === "pvp" && currentTurnRef.current !== localSide) return;
+      const pos = getCanvasPosition(canvas, event.clientX, event.clientY);
+      const activeChun = getLocalChun();
+      if (!isInsideChun(pos, activeChun)) return;
       dragRef.current = {
         isDragging: true,
-        startPos: { ...playerRef.current.position },
+        startPos: { ...activeChun.position },
         currentPos: pos,
       };
       phaseRef.current = "player-aiming";
-      canvas.setPointerCapture(e.pointerId);
+      canvas.setPointerCapture(event.pointerId);
     },
-    [enabled],
+    [enabled, getLocalChun, localSide, mode],
   );
 
-  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas || !dragRef.current.isDragging) return;
-    dragRef.current.currentPos = getCanvasPosition(canvas, e.clientX, e.clientY);
-  }, []);
+  const handlePointerMove = useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>) => {
+      const canvas = canvasRef.current;
+      if (!canvas || !dragRef.current.isDragging) return;
+      dragRef.current.currentPos = getCanvasPosition(
+        canvas,
+        event.clientX,
+        event.clientY,
+      );
+    },
+    [],
+  );
 
-  const handlePointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas || !dragRef.current.isDragging) return;
-    const pull = vec2.sub(dragRef.current.currentPos, dragRef.current.startPos);
-    const pullLength = Math.min(vec2.length(pull), PHYSICS.MAX_PULL_LENGTH);
-    if (pullLength > 10) {
-      const dir = vec2.normalize(pull);
-      playerRef.current.velocity = vec2.scale(dir, -pullLength * PHYSICS.PULL_POWER_SCALE);
-      lastAttackerRef.current = "player";
-      phaseRef.current = "player-simulating";
-      settleCountRef.current = 0;
-    } else {
-      phaseRef.current = "idle";
-    }
-    dragRef.current.isDragging = false;
-    canvas.releasePointerCapture(e.pointerId);
-  }, []);
+  const handlePointerUp = useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>) => {
+      const canvas = canvasRef.current;
+      if (!canvas || !dragRef.current.isDragging) return;
+      const pull = vec2.sub(
+        dragRef.current.currentPos,
+        dragRef.current.startPos,
+      );
+      const pullLength = Math.min(vec2.length(pull), PHYSICS.MAX_PULL_LENGTH);
+      if (pullLength > 10) {
+        const dir = vec2.normalize(pull);
+        const velocity = vec2.scale(
+          dir,
+          -pullLength * PHYSICS.PULL_POWER_SCALE,
+        );
+        const activeRef = localSide === "player" ? playerRef : botRef;
+        activeRef.current.velocity = velocity;
+        lastAttackerRef.current = localSide;
+        phaseRef.current =
+          localSide === "player" ? "player-simulating" : "bot-simulating";
+        settleCountRef.current = 0;
+        onShot?.({ side: localSide, velocity, pullLength });
+      } else {
+        phaseRef.current = "idle";
+      }
+      dragRef.current.isDragging = false;
+      canvas.releasePointerCapture(event.pointerId);
+    },
+    [localSide, onShot],
+  );
 
-  const canPlayerAim = phaseRef.current === "idle" || phaseRef.current === "player-aiming";
+  const canPlayerAim =
+    enabled &&
+    (phaseRef.current === "idle" || phaseRef.current === "player-aiming") &&
+    (mode === "bot" || currentTurnRef.current === localSide);
 
   return (
-    <div className="min-h-screen bg-sunny-gradient flex flex-col">
-      <div className="bg-white shadow-lg border-b-4 border-sunny-400 px-6 py-5">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <motion.button
-              onClick={onBack}
-              whileHover={{ scale: 1.1, rotate: -5 }}
-              whileTap={{ scale: 0.9 }}
-              className="bg-white p-4 rounded-full shadow-xl border-4 border-playful-blue"
-            >
-              <ArrowLeft className="size-6 text-playful-blue" />
-            </motion.button>
-            <div className="flex items-center gap-3">
-              <span className="text-4xl">🎯</span>
-              <div>
-                <h1 className="font-display font-black text-2xl text-gray-900">Match</h1>
-                <p className="text-gray-600 font-semibold">De vong tron bot de thang!</p>
+    <div
+      className={
+        showHeader ? "min-h-screen bg-sunny-gradient flex flex-col" : "flex flex-col"
+      }
+    >
+      {showHeader && (
+        <div className="bg-white shadow-lg border-b-4 border-sunny-400 px-6 py-5">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              <motion.button
+                onClick={onBack}
+                whileHover={{ scale: 1.1, rotate: -5 }}
+                whileTap={{ scale: 0.9 }}
+                className="bg-white p-4 rounded-full shadow-xl border-4 border-playful-blue"
+              >
+                <ArrowLeft className="size-6 text-playful-blue" />
+              </motion.button>
+              <div className="flex items-center gap-3">
+                <span className="text-4xl">Target</span>
+                <div>
+                  <h1 className="font-display font-black text-2xl text-gray-900">
+                    Match
+                  </h1>
+                  <p className="text-gray-600 font-semibold">
+                    {mode === "bot"
+                      ? "De vong tron bot de thang!"
+                      : "De vong tron doi thu de thang!"}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="flex-1 flex items-center justify-center p-6">
+      <div
+        className={
+          showHeader
+            ? "flex-1 flex items-center justify-center p-6"
+            : "flex items-center justify-center p-0"
+        }
+      >
         <div className="relative">
           {canPlayerAim && !dragRef.current.isDragging && (
             <motion.div
@@ -427,7 +626,7 @@ export default function GameCanvas({ onWin, onLose, onBack, enabled = true }: Ga
               className="absolute -top-16 left-1/2 -translate-x-1/2 bg-sunny-400 px-6 py-3 rounded-full border-4 border-white shadow-2xl z-10"
             >
               <p className="font-display font-black text-gray-900 text-lg whitespace-nowrap">
-                👆 Keo vong tron vang phia duoi
+                Keo vong tron cua ban
               </p>
             </motion.div>
           )}
@@ -436,7 +635,7 @@ export default function GameCanvas({ onWin, onLose, onBack, enabled = true }: Ga
             ref={canvasRef}
             width={canvasSize.width}
             height={canvasSize.height}
-            className="bg-[#1e2939] rounded-4xl shadow-2xl border-8 border-sunny-400 cursor-pointer hover:border-playful-blue transition-colors touch-none"
+            className="bg-[#1e2939] rounded-4xl shadow-2xl border-8 border-sunny-400 cursor-pointer hover:border-playful-blue transition-colors touch-none max-w-full"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}

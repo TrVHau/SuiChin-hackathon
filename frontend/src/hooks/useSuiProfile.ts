@@ -285,8 +285,8 @@ export function useSuiProfile() {
             ? `+${delta} Chun, Streak: ${profile.streak + 1}`
             : "-1 Chun, Streak reset";
           toast.success(msg);
-          setTimeout(() => {
-            loadProfile();
+          setTimeout(async () => {
+            await loadProfile();
             onSuccess?.();
           }, 1200);
         },
@@ -294,7 +294,7 @@ export function useSuiProfile() {
           console.error("Report result error:", error);
           const errMsg = String(error?.message ?? "");
           if (errMsg.includes("101")) {
-            toast.error("Cooldown chua het, cho them 10 giay");
+            toast.error("Cooldown chua het, cho them vai giay");
           } else if (errMsg.includes("102")) {
             toast.error("Delta qua lon (toi da 20)");
           } else {

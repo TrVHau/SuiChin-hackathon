@@ -10,7 +10,7 @@ import { logger } from "../shared/logger";
 
 export function createApp() {
   const app = express();
-  app.use(helmet());
+  app.use(helmet({ crossOriginOpenerPolicy: false }));
   app.use(cors({ origin: corsOrigins, credentials: true }));
   app.use(express.json({ limit: "1mb" }));
   app.use(rateLimit({ windowMs: 60_000, limit: 120 }));

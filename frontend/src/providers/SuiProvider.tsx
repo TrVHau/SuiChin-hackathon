@@ -40,15 +40,16 @@ function RegisterEnokiWallets() {
   useEffect(() => {
     if (!ENOKI_PUBLIC_API_KEY) return;
 
-    const providers: Record<string, { clientId: string }> = {};
+    const redirectUrl = `${window.location.origin}/login`;
+    const providers: Record<string, { clientId: string; redirectUrl: string }> = {};
     if (ENOKI_GOOGLE_CLIENT_ID) {
-      providers.google = { clientId: ENOKI_GOOGLE_CLIENT_ID };
+      providers.google = { clientId: ENOKI_GOOGLE_CLIENT_ID, redirectUrl };
     }
     if (ENOKI_FACEBOOK_CLIENT_ID) {
-      providers.facebook = { clientId: ENOKI_FACEBOOK_CLIENT_ID };
+      providers.facebook = { clientId: ENOKI_FACEBOOK_CLIENT_ID, redirectUrl };
     }
     if (ENOKI_TWITCH_CLIENT_ID) {
-      providers.twitch = { clientId: ENOKI_TWITCH_CLIENT_ID };
+      providers.twitch = { clientId: ENOKI_TWITCH_CLIENT_ID, redirectUrl };
     }
 
     if (Object.keys(providers).length === 0) return;

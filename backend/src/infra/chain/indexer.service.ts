@@ -3,8 +3,7 @@ import { getPrismaClient } from "../db/prisma";
 import { env } from "../../config/env";
 import { logger } from "../../shared/logger";
 import cron from "node-cron";
-
-const prisma = getPrismaClient() as Record<string, any>;
+import { valuationRoomEvents } from "../../gateways/socket/valuation-room-events";
 
 // The package ID to filter out events
 const PACKAGE_ID = env.SUI_PACKAGE_ID || "";
@@ -12,8 +11,16 @@ const EVENT_MODULES = ["craft_actions", "nft_valuation_lobby"] as const;
 
 export class IndexerService {
   private isCatchingUp = false;
+  private db: Record<string, any> | null = null;
 
   constructor() {}
+
+  private getDb() {
+    if (!this.db) {
+      this.db = getPrismaClient() as Record<string, any>;
+    }
+    return this.db;
+  }
 
   /**
    * Main entry point to start the Indexer
@@ -76,7 +83,7 @@ export class IndexerService {
 
     try {
       for (const moduleName of EVENT_MODULES) {
-        let cursor: { txDigest: string; eventSeq: string } | null = null;
+        let cursor = await this.loadCursor(moduleName);
 
         while (true) {
           const result = await suiClient.queryEvents({
@@ -93,6 +100,10 @@ export class IndexerService {
 
           for (const event of result.data) {
             await this.processEvent(event);
+            await this.saveCursor(moduleName, {
+              txDigest: event.id.txDigest,
+              eventSeq: event.id.eventSeq,
+            });
           }
 
           if (!result.hasNextPage || !result.nextCursor) {
@@ -110,6 +121,35 @@ export class IndexerService {
     } finally {
       this.isCatchingUp = false;
     }
+  }
+
+  private async loadCursor(moduleName: string): Promise<{ txDigest: string; eventSeq: string } | null> {
+    const row = await this.getDb().syncState.findUnique({ where: { moduleName } });
+    if (!row?.cursorTxDigest || !row?.cursorEventSeq) {
+      return null;
+    }
+    return {
+      txDigest: row.cursorTxDigest,
+      eventSeq: row.cursorEventSeq,
+    };
+  }
+
+  private async saveCursor(
+    moduleName: string,
+    cursor: { txDigest: string; eventSeq: string },
+  ) {
+    await this.getDb().syncState.upsert({
+      where: { moduleName },
+      create: {
+        moduleName,
+        cursorTxDigest: cursor.txDigest,
+        cursorEventSeq: cursor.eventSeq,
+      },
+      update: {
+        cursorTxDigest: cursor.txDigest,
+        cursorEventSeq: cursor.eventSeq,
+      },
+    });
   }
 
   /**
@@ -140,7 +180,7 @@ export class IndexerService {
               ? "SCRAP"
               : `TIER_${Number(payload.tier ?? 0)}`);
 
-          await prisma.craftEvent.create({
+          await this.getDb().craftEvent.create({
             data: {
               txDigest: event.id.txDigest,
               eventSeq: event.id.eventSeq,
@@ -163,7 +203,7 @@ export class IndexerService {
           break;
 
         case "RoomSettled":
-          await prisma.matchEvent.create({
+          await this.getDb().matchEvent.create({
             data: {
               txDigest: event.id.txDigest,
               eventSeq: event.id.eventSeq,
@@ -175,6 +215,44 @@ export class IndexerService {
             },
           });
           logger.info(`Indexed MatchEvent: Room ${payload.room_id} Settled`);
+          break;
+
+        case "RoomCreated":
+          valuationRoomEvents.emit("roomCreated", {
+            roomId: String(payload.room_id ?? ""),
+            creator: String(payload.creator ?? ""),
+            txDigest: event.id.txDigest,
+            eventSeq: event.id.eventSeq,
+          });
+          logger.info(
+            { roomId: payload.room_id, creator: payload.creator },
+            "Observed valuation RoomCreated event",
+          );
+          break;
+
+        case "RoomJoined":
+          valuationRoomEvents.emit("roomJoined", {
+            roomId: String(payload.room_id ?? ""),
+            joiner: String(payload.joiner ?? ""),
+            txDigest: event.id.txDigest,
+            eventSeq: event.id.eventSeq,
+          });
+          logger.info(
+            { roomId: payload.room_id, joiner: payload.joiner },
+            "Observed valuation RoomJoined event",
+          );
+          break;
+
+        case "RoomActivated":
+          valuationRoomEvents.emit("roomActivated", {
+            roomId: String(payload.room_id ?? ""),
+            txDigest: event.id.txDigest,
+            eventSeq: event.id.eventSeq,
+          });
+          logger.info(
+            { roomId: payload.room_id },
+            "Observed valuation RoomActivated event",
+          );
           break;
 
         case "RecycleRewardIssued":
@@ -189,7 +267,7 @@ export class IndexerService {
           break;
 
         case "ScrapFused":
-          await prisma.fusionEvent.create({
+          await this.getDb().fusionEvent.create({
             data: {
               txDigest: event.id.txDigest,
               eventSeq: event.id.eventSeq,
@@ -207,7 +285,7 @@ export class IndexerService {
           break;
 
         case "ScrapsFused":
-          await prisma.fusionEvent.create({
+          await this.getDb().fusionEvent.create({
             data: {
               txDigest: event.id.txDigest,
               eventSeq: event.id.eventSeq,

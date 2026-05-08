@@ -9,6 +9,7 @@ import { useGame } from "@/providers/GameContext";
 import {
   TREASURY_OBJECT_ID,
   CRAFT_CONFIG_OBJECT_ID,
+  RANDOM_OBJECT_ID,
   PACKAGE_ID,
   computeCraftCost,
 } from "@/config/sui.config";
@@ -215,6 +216,27 @@ export function useMintCraftFlow() {
     return { liveChun, liveCost };
   };
 
+  const canUseRandomnessCraft = async (): Promise<boolean> => {
+    if (!CRAFT_CONFIG_OBJECT_ID) return false;
+
+    try {
+      const [configObj, randomObj] = await Promise.all([
+        suiClient.getObject({
+          id: CRAFT_CONFIG_OBJECT_ID,
+          options: { showContent: true },
+        }),
+        suiClient.getObject({
+          id: RANDOM_OBJECT_ID,
+          options: { showContent: true },
+        }),
+      ]);
+
+      return Boolean(configObj.data && randomObj.data);
+    } catch {
+      return false;
+    }
+  };
+
   const handleCraft = async () => {
     if (!canCraft || crafting) return;
     if (!resolvedProfileId) {
@@ -238,7 +260,14 @@ export function useMintCraftFlow() {
     setCrafting(true);
     toast.loading("Dang craft Cuon Chun NFT...", { id: "craft" });
 
-    const tx = CRAFT_CONFIG_OBJECT_ID
+    const useRandomnessCraft = await canUseRandomnessCraft();
+    if (CRAFT_CONFIG_OBJECT_ID && !useRandomnessCraft) {
+      toast.info("Randomness config chua san sang, dung craft fallback.", {
+        id: "craft-mode",
+      });
+    }
+
+    const tx = useRandomnessCraft
       ? buildCraftChunWithRandomnessTx(resolvedProfileId, TREASURY_OBJECT_ID)
       : buildCraftChunTx(resolvedProfileId, TREASURY_OBJECT_ID);
 
@@ -301,6 +330,18 @@ export function useMintCraftFlow() {
           }
           if (message.includes("500")) {
             toast.error("Craft that bai: Khong du 0.1 SUI nap vao pool", {
+              id: "craft",
+            });
+            return;
+          }
+          if (message.includes("501")) {
+            toast.error("Craft that bai: Profile khong thuoc vi hien tai", {
+              id: "craft",
+            });
+            return;
+          }
+          if (message.includes("508")) {
+            toast.error("Craft dang tam dung tren config on-chain", {
               id: "craft",
             });
             return;
