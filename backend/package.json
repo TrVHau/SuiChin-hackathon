@@ -10,6 +10,7 @@
     "dev": "tsx watch src/main.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node --experimental-specifier-resolution=node dist/main.js",
+    "railway:start": "npx prisma db push && npm start",
     "test": "tsx src/tests/run-tests.ts",
     "test:build": "npm run build && tsx src/tests/run-tests.ts",
     "admin:add-lobby-signer": "tsx src/scripts/add-lobby-signer.ts",
