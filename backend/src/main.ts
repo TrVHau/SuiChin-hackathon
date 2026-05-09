@@ -7,13 +7,15 @@ import { logger } from "./shared/logger";
 import { indexerService } from "./infra/chain/indexer.service";
 
 async function bootstrap() {
-  await ensureRuntimeDependencies();
   const app = createApp();
   const server = createServer(app);
   attachMultiplayerGateway(server);
 
   server.listen(env.PORT, () => {
     logger.info({ port: env.PORT }, "Backend started");
+    ensureRuntimeDependencies().catch((err) => {
+      logger.error({ err }, "Runtime dependency check failed after startup");
+    });
     // Only run indexer when persistence backend is Prisma/Postgres.
     if (env.BACKEND_STORAGE === "prisma") {
       indexerService.start();
