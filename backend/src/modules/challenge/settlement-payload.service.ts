@@ -2,9 +2,9 @@ import { bcs } from "@mysten/sui/bcs";
 import { decodeSuiPrivateKey } from "@mysten/sui/cryptography";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { fromBase64, normalizeSuiAddress } from "@mysten/sui/utils";
-import { env } from "../../config/env";
-import { logger } from "../../shared/logger";
-import { suiClient } from "../../infra/chain/sui-client";
+import { env } from "../../config/env.js";
+import { logger } from "../../shared/logger.js";
+import { suiClient } from "../../infra/chain/sui-client.js";
 
 const SETTLEMENT_INTENT_SCOPE = 1;
 

@@ -1,5 +1,5 @@
-import { cryptoService } from "./crypto.service";
-import { logger } from "../../shared/logger";
+import { cryptoService } from "./crypto.service.js";
+import { logger } from "../../shared/logger.js";
 
 export enum RoomState {
   WAITING_FOR_PLAYERS = "WAITING_FOR_PLAYERS",
@@ -218,8 +218,8 @@ export class PvPStateService {
 }
 
 export const pvpStateService = new PvPStateService();
-import { env } from "../../config/env";
-import { getRedisClient } from "../../infra/cache/redis";
+import { env } from "../../config/env.js";
+import { getRedisClient } from "../../infra/cache/redis.js";
 
 interface MatchResult {
   matched: boolean;

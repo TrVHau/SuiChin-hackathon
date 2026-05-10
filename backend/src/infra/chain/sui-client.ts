@@ -1,5 +1,5 @@
 import { SuiJsonRpcClient as SuiClient } from "@mysten/sui/jsonRpc";
-import { env } from "../../config/env";
+import { env } from "../../config/env.js";
 
 function getFullnodeUrl(network: string): string {
   const urls: Record<string, string> = {

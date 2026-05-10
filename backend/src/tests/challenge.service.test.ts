@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
-import { ChallengeService } from "../modules/challenge/challenge.service";
+import { ChallengeService } from "../modules/challenge/challenge.service.js";
 
 describe("ChallengeService", () => {
   let service: ChallengeService;

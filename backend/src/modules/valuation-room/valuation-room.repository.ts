@@ -1,5 +1,5 @@
-import { env } from "../../config/env";
-import { getPrismaClient } from "../../infra/db/prisma";
+import { env } from "../../config/env.js";
+import { getPrismaClient } from "../../infra/db/prisma.js";
 
 export type ValuationRoomStatus =
   | "AWAITING_DEPOSIT"

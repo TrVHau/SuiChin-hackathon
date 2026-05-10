@@ -2,7 +2,7 @@ import {
   type CreateValuationRoomInput,
   type ValuationRoomRecord,
   valuationRoomRepository,
-} from "./valuation-room.repository";
+} from "./valuation-room.repository.js";
 
 export class ValuationRoomService {
   create(input: CreateValuationRoomInput): Promise<ValuationRoomRecord> {

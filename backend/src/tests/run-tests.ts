@@ -49,12 +49,12 @@ async function loadAppFactory(): Promise<AppFactory> {
     { valuationRoomEvents },
   ] =
     await Promise.all([
-      import("../app/create-app"),
-      import("../gateways/socket/multiplayer.gateway"),
-      import("../modules/challenge/challenge.service"),
-      import("../modules/matchmaking/matchmaking.service"),
-      import("../modules/valuation-room/valuation-room.service"),
-      import("../gateways/socket/valuation-room-events"),
+      import("../app/create-app.js"),
+      import("../gateways/socket/multiplayer.gateway.js"),
+      import("../modules/challenge/challenge.service.js"),
+      import("../modules/matchmaking/matchmaking.service.js"),
+      import("../modules/valuation-room/valuation-room.service.js"),
+      import("../gateways/socket/valuation-room-events.js"),
     ]);
 
   return {

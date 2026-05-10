@@ -2,7 +2,7 @@ import type {
   FinalizeChallengePayload,
   FinalizeChallengeResult,
   IChainAdapter,
-} from "./chain-adapter";
+} from "./chain-adapter.js";
 
 export class MockChainAdapter implements IChainAdapter {
   async finalizeChallenge(payload: FinalizeChallengePayload): Promise<FinalizeChallengeResult> {

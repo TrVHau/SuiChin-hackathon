@@ -1,10 +1,10 @@
 import { spawn } from "node:child_process";
-import { env } from "../../config/env";
+import { env } from "../../config/env.js";
 import type {
   FinalizeChallengePayload,
   FinalizeChallengeResult,
   IChainAdapter,
-} from "./chain-adapter";
+} from "./chain-adapter.js";
 
 interface ProfileSnapshot {
   objectId: string;

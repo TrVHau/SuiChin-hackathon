@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import { createServer, type Server as HttpServer } from "node:http";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { io as ioClient, type Socket as ClientSocket } from "socket.io-client";
-import { createApp } from "../app/create-app";
-import { attachMultiplayerGateway } from "../gateways/socket/multiplayer.gateway";
-import { valuationRoomEvents } from "../gateways/socket/valuation-room-events";
-import { matchmakingService } from "../modules/matchmaking/matchmaking.service";
-import { challengeService } from "../modules/challenge/challenge.service";
-import { valuationRoomService } from "../modules/valuation-room/valuation-room.service";
+import { createApp } from "../app/create-app.js";
+import { attachMultiplayerGateway } from "../gateways/socket/multiplayer.gateway.js";
+import { valuationRoomEvents } from "../gateways/socket/valuation-room-events.js";
+import { matchmakingService } from "../modules/matchmaking/matchmaking.service.js";
+import { challengeService } from "../modules/challenge/challenge.service.js";
+import { valuationRoomService } from "../modules/valuation-room/valuation-room.service.js";
 
 function waitForConnect(socket: ClientSocket) {
   return new Promise<void>((resolve, reject) => {

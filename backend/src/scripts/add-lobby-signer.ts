@@ -2,8 +2,8 @@ import { Transaction } from "@mysten/sui/transactions";
 import { decodeSuiPrivateKey } from "@mysten/sui/cryptography";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { fromBase64 } from "@mysten/sui/utils";
-import { env } from "../config/env";
-import { suiClient } from "../infra/chain/sui-client";
+import { env } from "../config/env.js";
+import { suiClient } from "../infra/chain/sui-client.js";
 
 const packageId = env.LOBBY_PACKAGE_ID ?? env.SUI_PACKAGE_ID;
 const LOBBY_ADMIN_CAP_TYPE = packageId

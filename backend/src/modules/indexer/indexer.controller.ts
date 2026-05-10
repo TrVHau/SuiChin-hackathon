@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { z } from "zod";
-import { logger } from "../../shared/logger";
-import { getPrismaClient } from "../../infra/db/prisma";
+import { logger } from "../../shared/logger.js";
+import { getPrismaClient } from "../../infra/db/prisma.js";
 
 const prisma = getPrismaClient() as Record<string, any>;
 

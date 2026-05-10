@@ -1,9 +1,9 @@
-import { suiClient } from "./sui-client";
-import { getPrismaClient } from "../db/prisma";
-import { env } from "../../config/env";
-import { logger } from "../../shared/logger";
+import { suiClient } from "./sui-client.js";
+import { getPrismaClient } from "../db/prisma.js";
+import { env } from "../../config/env.js";
+import { logger } from "../../shared/logger.js";
 import cron from "node-cron";
-import { valuationRoomEvents } from "../../gateways/socket/valuation-room-events";
+import { valuationRoomEvents } from "../../gateways/socket/valuation-room-events.js";
 
 // The package ID to filter out events
 const PACKAGE_ID = env.SUI_PACKAGE_ID || "";

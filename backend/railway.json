@@ -5,7 +5,7 @@
     "buildCommand": "npx prisma generate && npm run build"
   },
   "deploy": {
-    "preDeployCommand": "npm run railway:predeploy",
+    "preDeployCommand": "node dist/scripts/railway-predeploy.js",
     "startCommand": "npm start",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 300,

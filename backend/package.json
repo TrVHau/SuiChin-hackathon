@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node --experimental-specifier-resolution=node dist/main.js",
+    "start": "node dist/main.js",
     "railway:predeploy": "tsx src/scripts/railway-predeploy.ts",
     "test": "tsx src/tests/run-tests.ts",
     "test:build": "npm run build && tsx src/tests/run-tests.ts",

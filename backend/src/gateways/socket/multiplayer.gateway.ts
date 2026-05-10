@@ -1,20 +1,20 @@
 import type { Server as HttpServer } from "node:http";
 import { Server, type Socket } from "socket.io";
 import { z } from "zod";
-import { corsOrigins, env } from "../../config/env";
-import { challengeService } from "../../modules/challenge/challenge.service";
-import { getSettlementPayloadService } from "../../modules/challenge/settlement-payload.service";
-import { SubmitResultSchema } from "../../modules/challenge/challenge.schemas";
-import type { ChallengeResultRecord } from "../../modules/challenge/challenge.types";
-import { matchmakingService } from "../../modules/matchmaking/matchmaking.service";
+import { corsOrigins, env } from "../../config/env.js";
+import { challengeService } from "../../modules/challenge/challenge.service.js";
+import { getSettlementPayloadService } from "../../modules/challenge/settlement-payload.service.js";
+import { SubmitResultSchema } from "../../modules/challenge/challenge.schemas.js";
+import type { ChallengeResultRecord } from "../../modules/challenge/challenge.types.js";
+import { matchmakingService } from "../../modules/matchmaking/matchmaking.service.js";
 import {
   valuationRoomService,
-} from "../../modules/valuation-room/valuation-room.service";
+} from "../../modules/valuation-room/valuation-room.service.js";
 import type {
   ValuationRoomRecord,
-} from "../../modules/valuation-room/valuation-room.repository";
-import { logger } from "../../shared/logger";
-import { valuationRoomEvents } from "./valuation-room-events";
+} from "../../modules/valuation-room/valuation-room.repository.js";
+import { logger } from "../../shared/logger.js";
+import { valuationRoomEvents } from "./valuation-room-events.js";
 
 const BETTING_TIERS = {
   "0_5_SUI": {

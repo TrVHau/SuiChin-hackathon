@@ -2,8 +2,8 @@ import { bcs } from "@mysten/sui/bcs";
 import { decodeSuiPrivateKey } from "@mysten/sui/cryptography";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { fromBase64 } from "@mysten/sui/utils";
-import { env } from "../../config/env";
-import { logger } from "../../shared/logger";
+import { env } from "../../config/env.js";
+import { logger } from "../../shared/logger.js";
 
 // BCS struct strictly matching the Move SettleEvent
 const SettleMatchPayloadBcs = bcs.struct("SettleMatchPayload", {

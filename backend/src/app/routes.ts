@@ -1,17 +1,17 @@
 import type { Express } from "express";
 import { Router } from "express";
-import { env } from "../config/env";
-import { getRuntimeDependencyReport } from "../infra/runtime/dependency-check";
-import { indexerRoutes } from "../modules/indexer/indexer.routes";
-import { challengeService } from "../modules/challenge/challenge.service";
+import { env } from "../config/env.js";
+import { getRuntimeDependencyReport } from "../infra/runtime/dependency-check.js";
+import { indexerRoutes } from "../modules/indexer/indexer.routes.js";
+import { challengeService } from "../modules/challenge/challenge.service.js";
 import {
   ChallengeIdParamSchema,
   CreateChallengeSchema,
   FinalizeChallengeSchema,
   SubmitResultSchema,
-} from "../modules/challenge/challenge.schemas";
-import { getOracleApiKey, getWalletAddress } from "../shared/auth";
-import { AppError } from "../shared/errors";
+} from "../modules/challenge/challenge.schemas.js";
+import { getOracleApiKey, getWalletAddress } from "../shared/auth.js";
+import { AppError } from "../shared/errors.js";
 
 export function registerRoutes(app: Express) {
   const api = Router();

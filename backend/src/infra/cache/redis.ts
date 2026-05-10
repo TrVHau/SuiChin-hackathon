@@ -1,9 +1,13 @@
-import Redis from "ioredis";
-import { env } from "../../config/env";
+import { createRequire } from "node:module";
+import type { Redis as RedisClient } from "ioredis";
+import { env } from "../../config/env.js";
 
-let client: Redis | null = null;
+const require = createRequire(import.meta.url);
+const Redis = require("ioredis") as new (...args: unknown[]) => RedisClient;
 
-export function getRedisClient(): Redis {
+let client: RedisClient | null = null;
+
+export function getRedisClient(): RedisClient {
   if (!env.REDIS_URL) {
     throw new Error("REDIS_URL is required when MATCHMAKING_BACKEND=redis");
   }
