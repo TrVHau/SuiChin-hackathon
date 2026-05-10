@@ -23,7 +23,7 @@ const item = {
 };
 
 export default function Dashboard() {
-  const { playerData, refreshProfile } = useGame();
+  const { playerData, refreshProfile, createProfile, loading } = useGame();
   const { cuonChuns } = useOwnedNFTs();
 
   const tier1Count = cuonChuns.filter((nft) => nft.tier === 1).length;
@@ -60,19 +60,18 @@ export default function Dashboard() {
           <StreakCard />
         </motion.div>
 
-        <FeatureCards />
-
-        {playerData.objectId && (
+        <motion.div
+          id="faucet-panel"
+          variants={container}
+          initial="hidden"
+          animate="show"
+          className="mb-8 scroll-mt-32"
+        >
           <motion.div
-            variants={container}
-            initial="hidden"
-            animate="show"
-            className="mt-8"
+            variants={item}
+            className="bg-white border-8 border-playful-teal rounded-4xl p-8 text-left shadow-2xl"
           >
-            <motion.div
-              variants={item}
-              className="bg-white border-8 border-playful-teal rounded-4xl p-8 text-left shadow-2xl"
-            >
+            {playerData.objectId ? (
               <FaucetPanel
                 profileId={playerData.objectId}
                 lastFaucetMs={playerData.last_faucet_ms ?? 0}
@@ -80,9 +79,43 @@ export default function Dashboard() {
                   void refreshProfile();
                 }}
               />
-            </motion.div>
+            ) : (
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="bg-playful-teal/10 p-3 rounded-3xl mb-5 inline-block border-4 border-white shadow-lg">
+                    <img
+                      src="/img/chun_raw.jpg"
+                      alt="Chun Raw"
+                      className="size-16 rounded-2xl object-cover"
+                    />
+                  </div>
+                  <h3 className="font-display font-black text-3xl text-gray-900 mb-2">
+                    Nhan Chun de bat dau
+                  </h3>
+                  <p className="text-gray-700 font-semibold text-lg">
+                    Vi nay chua co profile on-chain. Tao profile truoc, sau do
+                    ban co the nhan Chun faucet va choi game.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => {
+                    void createProfile(() => {
+                      void refreshProfile();
+                    });
+                  }}
+                  className="rounded-2xl border-4 border-amber-700 bg-yellow-300 px-8 py-4 text-lg font-black text-gray-900 shadow-lg transition-all hover:bg-yellow-200 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 disabled:border-gray-400"
+                >
+                  {loading ? "Dang tao profile..." : "Tao profile nhan Chun"}
+                </button>
+              </div>
+            )}
           </motion.div>
-        )}
+        </motion.div>
+
+        <FeatureCards />
       </main>
     </div>
   );

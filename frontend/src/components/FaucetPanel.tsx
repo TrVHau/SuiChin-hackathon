@@ -31,7 +31,7 @@ export default function FaucetPanel({
   const pendingRaw = Math.min(Math.floor(elapsedMs / FAUCET_COOLDOWN_MS), FAUCET_MAX_STACK);
   const pending = Number.isFinite(pendingRaw) ? pendingRaw : 0;
 
-  const nextMs = lastFaucetMs + FAUCET_COOLDOWN_MS;
+  const nextMs = normalizedLast + FAUCET_COOLDOWN_MS;
   const remainingMin = Math.max(0, Math.ceil((nextMs - nowMs) / 60_000));
   const cooldownHours = Math.max(1, Math.round(FAUCET_COOLDOWN_MS / 3_600_000));
   const clampedStack = Math.max(0, Math.min(pending, FAUCET_MAX_STACK));

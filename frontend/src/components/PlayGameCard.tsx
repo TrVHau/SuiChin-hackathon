@@ -11,6 +11,8 @@ export function PlayGameCard() {
   const [cooldownLeft, setCooldownLeft] = useState(0);
   const hasChun = (playerData?.chun_raw ?? 0) > 0;
   const canPlay = cooldownLeft === 0 && hasChun;
+  const canOpenFaucet = !hasChun;
+  const canInteract = canPlay || canOpenFaucet;
 
   useEffect(() => {
     const update = () => {
@@ -76,14 +78,23 @@ export function PlayGameCard() {
           onClick={() => {
             if (canPlay) {
               navigate("/session");
+              return;
+            }
+
+            if (canOpenFaucet) {
+              document
+                .getElementById("faucet-panel")
+                ?.scrollIntoView({ behavior: "smooth", block: "center" });
             }
           }}
-          disabled={!canPlay}
-          whileHover={canPlay ? { scale: 1.05 } : {}}
-          whileTap={canPlay ? { scale: 0.95 } : {}}
+          disabled={!canInteract}
+          whileHover={canInteract ? { scale: 1.05 } : {}}
+          whileTap={canInteract ? { scale: 0.95 } : {}}
           className={`btn-playful text-2xl flex items-center gap-3 border-4 ${
-            !canPlay
-              ? "bg-gray-200 text-gray-400 border-gray-300 cursor-not-allowed"
+            !hasChun
+              ? "bg-yellow-300 text-gray-900 border-amber-600 shadow-xl hover:bg-yellow-200"
+              : cooldownLeft > 0
+                ? "bg-gray-200 text-gray-400 border-gray-300 cursor-not-allowed"
               : "bg-gradient-to-r from-playful-green to-playful-blue text-white border-white shadow-2xl"
           }`}
         >
