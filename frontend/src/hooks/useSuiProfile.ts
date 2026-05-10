@@ -144,8 +144,8 @@ export function useSuiProfile() {
     [suiClient],
   );
 
-  const loadProfile = useCallback(async () => {
-    if (!account?.address) return;
+  const loadProfile = useCallback(async (): Promise<PlayerProfileData | null> => {
+    if (!account?.address) return null;
 
     setLoading(true);
     try {
@@ -156,16 +156,18 @@ export function useSuiProfile() {
         setHasProfile(false);
         setProfile(null);
         setStoreProfile(null);
-        return;
+        return null;
       }
 
       const selected = pickBestProfile(profiles);
       setHasProfile(true);
       setProfile(selected);
       setStoreProfile(selected);
+      return selected;
     } catch (error) {
       console.error("Error loading profile:", error);
       toast.error("Khong the tai profile");
+      return null;
     } finally {
       setLoading(false);
     }

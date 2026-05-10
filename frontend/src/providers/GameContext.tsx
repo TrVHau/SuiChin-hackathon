@@ -36,7 +36,7 @@ interface GameContextType {
     onDone?: () => void,
     onError?: () => void,
   ) => void;
-  refreshProfile: () => Promise<void>;
+  refreshProfile: () => Promise<unknown | null>;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
