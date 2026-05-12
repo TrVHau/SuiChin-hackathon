@@ -18,9 +18,6 @@ export const LOBBY_SIGNER_PUBKEY =
 export const LOBBY_DEFAULT_TARGET_POINTS = Number(
   import.meta.env.VITE_LOBBY_DEFAULT_TARGET_POINTS || 1000,
 );
-export const LOBBY_DEFAULT_COIN_MIST = BigInt(
-  import.meta.env.VITE_LOBBY_DEFAULT_COIN_MIST || "100000000",
-);
 export const MARKET_OBJECT_ID = import.meta.env.VITE_MARKET_OBJECT_ID || "";
 export const TREASURY_OBJECT_ID = import.meta.env.VITE_TREASURY_OBJECT_ID || "";
 export const CRAFT_CONFIG_OBJECT_ID =

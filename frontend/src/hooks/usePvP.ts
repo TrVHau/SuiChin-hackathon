@@ -22,8 +22,7 @@ interface QueueJoinAck {
     opponentWallet?: string;
     challengeId?: string;
     tier?: BettingTier;
-    wager?: number;
-    wagerMist?: number;
+    targetPoints?: number;
   };
   error?: string;
 }
@@ -50,9 +49,8 @@ interface MatchStartEvent {
   roomId: string;
   players: string[];
   challengeId: string;
-  wager?: number;
-  wagerMist?: number;
   tier?: BettingTier;
+  targetPoints?: number;
   nfts?: Record<string, ValuationNft>;
 }
 
@@ -95,10 +93,9 @@ interface MatchShotEvent {
 interface MatchFoundEvent {
   roomId: string;
   challengeId: string;
-  wager: number;
-  wagerMist?: number;
   tier?: BettingTier;
   tierLabel?: string;
+  targetPoints?: number;
   status?: "AWAITING_DEPOSIT";
   creator: string;
   joiner: string;
@@ -130,8 +127,6 @@ export interface PvPState {
   role: "CREATOR" | "JOINER" | null;
   challengeId: string | null;
   opponent: string | null;
-  wager: number;
-  wagerMist: number;
   betTier: BettingTier | null;
   round: number;
   scores: [number, number];
@@ -161,8 +156,6 @@ const INITIAL_STATE: PvPState = {
   role: null,
   challengeId: null,
   opponent: null,
-  wager: 0,
-  wagerMist: 0,
   betTier: null,
   round: 1,
   scores: [0, 0],
@@ -205,8 +198,6 @@ export function usePvP(_profileId: string | undefined) {
         role: myWallet === event.creator ? "CREATOR" : "JOINER",
         challengeId: event.challengeId,
         opponent: opponentWallet,
-        wager: 0,
-        wagerMist: 0,
         betTier: event.tier ?? prev.betTier,
         myNft:
           myWallet === event.creator
@@ -235,8 +226,6 @@ export function usePvP(_profileId: string | undefined) {
         roomId: event.roomId,
         challengeId: event.challengeId,
         opponent: opponentWallet,
-        wager: 0,
-        wagerMist: 0,
         betTier: event.tier ?? prev.betTier,
         myNft: event.nfts?.[myWallet] ?? prev.myNft,
         opponentNft:
@@ -265,7 +254,6 @@ export function usePvP(_profileId: string | undefined) {
 
   const joinQueue = useCallback(
     (
-      wager: number,
       roomId?: string,
       options?: {
         tier?: BettingTier;
@@ -285,8 +273,6 @@ export function usePvP(_profileId: string | undefined) {
       setPvP({
         ...INITIAL_STATE,
         status: "connecting",
-        wager,
-        wagerMist: Math.round(wager * 1_000_000_000),
         betTier: options?.tier ?? null,
         myNft: options?.nft ?? null,
       });
@@ -301,7 +287,6 @@ export function usePvP(_profileId: string | undefined) {
         socket.emit(
           "queue.join",
           {
-            wager,
             roomId,
             tier: options?.tier,
             nft: options?.nft,
@@ -319,8 +304,6 @@ export function usePvP(_profileId: string | undefined) {
                 status: "waiting",
                 roomId: ack.result?.roomId ?? roomId ?? prev.roomId,
                 betTier: ack.result?.tier ?? prev.betTier,
-                wager: ack.result?.wager ?? prev.wager,
-                wagerMist: ack.result?.wagerMist ?? prev.wagerMist,
               }));
             }
           },

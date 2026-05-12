@@ -418,7 +418,7 @@ export default function PvPScreen() {
       return;
     }
 
-    connectRoomSocket(0, undefined, {
+    connectRoomSocket(undefined, {
       tier: selectedBettingLobby.id,
       nft,
     });
@@ -473,7 +473,7 @@ export default function PvPScreen() {
       return;
     }
     if (pvp.role && pvp.role !== "CREATOR") {
-      toast.error("Ban khong phai nguoi duoc dat cuoc truoc trong cap dau nay.");
+      toast.error("Ban khong phai nguoi tao phong truoc trong cap dau nay.");
       return;
     }
 
@@ -554,7 +554,7 @@ export default function PvPScreen() {
       return;
     }
     if (pvp.role && pvp.role !== "JOINER") {
-      toast.error("Ban khong phai nguoi duoc dat cuoc sau trong cap dau nay.");
+      toast.error("Ban khong phai nguoi join phong trong cap dau nay.");
       return;
     }
 
@@ -1126,7 +1126,7 @@ export default function PvPScreen() {
                           onClick={cancelLobbyRoom}
                           className="rounded-full border-2 border-red-200 bg-red-50 px-4 py-2 text-sm font-black text-red-700"
                         >
-                          Huy dat cuoc
+                          Huy phong
                         </button>
                       )}
                     {roomStatus === 1 && (
@@ -1271,7 +1271,7 @@ export default function PvPScreen() {
                       onClick={cancelLobbyRoom}
                       className="mt-3 rounded-full border-2 border-red-200 bg-red-50 px-4 py-2 text-sm font-black text-red-700"
                     >
-                      Huy dat cuoc
+                      Huy phong
                     </button>
                   )}
                 {createdRoomId && roomStatus === 1 && (

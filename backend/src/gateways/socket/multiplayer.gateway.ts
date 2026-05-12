@@ -19,22 +19,16 @@ import { valuationRoomEvents } from "./valuation-room-events.js";
 const BETTING_TIERS = {
   "0_5_SUI": {
     label: "Binh dan",
-    wagerSui: 0,
-    wagerMist: 0,
     targetPoints: 100,
     requiredNftTier: 1,
   },
   "1_SUI": {
     label: "Trung luu",
-    wagerSui: 0,
-    wagerMist: 0,
     targetPoints: 250,
     requiredNftTier: 2,
   },
   "2_SUI": {
     label: "Dai gia",
-    wagerSui: 0,
-    wagerMist: 0,
     targetPoints: 1000,
     requiredNftTier: 3,
   },
@@ -60,8 +54,7 @@ interface ValuationMatchState {
   tempRoomId: string;
   suiRoomId: string | null;
   tier: BettingTier;
-  wagerSui: number;
-  wagerMist: number;
+  targetPoints: number;
   players: [string, string];
   nftsByWallet: Map<string, ValuationNft>;
   started: boolean;
@@ -108,7 +101,7 @@ const NftSelectionSchema = z.object({
 });
 
 const QueueJoinPayloadSchema = z.object({
-  wager: z.coerce.number().finite().min(0).max(1_000_000).default(0),
+  wager: z.coerce.number().finite().min(0).max(1_000_000).default(0), // legacy room mode only
   tier: z.enum(["0_5_SUI", "1_SUI", "2_SUI"]).optional(),
   nft: NftSelectionSchema.optional(),
   roomId: z.string().trim().min(0).optional(),
@@ -166,8 +159,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
       tempRoomId: record.tempRoomId,
       suiRoomId: record.suiRoomId,
       tier: record.tier as BettingTier,
-      wagerSui: record.wagerSui,
-      wagerMist: record.wagerMist,
+      targetPoints: BETTING_TIERS[record.tier as BettingTier]?.targetPoints ?? 0,
       players: [record.creatorWallet, record.joinerWallet],
       nftsByWallet,
       started: record.status === "PLAYING",
@@ -291,10 +283,9 @@ export function attachMultiplayerGateway(server: HttpServer) {
       roomId,
       players: [challenge.challengerWallet, challenge.opponentWallet],
       challengeId: challenge.id,
-      wager: challenge.stakeAmount ?? 0,
       status: "PLAYING",
       tier: match.tier,
-      wagerMist: match.wagerMist,
+      targetPoints: match.targetPoints,
       nfts: Object.fromEntries(match.nftsByWallet.entries()),
     });
 
@@ -341,7 +332,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
               ? {}
               : payloadOrAck;
           const parsedPayload = QueueJoinPayloadSchema.parse(payload);
-          const wager = parsedPayload.wager;
+          const legacyQueueValue = parsedPayload.wager;
           const requestedRoomId = parsedPayload.roomId;
 
           const walletAddress = getWalletFromSocket(socket);
@@ -373,8 +364,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
                   matched: false,
                   tier,
                   roomId: null,
-                  wager: tierConfig.wagerSui,
-                  wagerMist: tierConfig.wagerMist,
+                  targetPoints: tierConfig.targetPoints,
                 },
               });
               return;
@@ -409,8 +399,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
               tempRoomId,
               suiRoomId: null,
               tier,
-              wagerSui: tierConfig.wagerSui,
-              wagerMist: tierConfig.wagerMist,
+              targetPoints: tierConfig.targetPoints,
               players: [opponent.walletAddress, walletAddress],
               nftsByWallet,
               started: false,
@@ -419,8 +408,9 @@ export function attachMultiplayerGateway(server: HttpServer) {
               challengeId: challenge.id,
               tempRoomId,
               tier,
-              wagerSui: tierConfig.wagerSui,
-              wagerMist: tierConfig.wagerMist,
+              // Prisma schema still has these historical columns; NFT-only PvP stores zero.
+              wagerSui: 0,
+              wagerMist: 0,
               creatorWallet: opponent.walletAddress,
               joinerWallet: walletAddress,
               creatorNft: opponent.nft,
@@ -433,8 +423,6 @@ export function attachMultiplayerGateway(server: HttpServer) {
               status: "AWAITING_DEPOSIT",
               tier,
               tierLabel: tierConfig.label,
-              wager: tierConfig.wagerSui,
-              wagerMist: tierConfig.wagerMist,
               targetPoints: tierConfig.targetPoints,
               creator: opponent.walletAddress,
               joiner: walletAddress,
@@ -449,9 +437,8 @@ export function attachMultiplayerGateway(server: HttpServer) {
                 matched: true,
                 roomId: tempRoomId,
                 opponentWallet: opponent.walletAddress,
-                wager: tierConfig.wagerSui,
-                wagerMist: tierConfig.wagerMist,
                 tier,
+                targetPoints: tierConfig.targetPoints,
                 challengeId: challenge.id,
               },
             });
@@ -469,7 +456,6 @@ export function attachMultiplayerGateway(server: HttpServer) {
                 result: {
                   matched: false,
                   roomId: requestedRoomId,
-                  wager,
                 },
               });
               return;
@@ -497,7 +483,6 @@ export function attachMultiplayerGateway(server: HttpServer) {
               roomId: requestedRoomId,
               players: [walletAddress, opponentWallet],
               challengeId: challenge.id,
-              wager,
             });
 
             const firstTurnWallet = challenge.challengerWallet;
@@ -514,20 +499,19 @@ export function attachMultiplayerGateway(server: HttpServer) {
                 matched: true,
                 roomId: requestedRoomId,
                 opponentWallet,
-                wager,
                 challengeId: challenge.id,
               },
             });
             return;
           }
 
-          const result = await matchmakingService.joinQueue(walletAddress, wager);
+          const result = await matchmakingService.joinQueue(walletAddress, legacyQueueValue);
           if (result.matched && result.roomId && result.opponentWallet) {
             const challenge = await challengeService.createChallenge(result.opponentWallet, {
               mode: "REALTIME",
               opponentWallet: walletAddress,
-              stakeEnabled: result.wager > 0,
-              stakeAmount: result.wager,
+              stakeEnabled: false,
+              stakeAmount: 0,
             });
             await challengeService.acceptChallenge(challenge.id, walletAddress);
 
@@ -543,7 +527,6 @@ export function attachMultiplayerGateway(server: HttpServer) {
             namespace.to(result.roomId).emit("match.found", {
               roomId: result.roomId,
               challengeId: challenge.id,
-              wager: result.wager,
               creator: result.opponentWallet,
               joiner: walletAddress,
             });
@@ -551,13 +534,22 @@ export function attachMultiplayerGateway(server: HttpServer) {
             ack?.({
               ok: true,
               result: {
-                ...result,
+                matched: result.matched,
+                roomId: result.roomId,
+                opponentWallet: result.opponentWallet,
                 challengeId: challenge.id,
               },
             });
             return;
           }
-          ack?.({ ok: true, result });
+          ack?.({
+            ok: true,
+            result: {
+              matched: result.matched,
+              roomId: result.roomId,
+              opponentWallet: result.opponentWallet,
+            },
+          });
         } catch (err) {
           const ack = typeof payloadOrAck === "function" ? payloadOrAck : maybeAck;
           ack?.({
@@ -671,10 +663,9 @@ export function attachMultiplayerGateway(server: HttpServer) {
               roomId: parsed.suiRoomId,
               players: [challenge.challengerWallet, challenge.opponentWallet],
               challengeId: challenge.id,
-              wager: challenge.stakeAmount ?? 0,
               status: "PLAYING",
               tier: valuationMatch?.tier,
-              wagerMist: valuationMatch?.wagerMist,
+              targetPoints: valuationMatch?.targetPoints,
               nfts: valuationMatch
                 ? Object.fromEntries(valuationMatch.nftsByWallet.entries())
                 : undefined,
