@@ -172,12 +172,15 @@ export default function PvpGameSession() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-[28px] border border-white/10 bg-black/20 p-3 mb-4">
+        <div
+          key={roundKey}
+          className="overflow-hidden rounded-[28px] border border-white/10 bg-black/20 p-3 mb-4"
+        >
           <GameCanvas
             mode="pvp"
             showHeader={false}
             onBack={handleBack}
-            enabled={phase === "playing" && !pvp.submittedResult}
+            enabled={phase === "playing" && !pvp.submittedResult && !pvp.paused}
             localSide={localSide}
             currentTurnSide={currentTurnSide}
             playerLabel={localSide === "player" ? "YOU" : "OPP"}

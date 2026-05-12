@@ -6,7 +6,8 @@ export type ValuationRoomStatus =
   | "ROOM_CREATED"
   | "JOINED"
   | "PLAYING"
-  | "FINALIZED";
+  | "FINALIZED"
+  | "CANCELLED";
 
 export interface ValuationRoomNft {
   id: string;
@@ -60,6 +61,7 @@ interface ValuationRoomRepository {
   }): Promise<ValuationRoomRecord>;
   markPlaying(challengeId: string): Promise<ValuationRoomRecord | null>;
   markFinalized(challengeId: string): Promise<ValuationRoomRecord | null>;
+  markCancelled(challengeId: string): Promise<ValuationRoomRecord | null>;
   reset(): Promise<void>;
 }
 
@@ -159,6 +161,13 @@ class InMemoryValuationRoomRepository implements ValuationRoomRepository {
     const record = this.roomsByChallenge.get(challengeId);
     if (!record) return null;
     record.status = "FINALIZED";
+    return cloneRecord(record);
+  }
+
+  async markCancelled(challengeId: string): Promise<ValuationRoomRecord | null> {
+    const record = this.roomsByChallenge.get(challengeId);
+    if (!record) return null;
+    record.status = "CANCELLED";
     return cloneRecord(record);
   }
 
@@ -273,6 +282,14 @@ class PrismaValuationRoomRepository implements ValuationRoomRepository {
     const row = await this.db.valuationRoom.update({
       where: { challengeId },
       data: { status: "FINALIZED" },
+    });
+    return row ? this.toRecord(row) : null;
+  }
+
+  async markCancelled(challengeId: string): Promise<ValuationRoomRecord | null> {
+    const row = await this.db.valuationRoom.update({
+      where: { challengeId },
+      data: { status: "CANCELLED" },
     });
     return row ? this.toRecord(row) : null;
   }

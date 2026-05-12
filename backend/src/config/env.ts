@@ -28,6 +28,14 @@ const EnvSchema = z.object({
   LOBBY_CONFIG_OBJECT_ID: z.string().optional(),
   LOBBY_SIGNER_SECRET_KEY: z.string().optional(),
   LOBBY_SETTLEMENT_TTL_MS: z.coerce.number().int().positive().default(120_000),
+  LOBBY_EMERGENCY_REFUND_DELAY_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(300_000),
+  PVP_QUEUE_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+  PVP_LOCK_TIMEOUT_MS: z.coerce.number().int().positive().default(45_000),
+  PVP_DISCONNECT_GRACE_MS: z.coerce.number().int().positive().default(15_000),
 });
 
 export const env = EnvSchema.parse(process.env);

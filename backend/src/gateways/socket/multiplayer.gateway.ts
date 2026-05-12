@@ -45,6 +45,13 @@ interface ValuationNft {
   imageUrl?: string;
 }
 
+type ValuationRuntimePhase =
+  | "MATCHED"
+  | "LOCKING"
+  | "IN_GAME"
+  | "FINISHED"
+  | "CANCELLED";
+
 interface ValuationMatchState {
   challengeId: string;
   tempRoomId: string;
@@ -54,6 +61,7 @@ interface ValuationMatchState {
   players: [string, string];
   nftsByWallet: Map<string, ValuationNft>;
   started: boolean;
+  phase: ValuationRuntimePhase;
 }
 
 function getWalletFromSocket(socket: Socket): string {
@@ -134,6 +142,25 @@ const RoomJoinedPayloadSchema = z.object({
   suiRoomId: z.string().trim().min(1),
 });
 
+const MatchRejoinPayloadSchema = z.object({
+  challengeId: z.string().uuid(),
+  roomId: z.string().trim().min(1).optional(),
+});
+
+function timerWithUnref(callback: () => void, delayMs: number): NodeJS.Timeout {
+  const timer = setTimeout(callback, delayMs);
+  timer.unref?.();
+  return timer;
+}
+
+function walletKey(wallet: string): string {
+  return wallet.toLowerCase();
+}
+
+function disconnectTimerKey(challengeId: string, wallet: string): string {
+  return `${challengeId}:${walletKey(wallet)}`;
+}
+
 function buildTempRoomId(
   walletA: string,
   walletB: string,
@@ -158,6 +185,9 @@ export function attachMultiplayerGateway(server: HttpServer) {
   const pendingEscrowRoomByWallet = new Map<string, string>();
   const valuationQueuesByTier = new Map<BettingTier, QueuedValuationPlayer[]>();
   const valuationMatchByChallenge = new Map<string, ValuationMatchState>();
+  const queueTimeoutByWallet = new Map<string, NodeJS.Timeout>();
+  const preGameTimeoutByChallenge = new Map<string, NodeJS.Timeout>();
+  const disconnectTimeoutByChallengeWallet = new Map<string, NodeJS.Timeout>();
 
   function buildValuationMatchFromRecord(
     record: ValuationRoomRecord,
@@ -176,6 +206,16 @@ export function attachMultiplayerGateway(server: HttpServer) {
       players: [record.creatorWallet, record.joinerWallet],
       nftsByWallet,
       started: record.status === "PLAYING",
+      phase:
+        record.status === "PLAYING"
+          ? "IN_GAME"
+          : record.status === "FINALIZED"
+            ? "FINISHED"
+            : record.status === "CANCELLED"
+              ? "CANCELLED"
+              : record.status === "ROOM_CREATED" || record.status === "JOINED"
+                ? "LOCKING"
+                : "MATCHED",
     };
   }
 
@@ -184,6 +224,304 @@ export function attachMultiplayerGateway(server: HttpServer) {
     challengeByRoom.set(match.suiRoomId ?? match.tempRoomId, match.challengeId);
     roomByChallenge.set(match.challengeId, match.suiRoomId ?? match.tempRoomId);
     return match;
+  }
+
+  function clearQueueTimeout(wallet: string) {
+    const key = walletKey(wallet);
+    const timer = queueTimeoutByWallet.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      queueTimeoutByWallet.delete(key);
+    }
+  }
+
+  function removeQueuedValuationPlayer(wallet: string): boolean {
+    let removed = false;
+    for (const [tier, queue] of valuationQueuesByTier.entries()) {
+      const nextQueue = queue.filter(
+        (entry) => !sameWallet(entry.walletAddress, wallet),
+      );
+      if (nextQueue.length !== queue.length) {
+        removed = true;
+      }
+      if (nextQueue.length > 0) {
+        valuationQueuesByTier.set(tier, nextQueue);
+      } else {
+        valuationQueuesByTier.delete(tier);
+      }
+    }
+    if (removed) {
+      clearQueueTimeout(wallet);
+    }
+    return removed;
+  }
+
+  function scheduleQueueTimeout(
+    wallet: string,
+    tier: BettingTier,
+    socketId: string,
+  ) {
+    clearQueueTimeout(wallet);
+    const timer = timerWithUnref(() => {
+      const removed = removeQueuedValuationPlayer(wallet);
+      if (!removed) return;
+      namespace.to(socketId).emit("queue.timeout", {
+        tier,
+        timeoutMs: env.PVP_QUEUE_TIMEOUT_MS,
+        message: "Khong tim thay doi thu",
+      });
+      void matchmakingService.leaveQueue(wallet);
+    }, env.PVP_QUEUE_TIMEOUT_MS);
+    queueTimeoutByWallet.set(walletKey(wallet), timer);
+  }
+
+  function clearPreGameTimeout(challengeId: string) {
+    const timer = preGameTimeoutByChallenge.get(challengeId);
+    if (timer) {
+      clearTimeout(timer);
+      preGameTimeoutByChallenge.delete(challengeId);
+    }
+  }
+
+  function matchRooms(match: ValuationMatchState): string[] {
+    return [...new Set([match.tempRoomId, match.suiRoomId].filter(Boolean))] as string[];
+  }
+
+  function cleanupValuationMatch(match: ValuationMatchState) {
+    clearPreGameTimeout(match.challengeId);
+    challengeByRoom.delete(match.tempRoomId);
+    if (match.suiRoomId) {
+      challengeByRoom.delete(match.suiRoomId);
+    }
+    roomByChallenge.delete(match.challengeId);
+    currentTurnByChallenge.delete(match.challengeId);
+    shotSequenceByChallenge.delete(match.challengeId);
+    for (const wallet of match.players) {
+      const key = disconnectTimerKey(match.challengeId, wallet);
+      const timer = disconnectTimeoutByChallengeWallet.get(key);
+      if (timer) {
+        clearTimeout(timer);
+        disconnectTimeoutByChallengeWallet.delete(key);
+      }
+    }
+  }
+
+  function findValuationMatchByWallet(wallet: string) {
+    for (const match of valuationMatchByChallenge.values()) {
+      if (match.phase === "CANCELLED" || match.phase === "FINISHED") continue;
+      if (match.players.some((player) => sameWallet(player, wallet))) {
+        return match;
+      }
+    }
+    return null;
+  }
+
+  function isMatchPaused(challengeId: string): boolean {
+    for (const key of disconnectTimeoutByChallengeWallet.keys()) {
+      if (key.startsWith(`${challengeId}:`)) return true;
+    }
+    return false;
+  }
+
+  async function buildSettlementPayloadForRoom(input: {
+    challengeId: string;
+    roomId: string | undefined;
+    winnerWallet: string | null;
+    loserWallet: string | null;
+  }) {
+    const settlementSecret = env.LOBBY_SIGNER_SECRET_KEY ?? env.ADMIN_SECRET_KEY;
+    if (
+      !input.roomId ||
+      !input.winnerWallet ||
+      !input.loserWallet ||
+      !settlementSecret ||
+      !isLikelySuiObjectId(input.roomId)
+    ) {
+      return null;
+    }
+
+    try {
+      const digestBytes = Array.from(
+        new TextEncoder().encode(input.challengeId),
+      );
+      return await getSettlementPayloadService().buildPayload({
+        roomId: input.roomId,
+        winner: input.winnerWallet,
+        loser: input.loserWallet,
+        matchDigest: digestBytes,
+      });
+    } catch (error) {
+      logger.warn(
+        {
+          challengeId: input.challengeId,
+          roomId: input.roomId,
+          error,
+        },
+        "Failed to build valuation lobby settlement payload",
+      );
+      return null;
+    }
+  }
+
+  async function handleExitPreGame(wallet: string, reason: "PLAYER_LEFT" | "DISCONNECT" | "LOCK_TIMEOUT") {
+    const match = findValuationMatchByWallet(wallet);
+    if (!match || match.started || match.phase === "IN_GAME") {
+      return false;
+    }
+
+    match.phase = "CANCELLED";
+    const creatorWallet = match.players[0];
+    const opponentWallet =
+      match.players.find((player) => !sameWallet(player, wallet)) ?? null;
+    const needsCreatorCancel = Boolean(match.suiRoomId);
+    const message =
+      reason === "LOCK_TIMEOUT"
+        ? "Doi thu khong chot tai san dung han."
+        : "Doi thu da chay tron.";
+
+    for (const roomId of matchRooms(match)) {
+      namespace.to(roomId).emit("match.cancelled", {
+        challengeId: match.challengeId,
+        roomId,
+        tempRoomId: match.tempRoomId,
+        suiRoomId: match.suiRoomId,
+        reason,
+        phase: match.phase,
+        message,
+        leftWallet: wallet,
+        opponentWallet,
+        creatorWallet,
+        needsCreatorCancel,
+        cancelRoomId: match.suiRoomId,
+        canCancelWallet: creatorWallet,
+      });
+    }
+
+    await valuationRoomService.markCancelled(match.challengeId);
+    cleanupValuationMatch(match);
+    valuationMatchByChallenge.delete(match.challengeId);
+    return true;
+  }
+
+  function schedulePreGameTimeout(match: ValuationMatchState) {
+    clearPreGameTimeout(match.challengeId);
+    const timer = timerWithUnref(() => {
+      void handleExitPreGame(match.players[1], "LOCK_TIMEOUT");
+    }, env.PVP_LOCK_TIMEOUT_MS);
+    preGameTimeoutByChallenge.set(match.challengeId, timer);
+  }
+
+  async function finalizeDisconnectedPlayer(match: ValuationMatchState, disconnectedWallet: string) {
+    const challenge = await challengeService.getChallenge(match.challengeId);
+    if (!challenge || challenge.status === "FINALIZED") {
+      return;
+    }
+
+    const winnerWallet =
+      match.players.find((player) => !sameWallet(player, disconnectedWallet)) ??
+      null;
+    if (!winnerWallet) return;
+
+    const saveResult = async (wallet: string, result: "WIN" | "FORFEIT") => {
+      try {
+        await challengeService.submitResult(match.challengeId, wallet, result);
+      } catch (error) {
+        const message = String(error instanceof Error ? error.message : error);
+        if (!message.includes("Result already submitted")) {
+          throw error;
+        }
+      }
+    };
+
+    await saveResult(disconnectedWallet, "FORFEIT");
+    await saveResult(winnerWallet, "WIN");
+
+    const results = await challengeService.listResults(match.challengeId);
+    let resolvedWinner: string | null =
+      resolveWinnerWallet(results) ?? winnerWallet;
+    let txDigest: string | null = null;
+    let loserWallet: string | null = disconnectedWallet;
+
+    try {
+      const finalized = await challengeService.finalizeChallenge(
+        match.challengeId,
+        resolvedWinner,
+      );
+      resolvedWinner = finalized.challenge.winnerWallet;
+      if (resolvedWinner && finalized.challenge.opponentWallet) {
+        loserWallet =
+          resolvedWinner === finalized.challenge.challengerWallet
+            ? finalized.challenge.opponentWallet
+            : finalized.challenge.challengerWallet;
+      }
+      txDigest = finalized.chainResult.digest;
+    } catch (error) {
+      const existing = await challengeService.getChallenge(match.challengeId);
+      if (!existing || existing.status !== "FINALIZED") {
+        throw error;
+      }
+      resolvedWinner = existing.winnerWallet;
+      if (resolvedWinner && existing.opponentWallet) {
+        loserWallet =
+          resolvedWinner === existing.challengerWallet
+            ? existing.opponentWallet
+            : existing.challengerWallet;
+      }
+    }
+
+    const roomId = roomByChallenge.get(match.challengeId) ?? match.suiRoomId ?? match.tempRoomId;
+    const settlementPayload = await buildSettlementPayloadForRoom({
+      challengeId: match.challengeId,
+      roomId,
+      winnerWallet: resolvedWinner,
+      loserWallet,
+    });
+
+    namespace.to(roomId).emit("match.result.finalized", {
+      challengeId: match.challengeId,
+      winnerWallet: resolvedWinner,
+      txDigest,
+      settlementPayload,
+      reason: "DISCONNECT_FORFEIT",
+      loserWallet,
+    });
+
+    match.phase = "FINISHED";
+    await valuationRoomService.markFinalized(match.challengeId);
+    cleanupValuationMatch(match);
+    valuationMatchByChallenge.delete(match.challengeId);
+  }
+
+  function scheduleInGameDisconnect(match: ValuationMatchState, wallet: string) {
+    const key = disconnectTimerKey(match.challengeId, wallet);
+    if (disconnectTimeoutByChallengeWallet.has(key)) return;
+
+    const deadlineMs = Date.now() + env.PVP_DISCONNECT_GRACE_MS;
+    const timer = timerWithUnref(() => {
+      disconnectTimeoutByChallengeWallet.delete(key);
+      void finalizeDisconnectedPlayer(match, wallet).catch((error) => {
+        logger.error({ error, challengeId: match.challengeId, wallet }, "Failed to finalize disconnected PvP player");
+      });
+    }, env.PVP_DISCONNECT_GRACE_MS);
+    disconnectTimeoutByChallengeWallet.set(key, timer);
+
+    const roomId = roomByChallenge.get(match.challengeId) ?? match.suiRoomId ?? match.tempRoomId;
+    namespace.to(roomId).emit("match.playerDisconnected", {
+      challengeId: match.challengeId,
+      wallet,
+      deadlineMs,
+      graceMs: env.PVP_DISCONNECT_GRACE_MS,
+      message: "Doi thu mat ket noi. Tran tam dung de cho reconnect.",
+    });
+  }
+
+  function clearInGameDisconnect(match: ValuationMatchState, wallet: string) {
+    const key = disconnectTimerKey(match.challengeId, wallet);
+    const timer = disconnectTimeoutByChallengeWallet.get(key);
+    if (!timer) return false;
+    clearTimeout(timer);
+    disconnectTimeoutByChallengeWallet.delete(key);
+    return true;
   }
 
   function findPendingValuationMatchByCreator(creator: string) {
@@ -237,6 +575,8 @@ export function attachMultiplayerGateway(server: HttpServer) {
     }
 
     match.suiRoomId = input.roomId;
+    match.phase = "LOCKING";
+    schedulePreGameTimeout(match);
     await valuationRoomService.markRoomCreated({
       challengeId: match.challengeId,
       suiRoomId: input.roomId,
@@ -270,6 +610,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
     }
 
     match.suiRoomId = input.roomId;
+    match.phase = "LOCKING";
     await valuationRoomService.markRoomJoined({
       challengeId: match.challengeId,
       suiRoomId: input.roomId,
@@ -287,7 +628,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
         );
       }
     }
-    if (!match || match.started) {
+    if (!match || match.started || match.phase === "CANCELLED" || match.phase === "FINISHED") {
       return false;
     }
 
@@ -301,6 +642,8 @@ export function attachMultiplayerGateway(server: HttpServer) {
     }
 
     match.started = true;
+    match.phase = "IN_GAME";
+    clearPreGameTimeout(match.challengeId);
     await valuationRoomService.markPlaying(match.challengeId);
     challengeByRoom.delete(match.tempRoomId);
     roomByChallenge.delete(match.challengeId);
@@ -376,6 +719,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
           const requestedRoomId = parsedPayload.roomId;
 
           const walletAddress = getWalletFromSocket(socket);
+          removeQueuedValuationPlayer(walletAddress);
 
           if (parsedPayload.tier && parsedPayload.nft) {
             const tier = parsedPayload.tier;
@@ -398,6 +742,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
                 nft: parsedPayload.nft,
               });
               valuationQueuesByTier.set(tier, existingQueue);
+              scheduleQueueTimeout(walletAddress, tier, socket.id);
               ack?.({
                 ok: true,
                 result: {
@@ -411,6 +756,8 @@ export function attachMultiplayerGateway(server: HttpServer) {
             }
 
             valuationQueuesByTier.set(tier, existingQueue);
+            clearQueueTimeout(opponent.walletAddress);
+            clearQueueTimeout(walletAddress);
             const challenge = await challengeService.createChallenge(
               opponent.walletAddress,
               {
@@ -450,7 +797,11 @@ export function attachMultiplayerGateway(server: HttpServer) {
               players: [opponent.walletAddress, walletAddress],
               nftsByWallet,
               started: false,
+              phase: "MATCHED",
             });
+            schedulePreGameTimeout(
+              valuationMatchByChallenge.get(challenge.id)!,
+            );
             await valuationRoomService.create({
               challengeId: challenge.id,
               tempRoomId,
@@ -624,16 +975,11 @@ export function attachMultiplayerGateway(server: HttpServer) {
 
     socket.on("queue.leave", async (ack?: (payload: unknown) => void) => {
       const walletAddress = getWalletFromSocket(socket);
-      for (const [tier, queue] of valuationQueuesByTier.entries()) {
-        const nextQueue = queue.filter(
-          (entry) => entry.walletAddress !== walletAddress,
-        );
-        if (nextQueue.length > 0) {
-          valuationQueuesByTier.set(tier, nextQueue);
-        } else {
-          valuationQueuesByTier.delete(tier);
-        }
-      }
+      const removedFromQueue = removeQueuedValuationPlayer(walletAddress);
+      const cancelledPreGame = await handleExitPreGame(
+        walletAddress,
+        "PLAYER_LEFT",
+      );
       const pendingRoomId = pendingEscrowRoomByWallet.get(walletAddress);
       if (pendingRoomId) {
         pendingEscrowRoomByWallet.delete(walletAddress);
@@ -642,21 +988,12 @@ export function attachMultiplayerGateway(server: HttpServer) {
         }
       }
       const result = await matchmakingService.leaveQueue(walletAddress);
-      ack?.({ ok: true, result });
+      ack?.({ ok: true, result, removedFromQueue, cancelledPreGame });
     });
 
     socket.on("disconnect", () => {
       const walletAddress = getWalletFromSocket(socket);
-      for (const [tier, queue] of valuationQueuesByTier.entries()) {
-        const nextQueue = queue.filter(
-          (entry) => entry.walletAddress !== walletAddress,
-        );
-        if (nextQueue.length > 0) {
-          valuationQueuesByTier.set(tier, nextQueue);
-        } else {
-          valuationQueuesByTier.delete(tier);
-        }
-      }
+      removeQueuedValuationPlayer(walletAddress);
       const pendingRoomId = pendingEscrowRoomByWallet.get(walletAddress);
       if (pendingRoomId) {
         pendingEscrowRoomByWallet.delete(walletAddress);
@@ -665,7 +1002,79 @@ export function attachMultiplayerGateway(server: HttpServer) {
         }
       }
       void matchmakingService.leaveQueue(walletAddress);
+
+      const match = findValuationMatchByWallet(walletAddress);
+      if (!match) return;
+      if (match.started || match.phase === "IN_GAME") {
+        scheduleInGameDisconnect(match, walletAddress);
+        return;
+      }
+      void handleExitPreGame(walletAddress, "DISCONNECT");
     });
+
+    socket.on(
+      "match.rejoin",
+      async (payload: unknown, ack?: (payload: unknown) => void) => {
+        try {
+          const walletAddress = getWalletFromSocket(socket);
+          const parsed = MatchRejoinPayloadSchema.parse(payload);
+          let match = valuationMatchByChallenge.get(parsed.challengeId) ?? null;
+          if (!match) {
+            const persisted = await valuationRoomService.findByChallengeId(
+              parsed.challengeId,
+            );
+            if (persisted) {
+              match = rememberValuationMatch(
+                buildValuationMatchFromRecord(persisted),
+              );
+            }
+          }
+          if (!match) {
+            throw new Error("Match not found");
+          }
+          if (!match.players.some((player) => sameWallet(player, walletAddress))) {
+            throw new Error("Wallet does not belong to this match");
+          }
+
+          for (const roomId of matchRooms(match)) {
+            socket.join(roomId);
+          }
+
+          const reconnected = clearInGameDisconnect(match, walletAddress);
+          const roomId =
+            roomByChallenge.get(match.challengeId) ??
+            match.suiRoomId ??
+            match.tempRoomId;
+          if (reconnected) {
+            namespace.to(roomId).emit("match.playerReconnected", {
+              challengeId: match.challengeId,
+              wallet: walletAddress,
+              message: "Doi thu da ket noi lai.",
+            });
+          }
+
+          ack?.({
+            ok: true,
+            result: {
+              roomId,
+              challengeId: match.challengeId,
+              status: match.phase,
+              players: match.players,
+              tier: match.tier,
+              targetPoints: match.targetPoints,
+              nfts: Object.fromEntries(match.nftsByWallet.entries()),
+              currentTurnWallet:
+                currentTurnByChallenge.get(match.challengeId) ?? null,
+            },
+          });
+        } catch (err) {
+          ack?.({
+            ok: false,
+            error: err instanceof Error ? err.message : "match.rejoin failed",
+          });
+        }
+      },
+    );
 
     socket.on(
       "queue.roomCreated",
@@ -727,6 +1136,9 @@ export function attachMultiplayerGateway(server: HttpServer) {
             const valuationMatch = valuationMatchByChallenge.get(challengeId);
             if (valuationMatch) {
               valuationMatch.suiRoomId = parsed.suiRoomId;
+              valuationMatch.started = true;
+              valuationMatch.phase = "IN_GAME";
+              clearPreGameTimeout(challengeId);
             }
 
             const challenge = await challengeService.getChallenge(challengeId);
@@ -763,6 +1175,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
                 challengeId: challenge.id,
                 currentTurnWallet: firstTurnWallet,
               });
+              await valuationRoomService.markPlaying(challenge.id);
             }
           }
 
@@ -800,6 +1213,9 @@ export function attachMultiplayerGateway(server: HttpServer) {
             challenge.opponentWallet === walletAddress;
           if (!isParticipant) {
             throw new Error("Wallet does not belong to this challenge");
+          }
+          if (isMatchPaused(parsed.challengeId)) {
+            throw new Error("Match paused while waiting for reconnect");
           }
 
           const expectedTurn =
@@ -880,7 +1296,6 @@ export function attachMultiplayerGateway(server: HttpServer) {
           let winnerWallet = resolveWinnerWallet(results);
           let txDigest: string | null = null;
           let loserWallet: string | null = null;
-          let settlementPayload: unknown = null;
 
           try {
             const finalized = await challengeService.finalizeChallenge(
@@ -911,39 +1326,12 @@ export function attachMultiplayerGateway(server: HttpServer) {
             }
           }
 
-          const settlementSecret =
-            env.LOBBY_SIGNER_SECRET_KEY ?? env.ADMIN_SECRET_KEY;
-
-          if (
-            roomId &&
-            winnerWallet &&
-            loserWallet &&
-            settlementSecret &&
-            isLikelySuiObjectId(roomId)
-          ) {
-            try {
-              const digestBytes = Array.from(
-                new TextEncoder().encode(parsed.challengeId),
-              );
-              settlementPayload =
-                await getSettlementPayloadService().buildPayload({
-                  roomId,
-                  winner: winnerWallet,
-                  loser: loserWallet,
-                  matchDigest: digestBytes,
-                });
-            } catch (error) {
-              logger.warn(
-                {
-                  challengeId: parsed.challengeId,
-                  roomId,
-                  error,
-                },
-                "Failed to build valuation lobby settlement payload",
-              );
-              settlementPayload = null;
-            }
-          }
+          const settlementPayload = await buildSettlementPayloadForRoom({
+            challengeId: parsed.challengeId,
+            roomId,
+            winnerWallet,
+            loserWallet,
+          });
 
           if (roomId) {
             namespace.to(roomId).emit("match.result.finalized", {
@@ -954,12 +1342,22 @@ export function attachMultiplayerGateway(server: HttpServer) {
             });
           }
 
-          if (roomId) {
-            challengeByRoom.delete(roomId);
+          const valuationMatch = valuationMatchByChallenge.get(
+            parsed.challengeId,
+          );
+          if (valuationMatch) {
+            valuationMatch.phase = "FINISHED";
+            cleanupValuationMatch(valuationMatch);
+            valuationMatchByChallenge.delete(parsed.challengeId);
+          } else {
+            if (roomId) {
+              challengeByRoom.delete(roomId);
+            }
+            roomByChallenge.delete(parsed.challengeId);
+            currentTurnByChallenge.delete(parsed.challengeId);
+            shotSequenceByChallenge.delete(parsed.challengeId);
           }
-          roomByChallenge.delete(parsed.challengeId);
-          currentTurnByChallenge.delete(parsed.challengeId);
-          shotSequenceByChallenge.delete(parsed.challengeId);
+          await valuationRoomService.markFinalized(parsed.challengeId);
 
           ack?.({
             ok: true,

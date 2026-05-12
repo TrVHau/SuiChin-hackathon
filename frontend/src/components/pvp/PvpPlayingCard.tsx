@@ -126,7 +126,9 @@ export default function PvpPlayingCard({
             mode="pvp"
             showHeader={false}
             onBack={() => undefined}
-            enabled={pvp.status === "playing" && !pvp.submittedResult}
+            enabled={
+              pvp.status === "playing" && !pvp.submittedResult && !pvp.paused
+            }
             localSide={localSide}
             currentTurnSide={currentTurnSide}
             playerLabel={localSide === "player" ? "YOU" : "OPP"}
@@ -136,6 +138,13 @@ export default function PvpPlayingCard({
             onRoundResult={reportWinner}
           />
         </div>
+
+        {pvp.paused && (
+          <div className="mt-4 rounded-[22px] border border-amber-300/40 bg-amber-400/15 p-4 text-sm font-bold text-amber-100">
+            {pvp.pausedReason ??
+              "Tran dang tam dung de cho nguoi choi ket noi lai."}
+          </div>
+        )}
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[22px] border border-white/10 bg-white/5 p-4 text-sm text-white/75">
           <div className="flex items-center gap-2">

@@ -109,7 +109,7 @@ export default function PvPScreen() {
   const [escrowTargetPoints, setEscrowTargetPoints] = useState(
     LOBBY_DEFAULT_TARGET_POINTS,
   );
-  const [escrowDeadlineMinutes] = useState(30);
+  const [escrowDeadlineMinutes] = useState(3);
   const [createdRoomId, setCreatedRoomId] = useState<string | null>(null);
   const [joinRoomId, setJoinRoomId] = useState("");
   const [escrowSubmitting, setEscrowSubmitting] = useState(false);
@@ -128,6 +128,7 @@ export default function PvPScreen() {
   const [escrowLocked, setEscrowLocked] = useState(false);
   const restoredRoomRef = useRef(false);
   const lastActiveSyncAtRef = useRef(0);
+  const autoCancelRoomRef = useRef<string | null>(null);
 
   const handleBack = () => {
     void handleLeave();
@@ -234,12 +235,37 @@ export default function PvPScreen() {
     });
   };
 
+  useEffect(() => {
+    if (pvp.status !== "cancelled") return;
+    if (!pvp.needsCreatorCancel || !pvp.cancelRoomId) return;
+    if (!sameAddress(pvp.canCancelWallet, account?.address)) return;
+    if (autoCancelRoomRef.current === pvp.cancelRoomId) return;
+
+    autoCancelRoomRef.current = pvp.cancelRoomId;
+    setCreatedRoomId(pvp.cancelRoomId);
+    setJoinRoomId(pvp.cancelRoomId);
+    setEscrowSubmitting(true);
+    toast.loading("Doi thu da chay tron. Dang huy room de tra NFT...", {
+      id: "lobby-cancel",
+    });
+
+    void cancelLobbyRoomTx(pvp.cancelRoomId).finally(() => {
+      setEscrowSubmitting(false);
+    });
+  }, [
+    account?.address,
+    pvp.canCancelWallet,
+    pvp.cancelRoomId,
+    pvp.needsCreatorCancel,
+    pvp.status,
+  ]);
+
   const handleLeave = async () => {
     if (shouldWarnUnsafeLeave) {
       const leaveConfirmed = window.confirm(
         roomStatus === 0
           ? "Ban dang co room escrow WAITING. Neu thoat, he thong se thu huy room de tra NFT ve vi. Ban chac chan muon thoat?"
-          : 'Room dang ACTIVE, NFT dang khoa trong escrow. Neu thoat/reload luc nay, ban can quay lai room hoac doi "Emergency refund". Ban van muon thoat?',
+          : 'Room dang ACTIVE, NFT dang khoa trong escrow. Neu thoat/reload luc nay, ban can quay lai room hoac doi "Reclaim NFT". Ban van muon thoat?',
       );
       if (!leaveConfirmed) {
         return;
@@ -274,8 +300,8 @@ export default function PvPScreen() {
       } else if (roomStatus === 1) {
         const refundText =
           emergencyRefundRemainingMs > 0
-            ? `Emergency refund khả dụng sau ${emergencyRefundRemainingMin} phút. NFT sẽ được hoàn tự động.`
-            : `Bấm nút "Emergency refund" bên dưới để hoàn NFT ngay.`;
+            ? `Reclaim NFT kha dung sau ${emergencyRefundRemainingMin} phut. NFT se duoc hoan ve vi.`
+            : `Bam nut "Reclaim NFT" ben duoi de hoan NFT ngay.`;
 
         toast.error(
           `⚠️ Room ACTIVE - NFT bị khóa trong escrow. ${refundText}`,
@@ -367,13 +393,6 @@ export default function PvPScreen() {
 
     return () => window.clearInterval(intervalId);
   }, []);
-
-  // Navigate to game session when match starts
-  useEffect(() => {
-    if (pvp.status === "playing") {
-      navigate("/pvp-session");
-    }
-  }, [pvp.status, navigate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -954,6 +973,72 @@ export default function PvPScreen() {
   );
 
   const renderContent = () => {
+    if (pvp.status === "cancelled") {
+      const canCancelOnChain =
+        Boolean(pvp.cancelRoomId) &&
+        Boolean(pvp.needsCreatorCancel) &&
+        sameAddress(pvp.canCancelWallet, account?.address);
+
+      return (
+        <div className="overflow-hidden rounded-[28px] border border-red-200 bg-white shadow-[0_18px_48px_rgba(15,23,42,0.12)]">
+          <div className="border-b border-red-100 bg-red-950 px-6 py-5 text-white md:px-8">
+            <p className="text-xs font-black uppercase tracking-[0.25em] text-red-200">
+              CANCELLED
+            </p>
+            <h3 className="mt-2 text-2xl font-black md:text-3xl">
+              Doi thu da roi phong
+            </h3>
+            <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-red-100/80">
+              {pvp.cancelReason ??
+                "Tran chua vao In-Game nen phong da bi huy truoc tran."}
+            </p>
+          </div>
+
+          <div className="space-y-4 p-6 md:p-8">
+            <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-bold leading-6 text-red-900">
+              {pvp.needsCreatorCancel
+                ? "NFT da nam trong room WAITING. Creator can ky giao dich huy room de tra NFT ve vi."
+                : "Chua co NFT nao bi khoa on-chain. Ban co the quay lai sanh va tim tran moi."}
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              {canCancelOnChain && (
+                <button
+                  onClick={() => {
+                    const roomId = pvp.cancelRoomId;
+                    if (!roomId) return;
+                    setCreatedRoomId(roomId);
+                    setJoinRoomId(roomId);
+                    toast.loading("Dang huy room escrow...", {
+                      id: "lobby-cancel",
+                    });
+                    setEscrowSubmitting(true);
+                    void cancelLobbyRoomTx(roomId).finally(() => {
+                      setEscrowSubmitting(false);
+                    });
+                  }}
+                  disabled={escrowSubmitting}
+                  className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-black text-white disabled:opacity-60"
+                >
+                  Huy room va lay lai NFT
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  disconnectRoomSocket();
+                  setCreatedRoomId(null);
+                  setJoinRoomId("");
+                }}
+                className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700"
+              >
+                Tim tran moi
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     if (pvp.status === "idle" || pvp.status === "error") {
       return (
         <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_18px_48px_rgba(15,23,42,0.12)]">
@@ -1203,6 +1288,12 @@ export default function PvPScreen() {
               Sau khi ca hai ben khoa tai san thanh cong, indexer se bat event
               on-chain va tran tu dong chuyen sang man hinh ban chun.
             </div>
+            {pvp.paused && (
+              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold leading-6 text-amber-900">
+                {pvp.pausedReason ??
+                  "Dang mat ket noi trong luc chot tai san. He thong se huy phong neu khong ket noi lai kip."}
+              </div>
+            )}
           </div>
         </div>
       );
@@ -1352,8 +1443,8 @@ export default function PvPScreen() {
                       >
                         {emergencyRefundReadyAt &&
                         emergencyRefundRemainingMs > 0
-                          ? `Emergency refund sau ${emergencyRefundRemainingMin} phut`
-                          : "Emergency refund"}
+                          ? `Reclaim NFT sau ${emergencyRefundRemainingMin} phut`
+                          : "Reclaim NFT"}
                       </button>
                     )}
                   </div>
@@ -1514,8 +1605,8 @@ export default function PvPScreen() {
                     className="mt-3 rounded-full border-2 border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-800 disabled:opacity-60"
                   >
                     {emergencyRefundReadyAt && emergencyRefundRemainingMs > 0
-                      ? `Emergency refund sau ${emergencyRefundRemainingMin} phut`
-                      : "Emergency refund"}
+                      ? `Reclaim NFT sau ${emergencyRefundRemainingMin} phut`
+                      : "Reclaim NFT"}
                   </button>
                 )}
               </div>
