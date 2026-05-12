@@ -6,12 +6,12 @@ export const NETWORK = (import.meta.env.VITE_SUI_NETWORK || "devnet") as
 
 export const PACKAGE_ID =
   import.meta.env.VITE_SUI_PACKAGE_ID ||
-  "0x54e6483d4622e18a2275088eed97debfa16c8837a7765e974cea4ef8b2ee04d3";
+  "0xf057bdceaab0bf96a661bfbdf326ae5e6b476fae978f7b1fff629aecf894d5a6";
 export const LOBBY_PACKAGE_ID =
   import.meta.env.VITE_LOBBY_PACKAGE_ID || PACKAGE_ID;
 export const LOBBY_CONFIG_OBJECT_ID =
   import.meta.env.VITE_LOBBY_CONFIG_OBJECT_ID ||
-  "0x2de7948800c6f46d0fbe3409bd034334b8b213cb68f98fcebc6fab637251cbc6";
+  "0xabc6d0569b20fbf830045ddbec0d2e7cd665ff538f89811ea11a53dbe0017688";
 export const LOBBY_SIGNER_PUBKEY =
   import.meta.env.VITE_LOBBY_SIGNER_PUBKEY ||
   "AM0K19eocENUQLaqfPXy5BCZ/+Iwki1bYo/6rwiDSX/X";
@@ -25,7 +25,7 @@ export const MARKET_OBJECT_ID = import.meta.env.VITE_MARKET_OBJECT_ID || "";
 export const TREASURY_OBJECT_ID = import.meta.env.VITE_TREASURY_OBJECT_ID || "";
 export const CRAFT_CONFIG_OBJECT_ID =
   import.meta.env.VITE_CRAFT_CONFIG_OBJECT_ID ||
-  "0x47c3853aa21c23efe2e2480d69b260bcbc170b947dcebdcb392ab3e87181ca0c";
+  "0x133b585d2dab95bd9d02690f0cc2d6d6270ccc8e17514e927eb0fa91f40a1847";
 export const RANDOM_OBJECT_ID = import.meta.env.VITE_RANDOM_OBJECT_ID || "0x8";
 export const CLOCK_OBJECT_ID = "0x6";
 export const BACKEND_URL =

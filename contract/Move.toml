@@ -7,5 +7,5 @@ edition = "2024.beta"
 suichin = "0x0"
 
 [environments]
-devnet = "26b11cbb"
+devnet = "8e04f6e7"
 testnet = "4fe43958"
