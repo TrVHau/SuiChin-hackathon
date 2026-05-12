@@ -1,7 +1,4 @@
-/// NFT Valuation Lobby PvP Escrow.
-///
-/// Room lifecycle and settlement logic are kept here.
-/// Admin/configuration is split into `nft_valuation_lobby_config`.
+/// Mo-dun lobby dinh gia NFT cho PvP.
 module suichin::nft_valuation_lobby {
     use std::bcs;
     use sui::clock::{Self, Clock};
@@ -99,7 +96,7 @@ module suichin::nft_valuation_lobby {
         version: u64,
         room_id: ID,
         by: address,
-        reason: u8, // 1 = creator cancelled waiting room
+        reason: u8,
         timestamp_ms: u64,
     }
 
@@ -117,7 +114,7 @@ module suichin::nft_valuation_lobby {
     public struct EmergencyRefunded has copy, drop {
         version: u64,
         room_id: ID,
-        refund_mode: u8, // 1 = timeout admin/any caller trigger
+        refund_mode: u8,
         timestamp_ms: u64,
     }
 
@@ -215,7 +212,6 @@ module suichin::nft_valuation_lobby {
         assert!(valid, E_INVALID_PARTICIPANTS);
     }
 
-    // Wrappers kept for compatibility with existing callers.
     public fun set_pause(config: &mut LobbyConfig, cap: &LobbyAdminCap, paused: bool) {
         lobby_config::set_pause(config, cap, paused);
     }

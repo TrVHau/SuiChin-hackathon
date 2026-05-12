@@ -1,9 +1,4 @@
-/// Facade module for craft APIs.
-///
-/// Implementation is split into:
-/// - `craft_config`: admin and runtime config
-/// - `craft_treasury`: treasury and redemption economics
-/// - `craft_actions`: gameplay actions and events
+/// Mo-dun facade cho he craft.
 module suichin::craft {
     use sui::clock::Clock;
     use sui::coin::Coin;
@@ -237,8 +232,4 @@ module suichin::craft {
         config::test_init(ctx);
     }
 
-    #[test_only]
-    public fun set_total_crafts_for_testing(treasury_obj: &mut Treasury, n: u64) {
-        treasury::set_total_crafts_for_testing(treasury_obj, n);
-    }
 }

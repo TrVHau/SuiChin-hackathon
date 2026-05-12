@@ -1,18 +1,13 @@
-/// Module quản lý PlayerProfile — trạng thái on-chain mỗi ví.
-/// Mỗi ví tạo 1 profile bằng init_profile(), sau mỗi ván gọi
-/// report_result() để cập nhật chun_raw, wins, losses, streak.
-/// Mới: faucet tich lũy chun 2h/lan, và PvP staking qua MatchOracle.
+/// Mo-dun quan ly player profile tren chain.
 module suichin::player_profile {
     use sui::clock::{Self, Clock};
     use sui::event;
 
-    // ─── Constants ───────────────────────────────────────────────────────────────
-    const COOLDOWN_MS: u64          = 3_000;      // 3 giay giua hai lan report_result
-    const MAX_DELTA_CHUN: u64       = 20;          // delta tối đa mỗi ván
-    const FAUCET_COOLDOWN_MS: u64   = 7_200_000;  // 7200 giay (2h) giua moi 1 chun tich luy
-    const FAUCET_MAX_STACK: u64     = 10;          // tối đa chun stack được
+    const COOLDOWN_MS: u64          = 3_000;
+    const MAX_DELTA_CHUN: u64       = 20;
+    const FAUCET_COOLDOWN_MS: u64   = 7_200_000;
+    const FAUCET_MAX_STACK: u64     = 10;
 
-    // ─── Error codes ────────────────────────────────────────────────────────────
     const E_NOT_OWNER:                u64 = 100;
     const E_COOLDOWN_ACTIVE:          u64 = 101;
     const E_DELTA_TOO_LARGE:          u64 = 102;
@@ -21,8 +16,6 @@ module suichin::player_profile {
     const E_INSUFFICIENT_STAKED:      u64 = 105;
     const EVENT_VERSION:              u64 = 1;
 
-    // ─── Structs ──────────────────────────────────────────────────────────────
-    /// 1 object per wallet — owned bởi sender sau init_profile()
     public struct PlayerProfile has key {
         id: UID,
         owner: address,
@@ -30,17 +23,15 @@ module suichin::player_profile {
         wins: u64,
         losses: u64,
         streak: u64,
-        last_played_ms: u64,  // anti-spam cooldown timestamp
-        staked_chun: u64,     // chun đang lòck cho PvP match
-        last_faucet_ms: u64,  // timestamp claim faucet cuối (0 = chưa claim)
+        last_played_ms: u64,
+        staked_chun: u64,
+        last_faucet_ms: u64,
     }
 
-    /// Capability được giữ bởi backend — chỉ holder mới gọi resolve_match().
     public struct MatchOracle has key, store {
         id: UID,
     }
 
-    // ─── Events ───────────────────────────────────────────────────────────────
     public struct ProfileCreated has copy, drop {
         owner: address,
     }
@@ -91,17 +82,21 @@ module suichin::player_profile {
         });
     }
 
-    // ─── Init ───────────────────────────────────────────────────────────────
+    fun assert_owner(profile: &PlayerProfile, sender: address) {
+        assert!(sender == profile.owner, E_NOT_OWNER);
+    }
 
-    /// Tạo MatchOracle và transfer cho deployer khi publish package.
+    fun now_ms(clock: &Clock): u64 {
+        clock::timestamp_ms(clock)
+    }
+
+
     fun init(ctx: &mut TxContext) {
         let oracle = MatchOracle { id: object::new(ctx) };
         transfer::transfer(oracle, tx_context::sender(ctx));
     }
 
-    // ─── Entry Functions ───────────────────────────────────────────────────────
 
-    /// Tạo PlayerProfile cho sender. Gọi 1 lần khi connect ví lần đầu.
     public fun init_profile(ctx: &mut TxContext) {
         let sender = tx_context::sender(ctx);
         let profile = PlayerProfile {
@@ -119,9 +114,6 @@ module suichin::player_profile {
         transfer::transfer(profile, sender);
     }
 
-    /// Cập nhật chun_raw + stats sau mỗi ván.
-    /// Thắng: chun_raw += delta, wins++, streak++
-    /// Thua:  chun_raw -= 1 (sàn 0), losses++, streak = 0
     public fun report_result(
         profile: &mut PlayerProfile,
         delta: u64,
@@ -130,10 +122,9 @@ module suichin::player_profile {
         ctx: &mut TxContext,
     ) {
         let sender = tx_context::sender(ctx);
-        assert!(sender == profile.owner, E_NOT_OWNER);
+        assert_owner(profile, sender);
 
-        let clock_ms = clock::timestamp_ms(clock);
-        // Bỏ qua cooldown nếu chưa từng chơi (last_played_ms == 0)
+        let clock_ms = now_ms(clock);
         assert!(
             profile.last_played_ms == 0 || clock_ms - profile.last_played_ms >= COOLDOWN_MS,
             E_COOLDOWN_ACTIVE
@@ -160,7 +151,6 @@ module suichin::player_profile {
         emit_profile_updated(profile);
     }
 
-    // ─── Public Accessors ─────────────────────────────────────────────────────
 
     public fun chun_raw(profile: &PlayerProfile): u64      { profile.chun_raw }
     public fun streak(profile: &PlayerProfile): u64        { profile.streak }
@@ -170,32 +160,25 @@ module suichin::player_profile {
     public fun staked_chun(profile: &PlayerProfile): u64   { profile.staked_chun }
     public fun last_faucet_ms(profile: &PlayerProfile): u64 { profile.last_faucet_ms }
 
-    /// View: số chun đang tích lũy chưa claim (0 nếu chưa đủ 1 chu kỳ).
     public fun pending_faucet(profile: &PlayerProfile, clock: &Clock): u64 {
-        let now = clock::timestamp_ms(clock);
-        // last_faucet_ms == 0 → chưa claim lần nào, now - 0 = now (rất lớn) → cap = MAX_STACK
+        let now = now_ms(clock);
         let elapsed_ms = now - profile.last_faucet_ms;
         let pending = elapsed_ms / FAUCET_COOLDOWN_MS;
         if (pending > FAUCET_MAX_STACK) { FAUCET_MAX_STACK } else { pending }
     }
 
-    // ─── Package-internal Helpers ─────────────────────────────────────────────
 
-    /// Trừ chun_raw (chỉ gọi được từ trong package — ví dụ craft.move).
-    /// Abort nếu số dư không đủ.
     public(package) fun spend_chun(profile: &mut PlayerProfile, amount: u64) {
         assert!(profile.chun_raw >= amount, E_INSUFFICIENT_CHUN);
         profile.chun_raw = profile.chun_raw - amount;
         emit_profile_updated(profile);
     }
 
-    /// Cong chun_raw vao profile (chi package internal duoc goi).
     public(package) fun credit_chun(profile: &mut PlayerProfile, amount: u64) {
         profile.chun_raw = profile.chun_raw + amount;
         emit_profile_updated(profile);
     }
 
-    /// Hoàn trả staked chun vào chun_raw (dùng khi match bị hủy).
     public(package) fun unlock_from_match(profile: &mut PlayerProfile, amount: u64) {
         assert!(profile.staked_chun >= amount, E_INSUFFICIENT_STAKED);
         profile.staked_chun = profile.staked_chun - amount;
@@ -203,20 +186,17 @@ module suichin::player_profile {
         emit_profile_updated(profile);
     }
 
-    // ─── Faucet ──────────────────────────────────────────────────────────────
 
-    /// Claim toàn bộ chun đang tích lũy.
-    /// Abort E_FAUCET_NOTHING_TO_CLAIM nếu chưa đủ 1 chu kỳ (7200 giây).
     public fun claim_faucet(
         profile: &mut PlayerProfile,
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
-        assert!(tx_context::sender(ctx) == profile.owner, E_NOT_OWNER);
+        assert_owner(profile, tx_context::sender(ctx));
         let amount = pending_faucet(profile, clock);
         assert!(amount > 0, E_FAUCET_NOTHING_TO_CLAIM);
         profile.chun_raw = profile.chun_raw + amount;
-        profile.last_faucet_ms = clock::timestamp_ms(clock);
+        profile.last_faucet_ms = now_ms(clock);
         event::emit(FaucetClaimed {
             owner: profile.owner,
             amount,
@@ -225,16 +205,13 @@ module suichin::player_profile {
         emit_profile_updated(profile);
     }
 
-    // ─── PvP Staking ─────────────────────────────────────────────────────────
 
-    /// Lock `amount` chun_raw → staked_chun trước khi vào PvP match.
-    /// Chỉ owner của profile mới gọi được.
     public fun lock_for_match(
         profile: &mut PlayerProfile,
         amount: u64,
         ctx: &mut TxContext,
     ) {
-        assert!(tx_context::sender(ctx) == profile.owner, E_NOT_OWNER);
+        assert_owner(profile, tx_context::sender(ctx));
         assert!(profile.chun_raw >= amount, E_INSUFFICIENT_CHUN);
         profile.chun_raw = profile.chun_raw - amount;
         profile.staked_chun = profile.staked_chun + amount;
@@ -242,8 +219,6 @@ module suichin::player_profile {
         emit_profile_updated(profile);
     }
 
-    /// Chuyển `amount` staked_chun từ loser → winner.chun_raw.
-    /// Chỉ MatchOracle holder mới gọi được.
     public fun resolve_match(
         winner: &mut PlayerProfile,
         loser: &mut PlayerProfile,
@@ -262,7 +237,6 @@ module suichin::player_profile {
         emit_profile_updated(loser);
     }
 
-    // ─── Test-only Helpers ────────────────────────────────────────────────────
 
     #[test_only]
     public fun set_chun_raw_for_testing(profile: &mut PlayerProfile, amount: u64) {

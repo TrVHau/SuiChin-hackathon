@@ -1,4 +1,4 @@
-/// Craft configuration and admin controls.
+/// Mo-dun cau hinh va quan tri craft.
 module suichin::craft_config {
     use sui::event;
 
@@ -11,19 +11,17 @@ module suichin::craft_config {
 
     const EVENT_VERSION: u64 = 1;
     const DEFAULT_INDEXER_VERSION: u64 = 1;
-    const DEFAULT_CRAFT_SUCCESS_BPS: u64 = 2_000; // 20%
-    const DEFAULT_MINT_POOL_CONTRIBUTION: u64 = 100_000_000; // 0.1 SUI in MIST
+    const DEFAULT_CRAFT_SUCCESS_BPS: u64 = 2_000;
+    const DEFAULT_MINT_POOL_CONTRIBUTION: u64 = 100_000_000;
     const DEFAULT_SCRAP_FUSION_RECIPE: u64 = 20;
     const DEFAULT_BRONZE_RECYCLE_CHUN: u64 = 4;
     const DEFAULT_SILVER_RECYCLE_CHUN: u64 = 8;
     const DEFAULT_GOLD_RECYCLE_CHUN: u64 = 15;
 
-    /// Admin capability to manage craft/recycle/fusion configuration.
     public struct CraftAdminCap has key, store {
         id: UID,
     }
 
-    /// Shared config consumed by craft-related indexer flows.
     public struct SystemConfig has key {
         id: UID,
         event_version: u64,
