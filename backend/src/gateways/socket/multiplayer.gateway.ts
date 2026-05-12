@@ -7,12 +7,8 @@ import { getSettlementPayloadService } from "../../modules/challenge/settlement-
 import { SubmitResultSchema } from "../../modules/challenge/challenge.schemas.js";
 import type { ChallengeResultRecord } from "../../modules/challenge/challenge.types.js";
 import { matchmakingService } from "../../modules/matchmaking/matchmaking.service.js";
-import {
-  valuationRoomService,
-} from "../../modules/valuation-room/valuation-room.service.js";
-import type {
-  ValuationRoomRecord,
-} from "../../modules/valuation-room/valuation-room.repository.js";
+import { valuationRoomService } from "../../modules/valuation-room/valuation-room.service.js";
+import type { ValuationRoomRecord } from "../../modules/valuation-room/valuation-room.repository.js";
 import { logger } from "../../shared/logger.js";
 import { valuationRoomEvents } from "./valuation-room-events.js";
 
@@ -64,9 +60,17 @@ function getWalletFromSocket(socket: Socket): string {
   return String(socket.data.walletAddress ?? "");
 }
 
-function joinWalletSocketsToRoom(namespace: ReturnType<Server["of"]>, wallet: string, roomId: string) {
+function sameWallet(a?: string | null, b?: string | null): boolean {
+  return Boolean(a && b && a.toLowerCase() === b.toLowerCase());
+}
+
+function joinWalletSocketsToRoom(
+  namespace: ReturnType<Server["of"]>,
+  wallet: string,
+  roomId: string,
+) {
   for (const socket of namespace.sockets.values()) {
-    if (socket.data.walletAddress === wallet) {
+    if (sameWallet(String(socket.data.walletAddress ?? ""), wallet)) {
       socket.join(roomId);
     }
   }
@@ -76,13 +80,19 @@ function resolveWinnerWallet(results: ChallengeResultRecord[]): string | null {
   const winRecord = results.find((item) => item.result === "WIN");
   const loseRecord = results.find((item) => item.result === "LOSE");
 
-  if (winRecord && loseRecord && winRecord.walletAddress !== loseRecord.walletAddress) {
+  if (
+    winRecord &&
+    loseRecord &&
+    winRecord.walletAddress !== loseRecord.walletAddress
+  ) {
     return winRecord.walletAddress;
   }
 
   const forfeit = results.find((item) => item.result === "FORFEIT");
   if (forfeit) {
-    const otherPlayer = results.find((item) => item.walletAddress !== forfeit.walletAddress);
+    const otherPlayer = results.find(
+      (item) => item.walletAddress !== forfeit.walletAddress,
+    );
     return otherPlayer?.walletAddress ?? null;
   }
 
@@ -149,7 +159,9 @@ export function attachMultiplayerGateway(server: HttpServer) {
   const valuationQueuesByTier = new Map<BettingTier, QueuedValuationPlayer[]>();
   const valuationMatchByChallenge = new Map<string, ValuationMatchState>();
 
-  function buildValuationMatchFromRecord(record: ValuationRoomRecord): ValuationMatchState {
+  function buildValuationMatchFromRecord(
+    record: ValuationRoomRecord,
+  ): ValuationMatchState {
     const nftsByWallet = new Map<string, ValuationNft>([
       [record.creatorWallet, record.creatorNft],
       [record.joinerWallet, record.joinerNft],
@@ -159,7 +171,8 @@ export function attachMultiplayerGateway(server: HttpServer) {
       tempRoomId: record.tempRoomId,
       suiRoomId: record.suiRoomId,
       tier: record.tier as BettingTier,
-      targetPoints: BETTING_TIERS[record.tier as BettingTier]?.targetPoints ?? 0,
+      targetPoints:
+        BETTING_TIERS[record.tier as BettingTier]?.targetPoints ?? 0,
       players: [record.creatorWallet, record.joinerWallet],
       nftsByWallet,
       started: record.status === "PLAYING",
@@ -175,7 +188,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
 
   function findPendingValuationMatchByCreator(creator: string) {
     for (const match of valuationMatchByChallenge.values()) {
-      if (!match.suiRoomId && match.players[0] === creator) {
+      if (!match.suiRoomId && sameWallet(match.players[0], creator)) {
         return match;
       }
     }
@@ -184,7 +197,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
 
   function findPendingValuationMatchByJoiner(joiner: string) {
     for (const match of valuationMatchByChallenge.values()) {
-      if (!match.suiRoomId && match.players[1] === joiner) {
+      if (!match.suiRoomId && sameWallet(match.players[1], joiner)) {
         return match;
       }
     }
@@ -200,16 +213,26 @@ export function attachMultiplayerGateway(server: HttpServer) {
     return null;
   }
 
-  async function markValuationRoomCreated(input: { roomId: string; creator: string }) {
+  async function markValuationRoomCreated(input: {
+    roomId: string;
+    creator: string;
+  }) {
     let match = findPendingValuationMatchByCreator(input.creator);
     if (!match) {
-      const persisted = await valuationRoomService.findPendingByCreator(input.creator);
+      const persisted = await valuationRoomService.findPendingByCreator(
+        input.creator,
+      );
       if (persisted) {
-        match = rememberValuationMatch(buildValuationMatchFromRecord(persisted));
+        match = rememberValuationMatch(
+          buildValuationMatchFromRecord(persisted),
+        );
       }
     }
     if (!match) {
-      logger.debug(input, "No pending valuation match found for RoomCreated event");
+      logger.debug(
+        input,
+        "No pending valuation match found for RoomCreated event",
+      );
       return false;
     }
 
@@ -226,7 +249,10 @@ export function attachMultiplayerGateway(server: HttpServer) {
     return true;
   }
 
-  async function markValuationRoomJoined(input: { roomId: string; joiner: string }) {
+  async function markValuationRoomJoined(input: {
+    roomId: string;
+    joiner: string;
+  }) {
     let match = findPendingValuationMatchByJoiner(input.joiner);
     if (!match) {
       const persisted = await valuationRoomService.findPendingByJoiner({
@@ -234,7 +260,9 @@ export function attachMultiplayerGateway(server: HttpServer) {
         suiRoomId: input.roomId,
       });
       if (persisted) {
-        match = rememberValuationMatch(buildValuationMatchFromRecord(persisted));
+        match = rememberValuationMatch(
+          buildValuationMatchFromRecord(persisted),
+        );
       }
     }
     if (!match) {
@@ -254,7 +282,9 @@ export function attachMultiplayerGateway(server: HttpServer) {
     if (!match) {
       const persisted = await valuationRoomService.findBySuiRoomId(roomId);
       if (persisted) {
-        match = rememberValuationMatch(buildValuationMatchFromRecord(persisted));
+        match = rememberValuationMatch(
+          buildValuationMatchFromRecord(persisted),
+        );
       }
     }
     if (!match || match.started) {
@@ -263,7 +293,10 @@ export function attachMultiplayerGateway(server: HttpServer) {
 
     const challenge = await challengeService.getChallenge(match.challengeId);
     if (!challenge) {
-      logger.warn({ roomId, challengeId: match.challengeId }, "RoomActivated event has no challenge");
+      logger.warn(
+        { roomId, challengeId: match.challengeId },
+        "RoomActivated event has no challenge",
+      );
       return false;
     }
 
@@ -300,10 +333,16 @@ export function attachMultiplayerGateway(server: HttpServer) {
   }
 
   valuationRoomEvents.on("roomCreated", (event) => {
-    void markValuationRoomCreated({ roomId: event.roomId, creator: event.creator });
+    void markValuationRoomCreated({
+      roomId: event.roomId,
+      creator: event.creator,
+    });
   });
   valuationRoomEvents.on("roomJoined", (event) => {
-    void markValuationRoomJoined({ roomId: event.roomId, joiner: event.joiner });
+    void markValuationRoomJoined({
+      roomId: event.roomId,
+      joiner: event.joiner,
+    });
   });
   valuationRoomEvents.on("roomActivated", (event) => {
     void startValuationMatchFromRoom(event.roomId);
@@ -326,7 +365,8 @@ export function attachMultiplayerGateway(server: HttpServer) {
         maybeAck?: (payload: unknown) => void,
       ) => {
         try {
-          const ack = typeof payloadOrAck === "function" ? payloadOrAck : maybeAck;
+          const ack =
+            typeof payloadOrAck === "function" ? payloadOrAck : maybeAck;
           const payload =
             typeof payloadOrAck === "function" || payloadOrAck == null
               ? {}
@@ -347,7 +387,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
             }
             const currentQueue = valuationQueuesByTier.get(tier) ?? [];
             const existingQueue = currentQueue.filter(
-              (entry) => entry.walletAddress !== walletAddress,
+              (entry) => !sameWallet(entry.walletAddress, walletAddress),
             );
             const opponent = existingQueue.shift();
 
@@ -371,12 +411,15 @@ export function attachMultiplayerGateway(server: HttpServer) {
             }
 
             valuationQueuesByTier.set(tier, existingQueue);
-            const challenge = await challengeService.createChallenge(opponent.walletAddress, {
-              mode: "REALTIME",
-              opponentWallet: walletAddress,
-              stakeEnabled: false,
-              stakeAmount: 0,
-            });
+            const challenge = await challengeService.createChallenge(
+              opponent.walletAddress,
+              {
+                mode: "REALTIME",
+                opponentWallet: walletAddress,
+                stakeEnabled: false,
+                stakeAmount: 0,
+              },
+            );
             await challengeService.acceptChallenge(challenge.id, walletAddress);
 
             const tempRoomId = buildTempRoomId(
@@ -388,7 +431,11 @@ export function attachMultiplayerGateway(server: HttpServer) {
             challengeByRoom.set(tempRoomId, challenge.id);
             roomByChallenge.set(challenge.id, tempRoomId);
             joinWalletSocketsToRoom(namespace, walletAddress, tempRoomId);
-            joinWalletSocketsToRoom(namespace, opponent.walletAddress, tempRoomId);
+            joinWalletSocketsToRoom(
+              namespace,
+              opponent.walletAddress,
+              tempRoomId,
+            );
 
             const nftsByWallet = new Map<string, ValuationNft>([
               [opponent.walletAddress, opponent.nft],
@@ -446,7 +493,8 @@ export function attachMultiplayerGateway(server: HttpServer) {
           }
 
           if (requestedRoomId) {
-            const pendingWallet = pendingWalletByEscrowRoom.get(requestedRoomId);
+            const pendingWallet =
+              pendingWalletByEscrowRoom.get(requestedRoomId);
 
             if (!pendingWallet || pendingWallet === walletAddress) {
               pendingWalletByEscrowRoom.set(requestedRoomId, walletAddress);
@@ -466,12 +514,15 @@ export function attachMultiplayerGateway(server: HttpServer) {
             pendingEscrowRoomByWallet.delete(opponentWallet);
             pendingEscrowRoomByWallet.delete(walletAddress);
 
-            const challenge = await challengeService.createChallenge(opponentWallet, {
-              mode: "REALTIME",
-              opponentWallet: walletAddress,
-              stakeEnabled: false,
-              stakeAmount: 0,
-            });
+            const challenge = await challengeService.createChallenge(
+              opponentWallet,
+              {
+                mode: "REALTIME",
+                opponentWallet: walletAddress,
+                stakeEnabled: false,
+                stakeAmount: 0,
+              },
+            );
             await challengeService.acceptChallenge(challenge.id, walletAddress);
 
             challengeByRoom.set(requestedRoomId, challenge.id);
@@ -505,21 +556,31 @@ export function attachMultiplayerGateway(server: HttpServer) {
             return;
           }
 
-          const result = await matchmakingService.joinQueue(walletAddress, legacyQueueValue);
+          const result = await matchmakingService.joinQueue(
+            walletAddress,
+            legacyQueueValue,
+          );
           if (result.matched && result.roomId && result.opponentWallet) {
-            const challenge = await challengeService.createChallenge(result.opponentWallet, {
-              mode: "REALTIME",
-              opponentWallet: walletAddress,
-              stakeEnabled: false,
-              stakeAmount: 0,
-            });
+            const challenge = await challengeService.createChallenge(
+              result.opponentWallet,
+              {
+                mode: "REALTIME",
+                opponentWallet: walletAddress,
+                stakeEnabled: false,
+                stakeAmount: 0,
+              },
+            );
             await challengeService.acceptChallenge(challenge.id, walletAddress);
 
             challengeByRoom.set(result.roomId, challenge.id);
             roomByChallenge.set(challenge.id, result.roomId);
 
             joinWalletSocketsToRoom(namespace, walletAddress, result.roomId);
-            joinWalletSocketsToRoom(namespace, result.opponentWallet, result.roomId);
+            joinWalletSocketsToRoom(
+              namespace,
+              result.opponentWallet,
+              result.roomId,
+            );
 
             // New flow: Emit MATCH_FOUND with roles
             // opponentWallet was in queue first -> CREATOR
@@ -551,7 +612,8 @@ export function attachMultiplayerGateway(server: HttpServer) {
             },
           });
         } catch (err) {
-          const ack = typeof payloadOrAck === "function" ? payloadOrAck : maybeAck;
+          const ack =
+            typeof payloadOrAck === "function" ? payloadOrAck : maybeAck;
           ack?.({
             ok: false,
             error: err instanceof Error ? err.message : "queue.join failed",
@@ -563,7 +625,9 @@ export function attachMultiplayerGateway(server: HttpServer) {
     socket.on("queue.leave", async (ack?: (payload: unknown) => void) => {
       const walletAddress = getWalletFromSocket(socket);
       for (const [tier, queue] of valuationQueuesByTier.entries()) {
-        const nextQueue = queue.filter((entry) => entry.walletAddress !== walletAddress);
+        const nextQueue = queue.filter(
+          (entry) => entry.walletAddress !== walletAddress,
+        );
         if (nextQueue.length > 0) {
           valuationQueuesByTier.set(tier, nextQueue);
         } else {
@@ -584,7 +648,9 @@ export function attachMultiplayerGateway(server: HttpServer) {
     socket.on("disconnect", () => {
       const walletAddress = getWalletFromSocket(socket);
       for (const [tier, queue] of valuationQueuesByTier.entries()) {
-        const nextQueue = queue.filter((entry) => entry.walletAddress !== walletAddress);
+        const nextQueue = queue.filter(
+          (entry) => entry.walletAddress !== walletAddress,
+        );
         if (nextQueue.length > 0) {
           valuationQueuesByTier.set(tier, nextQueue);
         } else {
@@ -601,269 +667,318 @@ export function attachMultiplayerGateway(server: HttpServer) {
       void matchmakingService.leaveQueue(walletAddress);
     });
 
-    socket.on("queue.roomCreated", async (payload: unknown, ack?: (payload: unknown) => void) => {
-      try {
-        const walletAddress = getWalletFromSocket(socket);
-        const parsed = RoomCreatedPayloadSchema.parse(payload);
-        const handled = await markValuationRoomCreated({
-          roomId: parsed.suiRoomId,
-          creator: walletAddress,
-        });
-        if (!handled) {
-          namespace.to(parsed.tempRoomId).emit("match.roomReady", {
-            tempRoomId: parsed.tempRoomId,
-            suiRoomId: parsed.suiRoomId,
+    socket.on(
+      "queue.roomCreated",
+      async (payload: unknown, ack?: (payload: unknown) => void) => {
+        try {
+          const walletAddress = getWalletFromSocket(socket);
+          const parsed = RoomCreatedPayloadSchema.parse(payload);
+          const handled = await markValuationRoomCreated({
+            roomId: parsed.suiRoomId,
             creator: walletAddress,
           });
-        }
+          if (!handled) {
+            namespace.to(parsed.tempRoomId).emit("match.roomReady", {
+              tempRoomId: parsed.tempRoomId,
+              suiRoomId: parsed.suiRoomId,
+              creator: walletAddress,
+            });
+          }
 
-        ack?.({ ok: true });
-      } catch (err) {
-        ack?.({ ok: false, error: err instanceof Error ? err.message : "queue.roomCreated failed" });
-      }
-    });
-
-    socket.on("queue.roomJoined", async (payload: unknown, ack?: (payload: unknown) => void) => {
-      try {
-        const walletAddress = getWalletFromSocket(socket);
-        const parsed = RoomJoinedPayloadSchema.parse(payload);
-        await markValuationRoomJoined({
-          roomId: parsed.suiRoomId,
-          joiner: walletAddress,
-        });
-
-        const startedByValuationRoom = await startValuationMatchFromRoom(parsed.suiRoomId);
-        if (startedByValuationRoom) {
           ack?.({ ok: true });
-          return;
-        }
-
-        // Emits match.start to all users in temp room
-        // and swaps mappings so challenge points to suiRoomId
-        const challengeId = challengeByRoom.get(parsed.tempRoomId);
-        if (challengeId) {
-          challengeByRoom.delete(parsed.tempRoomId);
-          roomByChallenge.delete(challengeId);
-
-          challengeByRoom.set(parsed.suiRoomId, challengeId);
-          roomByChallenge.set(challengeId, parsed.suiRoomId);
-          const valuationMatch = valuationMatchByChallenge.get(challengeId);
-          if (valuationMatch) {
-            valuationMatch.suiRoomId = parsed.suiRoomId;
-          }
-
-          const challenge = await challengeService.getChallenge(challengeId);
-          if (challenge) {
-            joinWalletSocketsToRoom(namespace, challenge.challengerWallet, parsed.suiRoomId);
-            if (challenge.opponentWallet) {
-              joinWalletSocketsToRoom(namespace, challenge.opponentWallet, parsed.suiRoomId);
-            }
-
-            namespace.to(parsed.suiRoomId).emit("match.start", {
-              roomId: parsed.suiRoomId,
-              players: [challenge.challengerWallet, challenge.opponentWallet],
-              challengeId: challenge.id,
-              status: "PLAYING",
-              tier: valuationMatch?.tier,
-              targetPoints: valuationMatch?.targetPoints,
-              nfts: valuationMatch
-                ? Object.fromEntries(valuationMatch.nftsByWallet.entries())
-                : undefined,
-            });
-
-            const firstTurnWallet = challenge.challengerWallet;
-            currentTurnByChallenge.set(challenge.id, firstTurnWallet);
-            shotSequenceByChallenge.set(challenge.id, 0);
-            namespace.to(parsed.suiRoomId).emit("match.turn", {
-              challengeId: challenge.id,
-              currentTurnWallet: firstTurnWallet,
-            });
-          }
-        }
-
-        ack?.({ ok: true });
-      } catch (err) {
-        ack?.({ ok: false, error: err instanceof Error ? err.message : "queue.roomJoined failed" });
-      }
-    });
-
-    socket.on("match.shot.submit", async (payload: unknown, ack?: (payload: unknown) => void) => {
-      try {
-        const walletAddress = getWalletFromSocket(socket);
-        const parsed = MatchShotPayloadSchema.parse(payload);
-        const roomId = roomByChallenge.get(parsed.challengeId);
-        if (!roomId) {
-          throw new Error("Room not found for challenge");
-        }
-
-        const challenge = await challengeService.getChallenge(parsed.challengeId);
-        if (!challenge) {
-          throw new Error("Challenge not found");
-        }
-
-        const isParticipant =
-          challenge.challengerWallet === walletAddress || challenge.opponentWallet === walletAddress;
-        if (!isParticipant) {
-          throw new Error("Wallet does not belong to this challenge");
-        }
-
-        const expectedTurn = currentTurnByChallenge.get(parsed.challengeId) ?? challenge.challengerWallet;
-        if (expectedTurn !== walletAddress) {
-          throw new Error("Not your turn");
-        }
-
-        const nextTurnWallet =
-          walletAddress === challenge.challengerWallet
-            ? challenge.opponentWallet
-            : challenge.challengerWallet;
-        if (!nextTurnWallet) {
-          throw new Error("Challenge is missing opponent");
-        }
-
-        const nextSeq = (shotSequenceByChallenge.get(parsed.challengeId) ?? 0) + 1;
-        shotSequenceByChallenge.set(parsed.challengeId, nextSeq);
-        currentTurnByChallenge.set(parsed.challengeId, nextTurnWallet);
-
-        namespace.to(roomId).emit("match.shot.received", {
-          challengeId: parsed.challengeId,
-          byWallet: walletAddress,
-          seq: nextSeq,
-          shot: {
-            x: parsed.x,
-            y: parsed.y,
-            force: parsed.force,
-          },
-          nextTurnWallet,
-          atMs: Date.now(),
-        });
-        namespace.to(roomId).emit("match.turn", {
-          challengeId: parsed.challengeId,
-          currentTurnWallet: nextTurnWallet,
-        });
-
-        ack?.({
-          ok: true,
-          result: {
-            seq: nextSeq,
-            nextTurnWallet,
-          },
-        });
-      } catch (err) {
-        ack?.({
-          ok: false,
-          error: err instanceof Error ? err.message : "match.shot.submit failed",
-        });
-      }
-    });
-
-    socket.on("match.result.submit", async (payload: unknown, ack?: (payload: unknown) => void) => {
-      try {
-        const walletAddress = getWalletFromSocket(socket);
-        const parsed = SubmitResultSchema.parse(payload);
-        const submitResult = await challengeService.submitResult(
-          parsed.challengeId,
-          walletAddress,
-          parsed.result,
-        );
-
-        if (submitResult.totalSubmissions < 2) {
-          ack?.({ ok: true, result: submitResult });
-          return;
-        }
-
-        const roomId = roomByChallenge.get(parsed.challengeId);
-        const results = await challengeService.listResults(parsed.challengeId);
-        let winnerWallet = resolveWinnerWallet(results);
-        let txDigest: string | null = null;
-        let loserWallet: string | null = null;
-        let settlementPayload: unknown = null;
-
-        try {
-          const finalized = await challengeService.finalizeChallenge(parsed.challengeId, winnerWallet);
-          winnerWallet = finalized.challenge.winnerWallet;
-          if (winnerWallet && finalized.challenge.opponentWallet) {
-            loserWallet =
-              winnerWallet === finalized.challenge.challengerWallet
-                ? finalized.challenge.opponentWallet
-                : finalized.challenge.challengerWallet;
-          }
-          txDigest = finalized.chainResult.digest;
         } catch (err) {
-          const existing = await challengeService.getChallenge(parsed.challengeId);
-          if (!existing || existing.status !== "FINALIZED") {
-            throw err;
-          }
-          winnerWallet = existing.winnerWallet;
-          if (winnerWallet && existing.opponentWallet) {
-            loserWallet =
-              winnerWallet === existing.challengerWallet
-                ? existing.opponentWallet
-                : existing.challengerWallet;
-          }
-        }
-
-        const settlementSecret = env.LOBBY_SIGNER_SECRET_KEY ?? env.ADMIN_SECRET_KEY;
-
-        if (
-          roomId &&
-          winnerWallet &&
-          loserWallet &&
-          settlementSecret &&
-          isLikelySuiObjectId(roomId)
-        ) {
-          try {
-            const digestBytes = Array.from(new TextEncoder().encode(parsed.challengeId));
-            settlementPayload = await getSettlementPayloadService().buildPayload({
-              roomId,
-              winner: winnerWallet,
-              loser: loserWallet,
-              matchDigest: digestBytes,
-            });
-          } catch (error) {
-            logger.warn(
-              {
-                challengeId: parsed.challengeId,
-                roomId,
-                error,
-              },
-              "Failed to build valuation lobby settlement payload",
-            );
-            settlementPayload = null;
-          }
-        }
-
-        if (roomId) {
-          namespace.to(roomId).emit("match.result.finalized", {
-            challengeId: parsed.challengeId,
-            winnerWallet,
-            txDigest,
-            settlementPayload,
+          ack?.({
+            ok: false,
+            error:
+              err instanceof Error ? err.message : "queue.roomCreated failed",
           });
         }
+      },
+    );
 
-        if (roomId) {
-          challengeByRoom.delete(roomId);
+    socket.on(
+      "queue.roomJoined",
+      async (payload: unknown, ack?: (payload: unknown) => void) => {
+        try {
+          const walletAddress = getWalletFromSocket(socket);
+          const parsed = RoomJoinedPayloadSchema.parse(payload);
+          await markValuationRoomJoined({
+            roomId: parsed.suiRoomId,
+            joiner: walletAddress,
+          });
+
+          const startedByValuationRoom = await startValuationMatchFromRoom(
+            parsed.suiRoomId,
+          );
+          if (startedByValuationRoom) {
+            ack?.({ ok: true });
+            return;
+          }
+
+          // Emits match.start to all users in temp room
+          // and swaps mappings so challenge points to suiRoomId
+          const challengeId = challengeByRoom.get(parsed.tempRoomId);
+          if (challengeId) {
+            challengeByRoom.delete(parsed.tempRoomId);
+            roomByChallenge.delete(challengeId);
+
+            challengeByRoom.set(parsed.suiRoomId, challengeId);
+            roomByChallenge.set(challengeId, parsed.suiRoomId);
+            const valuationMatch = valuationMatchByChallenge.get(challengeId);
+            if (valuationMatch) {
+              valuationMatch.suiRoomId = parsed.suiRoomId;
+            }
+
+            const challenge = await challengeService.getChallenge(challengeId);
+            if (challenge) {
+              joinWalletSocketsToRoom(
+                namespace,
+                challenge.challengerWallet,
+                parsed.suiRoomId,
+              );
+              if (challenge.opponentWallet) {
+                joinWalletSocketsToRoom(
+                  namespace,
+                  challenge.opponentWallet,
+                  parsed.suiRoomId,
+                );
+              }
+
+              namespace.to(parsed.suiRoomId).emit("match.start", {
+                roomId: parsed.suiRoomId,
+                players: [challenge.challengerWallet, challenge.opponentWallet],
+                challengeId: challenge.id,
+                status: "PLAYING",
+                tier: valuationMatch?.tier,
+                targetPoints: valuationMatch?.targetPoints,
+                nfts: valuationMatch
+                  ? Object.fromEntries(valuationMatch.nftsByWallet.entries())
+                  : undefined,
+              });
+
+              const firstTurnWallet = challenge.challengerWallet;
+              currentTurnByChallenge.set(challenge.id, firstTurnWallet);
+              shotSequenceByChallenge.set(challenge.id, 0);
+              namespace.to(parsed.suiRoomId).emit("match.turn", {
+                challengeId: challenge.id,
+                currentTurnWallet: firstTurnWallet,
+              });
+            }
+          }
+
+          ack?.({ ok: true });
+        } catch (err) {
+          ack?.({
+            ok: false,
+            error:
+              err instanceof Error ? err.message : "queue.roomJoined failed",
+          });
         }
-        roomByChallenge.delete(parsed.challengeId);
-        currentTurnByChallenge.delete(parsed.challengeId);
-        shotSequenceByChallenge.delete(parsed.challengeId);
+      },
+    );
 
-        ack?.({
-          ok: true,
-          result: submitResult,
-          finalized: {
-            winnerWallet,
-            txDigest,
-            settlementPayload,
-          },
-        });
-      } catch (err) {
-        ack?.({
-          ok: false,
-          error: err instanceof Error ? err.message : "match.result.submit failed",
-        });
-      }
-    });
+    socket.on(
+      "match.shot.submit",
+      async (payload: unknown, ack?: (payload: unknown) => void) => {
+        try {
+          const walletAddress = getWalletFromSocket(socket);
+          const parsed = MatchShotPayloadSchema.parse(payload);
+          const roomId = roomByChallenge.get(parsed.challengeId);
+          if (!roomId) {
+            throw new Error("Room not found for challenge");
+          }
+
+          const challenge = await challengeService.getChallenge(
+            parsed.challengeId,
+          );
+          if (!challenge) {
+            throw new Error("Challenge not found");
+          }
+
+          const isParticipant =
+            challenge.challengerWallet === walletAddress ||
+            challenge.opponentWallet === walletAddress;
+          if (!isParticipant) {
+            throw new Error("Wallet does not belong to this challenge");
+          }
+
+          const expectedTurn =
+            currentTurnByChallenge.get(parsed.challengeId) ??
+            challenge.challengerWallet;
+          if (expectedTurn !== walletAddress) {
+            throw new Error("Not your turn");
+          }
+
+          const nextTurnWallet =
+            walletAddress === challenge.challengerWallet
+              ? challenge.opponentWallet
+              : challenge.challengerWallet;
+          if (!nextTurnWallet) {
+            throw new Error("Challenge is missing opponent");
+          }
+
+          const nextSeq =
+            (shotSequenceByChallenge.get(parsed.challengeId) ?? 0) + 1;
+          shotSequenceByChallenge.set(parsed.challengeId, nextSeq);
+          currentTurnByChallenge.set(parsed.challengeId, nextTurnWallet);
+
+          namespace.to(roomId).emit("match.shot.received", {
+            challengeId: parsed.challengeId,
+            byWallet: walletAddress,
+            seq: nextSeq,
+            shot: {
+              x: parsed.x,
+              y: parsed.y,
+              force: parsed.force,
+            },
+            nextTurnWallet,
+            atMs: Date.now(),
+          });
+          namespace.to(roomId).emit("match.turn", {
+            challengeId: parsed.challengeId,
+            currentTurnWallet: nextTurnWallet,
+          });
+
+          ack?.({
+            ok: true,
+            result: {
+              seq: nextSeq,
+              nextTurnWallet,
+            },
+          });
+        } catch (err) {
+          ack?.({
+            ok: false,
+            error:
+              err instanceof Error ? err.message : "match.shot.submit failed",
+          });
+        }
+      },
+    );
+
+    socket.on(
+      "match.result.submit",
+      async (payload: unknown, ack?: (payload: unknown) => void) => {
+        try {
+          const walletAddress = getWalletFromSocket(socket);
+          const parsed = SubmitResultSchema.parse(payload);
+          const submitResult = await challengeService.submitResult(
+            parsed.challengeId,
+            walletAddress,
+            parsed.result,
+          );
+
+          if (submitResult.totalSubmissions < 2) {
+            ack?.({ ok: true, result: submitResult });
+            return;
+          }
+
+          const roomId = roomByChallenge.get(parsed.challengeId);
+          const results = await challengeService.listResults(
+            parsed.challengeId,
+          );
+          let winnerWallet = resolveWinnerWallet(results);
+          let txDigest: string | null = null;
+          let loserWallet: string | null = null;
+          let settlementPayload: unknown = null;
+
+          try {
+            const finalized = await challengeService.finalizeChallenge(
+              parsed.challengeId,
+              winnerWallet,
+            );
+            winnerWallet = finalized.challenge.winnerWallet;
+            if (winnerWallet && finalized.challenge.opponentWallet) {
+              loserWallet =
+                winnerWallet === finalized.challenge.challengerWallet
+                  ? finalized.challenge.opponentWallet
+                  : finalized.challenge.challengerWallet;
+            }
+            txDigest = finalized.chainResult.digest;
+          } catch (err) {
+            const existing = await challengeService.getChallenge(
+              parsed.challengeId,
+            );
+            if (!existing || existing.status !== "FINALIZED") {
+              throw err;
+            }
+            winnerWallet = existing.winnerWallet;
+            if (winnerWallet && existing.opponentWallet) {
+              loserWallet =
+                winnerWallet === existing.challengerWallet
+                  ? existing.opponentWallet
+                  : existing.challengerWallet;
+            }
+          }
+
+          const settlementSecret =
+            env.LOBBY_SIGNER_SECRET_KEY ?? env.ADMIN_SECRET_KEY;
+
+          if (
+            roomId &&
+            winnerWallet &&
+            loserWallet &&
+            settlementSecret &&
+            isLikelySuiObjectId(roomId)
+          ) {
+            try {
+              const digestBytes = Array.from(
+                new TextEncoder().encode(parsed.challengeId),
+              );
+              settlementPayload =
+                await getSettlementPayloadService().buildPayload({
+                  roomId,
+                  winner: winnerWallet,
+                  loser: loserWallet,
+                  matchDigest: digestBytes,
+                });
+            } catch (error) {
+              logger.warn(
+                {
+                  challengeId: parsed.challengeId,
+                  roomId,
+                  error,
+                },
+                "Failed to build valuation lobby settlement payload",
+              );
+              settlementPayload = null;
+            }
+          }
+
+          if (roomId) {
+            namespace.to(roomId).emit("match.result.finalized", {
+              challengeId: parsed.challengeId,
+              winnerWallet,
+              txDigest,
+              settlementPayload,
+            });
+          }
+
+          if (roomId) {
+            challengeByRoom.delete(roomId);
+          }
+          roomByChallenge.delete(parsed.challengeId);
+          currentTurnByChallenge.delete(parsed.challengeId);
+          shotSequenceByChallenge.delete(parsed.challengeId);
+
+          ack?.({
+            ok: true,
+            result: submitResult,
+            finalized: {
+              winnerWallet,
+              txDigest,
+              settlementPayload,
+            },
+          });
+        } catch (err) {
+          ack?.({
+            ok: false,
+            error:
+              err instanceof Error ? err.message : "match.result.submit failed",
+          });
+        }
+      },
+    );
   });
 
   return io;
