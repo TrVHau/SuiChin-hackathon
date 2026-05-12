@@ -3,12 +3,77 @@ import {
   PACKAGE_ID,
   MODULES,
   CLOCK_OBJECT_ID,
-  CRAFT_FEE_MIST,
+  CRAFT_POOL_CONTRIBUTION_MIST,
+  CRAFT_CONFIG_OBJECT_ID,
+  LOBBY_CONFIG_OBJECT_ID,
+  LOBBY_PACKAGE_ID,
+  LOBBY_SIGNER_PUBKEY,
+  RANDOM_OBJECT_ID,
 } from "@/config/sui.config";
 
-// â”€â”€â”€ player_profile module â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function textToBytes(value: string): number[] {
+  return Array.from(new TextEncoder().encode(value));
+}
 
-/** Táº¡o PlayerProfile cho sender. Gá»i 1 láº§n khi connect vÃ­ láº§n Ä‘áº§u. */
+function base64ToBytes(value: string): number[] {
+  if (!value) return [];
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return Array.from(bytes);
+}
+
+function parseSignerPubkeyInput(value: string): number[] {
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (
+        Array.isArray(parsed) &&
+        parsed.every(
+          (item) =>
+            typeof item === "number" && Number.isInteger(item) && item >= 0 && item <= 255,
+        )
+      ) {
+        return parsed as number[];
+      }
+    } catch {
+      // fall back to other formats
+    }
+  }
+
+  const compact = trimmed.replace(/\s+/g, "");
+  if (/^\d+(,\d+)+$/.test(compact)) {
+    const parsed = compact.split(",").map(Number);
+    if (parsed.every((item) => Number.isInteger(item) && item >= 0 && item <= 255)) {
+      return parsed;
+    }
+  }
+
+  if (/^0x[0-9a-fA-F]+$/.test(trimmed) && (trimmed.length - 2) % 2 === 0) {
+    const bytes: number[] = [];
+    for (let index = 2; index < trimmed.length; index += 2) {
+      bytes.push(Number.parseInt(trimmed.slice(index, index + 2), 16));
+    }
+    return bytes;
+  }
+
+  if (/^[A-Za-z0-9+/]+={0,2}$/.test(compact) && compact.length % 4 === 0) {
+    try {
+      const decoded = base64ToBytes(compact);
+      if (decoded.length > 0) return decoded;
+    } catch {
+      // fall back to utf-8 text encoding
+    }
+  }
+
+  return textToBytes(trimmed);
+}
+
 export function buildInitProfileTx(): Transaction {
   const tx = new Transaction();
   tx.moveCall({
@@ -17,11 +82,6 @@ export function buildInitProfileTx(): Transaction {
   return tx;
 }
 
-/**
- * Cáº­p nháº­t chun_raw + stats sau má»—i vÃ¡n.
- * - Tháº¯ng: delta = min(1 + streak, 20), isWin = true
- * - Thua:  delta = 1, isWin = false
- */
 export function buildReportResultTx(
   profileId: string,
   delta: number,
@@ -40,7 +100,6 @@ export function buildReportResultTx(
   return tx;
 }
 
-/** Claim faucet chun_raw. Cáº§n Clock object. */
 export function buildClaimFaucetTx(
   profileId: string,
   functionName: string = "claim_faucet",
@@ -54,8 +113,10 @@ export function buildClaimFaucetTx(
   return tx;
 }
 
-/** Lock `amount` chun_raw vÃ o staked_chun trÆ°á»›c PvP match. */
-export function buildLockForMatchTx(profileId: string, amount: number): Transaction {
+export function buildLockForMatchTx(
+  profileId: string,
+  amount: number,
+): Transaction {
   const tx = new Transaction();
   tx.moveCall({
     target: `${PACKAGE_ID}::${MODULES.PLAYER_PROFILE}::lock_for_match`,
@@ -64,19 +125,12 @@ export function buildLockForMatchTx(profileId: string, amount: number): Transact
   return tx;
 }
 
-// â”€â”€â”€ craft module â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-/**
- * Craft má»™t CuonChunNFT.
- * YÃªu cáº§u: profile.chun_raw >= 10 vÃ  vÃ­ cÃ³ Ä‘á»§ SUI.
- * Tá»± split 0.1 SUI (100_000_000 MIST) tá»« gas coin Ä‘á»ƒ tráº£ phÃ­.
- */
 export function buildCraftChunTx(
   profileId: string,
   treasuryId: string,
 ): Transaction {
   const tx = new Transaction();
-  const [paymentCoin] = tx.splitCoins(tx.gas, [CRAFT_FEE_MIST]);
+  const [paymentCoin] = tx.splitCoins(tx.gas, [CRAFT_POOL_CONTRIBUTION_MIST]);
   tx.moveCall({
     target: `${PACKAGE_ID}::${MODULES.CRAFT}::craft_chun`,
     arguments: [
@@ -89,12 +143,85 @@ export function buildCraftChunTx(
   return tx;
 }
 
-// â”€â”€â”€ trade_up module â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export function buildCraftChunWithRandomnessTx(
+  profileId: string,
+  treasuryId: string,
+): Transaction {
+  const tx = new Transaction();
+  const [paymentCoin] = tx.splitCoins(tx.gas, [CRAFT_POOL_CONTRIBUTION_MIST]);
+  tx.moveCall({
+    target: `${PACKAGE_ID}::${MODULES.CRAFT}::craft_chun_with_randomness`,
+    arguments: [
+      tx.object(profileId),
+      tx.object(treasuryId),
+      tx.object(CRAFT_CONFIG_OBJECT_ID),
+      paymentCoin,
+      tx.object(RANDOM_OBJECT_ID),
+      tx.object(CLOCK_OBJECT_ID),
+    ],
+  });
+  return tx;
+}
 
-/**
- * Trade-up 8 Bronze NFT â†’ Silver (70%) hoáº·c Scrap (30%).
- * Táº¥t cáº£ input NFT bá»‹ burn báº¥t ká»ƒ káº¿t quáº£.
- */
+export function buildBurnNftForChunTx(
+  profileId: string,
+  nftId: string,
+): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${PACKAGE_ID}::${MODULES.CRAFT}::burn_nft_for_chun`,
+    arguments: [
+      tx.object(profileId),
+      tx.object(CRAFT_CONFIG_OBJECT_ID),
+      tx.object(nftId),
+      tx.object(CLOCK_OBJECT_ID),
+    ],
+  });
+  return tx;
+}
+
+export function buildRecycleScrapForChunTx(
+  profileId: string,
+  scrapId: string,
+): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${PACKAGE_ID}::${MODULES.CRAFT}::recycle_scrap_for_chun`,
+    arguments: [
+      tx.object(profileId),
+      tx.object(CRAFT_CONFIG_OBJECT_ID),
+      tx.object(scrapId),
+      tx.object(CLOCK_OBJECT_ID),
+    ],
+  });
+  return tx;
+}
+
+export function buildFuseScrapsForBronzeTx(scrapIds: string[]): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${PACKAGE_ID}::${MODULES.CRAFT}::fuse_scraps_for_bronze`,
+    arguments: [
+      tx.object(CRAFT_CONFIG_OBJECT_ID),
+      tx.makeMoveVec({ elements: scrapIds.map((id) => tx.object(id)) }),
+      tx.object(CLOCK_OBJECT_ID),
+    ],
+  });
+  return tx;
+}
+
+export function buildRedeemChunTx(
+  treasuryId: string,
+  nftId: string,
+): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${PACKAGE_ID}::${MODULES.CRAFT}::redeem_chun`,
+    arguments: [tx.object(treasuryId), tx.object(nftId)],
+  });
+  return tx;
+}
+
 export function buildTradeUpBronzeToSilverTx(nftIds: string[]): Transaction {
   const tx = new Transaction();
   tx.moveCall({
@@ -107,10 +234,6 @@ export function buildTradeUpBronzeToSilverTx(nftIds: string[]): Transaction {
   return tx;
 }
 
-/**
- * Trade-up 6 Silver NFT â†’ Gold (55%) hoáº·c Scrap (45%).
- * Táº¥t cáº£ input NFT bá»‹ burn báº¥t ká»ƒ káº¿t quáº£.
- */
 export function buildTradeUpSilverToGoldTx(nftIds: string[]): Transaction {
   const tx = new Transaction();
   tx.moveCall({
@@ -123,12 +246,6 @@ export function buildTradeUpSilverToGoldTx(nftIds: string[]): Transaction {
   return tx;
 }
 
-// â”€â”€â”€ marketplace module â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-/**
- * List má»™t CuonChunNFT lÃªn Market.
- * NFT sáº½ bá»‹ lock vÃ o Market object cho Ä‘áº¿n khi buy hoáº·c cancel.
- */
 export function buildListNFTTx(
   marketId: string,
   nftId: string,
@@ -147,10 +264,6 @@ export function buildListNFTTx(
   return tx;
 }
 
-/**
- * Mua má»™t NFT Ä‘ang Ä‘Æ°á»£c list.
- * Tá»± split Ä‘Ãºng sá»‘ SUI theo giÃ¡ listing tá»« gas coin.
- */
 export function buildBuyNFTTx(
   marketId: string,
   listingId: string,
@@ -165,10 +278,6 @@ export function buildBuyNFTTx(
   return tx;
 }
 
-/**
- * Há»§y listing â€” chá»‰ seller má»›i gá»i Ä‘Æ°á»£c.
- * NFT sáº½ Ä‘Æ°á»£c tráº£ vá» seller.
- */
 export function buildCancelListingTx(
   marketId: string,
   listingId: string,
@@ -181,12 +290,6 @@ export function buildCancelListingTx(
   return tx;
 }
 
-// â”€â”€â”€ achievement module â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-/**
- * Claim Achievement Badge khi streak Ä‘áº¡t milestone {1, 5, 18, 36, 67}.
- * Badge lÃ  Soulbound â€” khÃ´ng thá»ƒ chuyá»ƒn nhÆ°á»£ng sau khi claim.
- */
 export function buildClaimBadgeTx(
   profileId: string,
   badgeType: number,
@@ -203,3 +306,130 @@ export function buildClaimBadgeTx(
   return tx;
 }
 
+export function buildCreateValuationLobbyRoomTx(input: {
+  nftIds: string[];
+  targetPoints: number;
+  deadlineMs: bigint;
+  signerPubkey?: string | number[];
+}): Transaction {
+  const tx = new Transaction();
+  const signerPubkeyBytes = Array.isArray(input.signerPubkey)
+    ? input.signerPubkey
+    : parseSignerPubkeyInput(input.signerPubkey ?? LOBBY_SIGNER_PUBKEY);
+
+  tx.moveCall({
+    target: `${LOBBY_PACKAGE_ID}::nft_valuation_lobby::create_room_with_deposit`,
+    arguments: [
+      tx.object(LOBBY_CONFIG_OBJECT_ID),
+      tx.pure.u64(input.targetPoints),
+      tx.makeMoveVec({ elements: input.nftIds.map((id) => tx.object(id)) }),
+      tx.pure.vector("u8", signerPubkeyBytes),
+      tx.pure.u64(input.deadlineMs),
+      tx.object(CLOCK_OBJECT_ID),
+    ],
+  });
+
+  return tx;
+}
+
+export function buildJoinValuationLobbyRoomTx(input: {
+  roomId: string;
+  nftIds: string[];
+}): Transaction {
+  const tx = new Transaction();
+
+  tx.moveCall({
+    target: `${LOBBY_PACKAGE_ID}::nft_valuation_lobby::join_room_with_deposit`,
+    arguments: [
+      tx.object(LOBBY_CONFIG_OBJECT_ID),
+      tx.object(input.roomId),
+      tx.makeMoveVec({ elements: input.nftIds.map((id) => tx.object(id)) }),
+      tx.object(CLOCK_OBJECT_ID),
+    ],
+  });
+
+  return tx;
+}
+
+export function buildCancelValuationLobbyRoomTx(roomId: string): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${LOBBY_PACKAGE_ID}::nft_valuation_lobby::cancel_waiting_room`,
+    arguments: [
+      tx.object(LOBBY_CONFIG_OBJECT_ID),
+      tx.object(roomId),
+      tx.object(CLOCK_OBJECT_ID),
+    ],
+  });
+  return tx;
+}
+
+export function buildEmergencyRefundValuationLobbyRoomTx(
+  roomId: string,
+): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${LOBBY_PACKAGE_ID}::nft_valuation_lobby::emergency_refund`,
+    arguments: [
+      tx.object(LOBBY_CONFIG_OBJECT_ID),
+      tx.object(roomId),
+      tx.object(CLOCK_OBJECT_ID),
+    ],
+  });
+  return tx;
+}
+
+export function buildAddValuationLobbySignerTx(input: {
+  adminCapId: string;
+  signerPubkey: string | number[];
+}): Transaction {
+  const tx = new Transaction();
+  const signerPubkeyBytes = Array.isArray(input.signerPubkey)
+    ? input.signerPubkey
+    : parseSignerPubkeyInput(input.signerPubkey);
+
+  tx.moveCall({
+    target: `${LOBBY_PACKAGE_ID}::nft_valuation_lobby::add_signer_pubkey`,
+    arguments: [
+      tx.object(LOBBY_CONFIG_OBJECT_ID),
+      tx.object(input.adminCapId),
+      tx.pure.vector("u8", signerPubkeyBytes),
+    ],
+  });
+
+  return tx;
+}
+
+export function buildSettleValuationLobbyRoomTx(input: {
+  roomId: string;
+  winner: string;
+  loser: string;
+  matchDigest: number[];
+  nonce: number | bigint;
+  deadlineMs: number | bigint;
+  signature: number[];
+  signerPubkey: number[];
+}): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${LOBBY_PACKAGE_ID}::nft_valuation_lobby::settle_room_with_signature`,
+    arguments: [
+      tx.object(LOBBY_CONFIG_OBJECT_ID),
+      tx.object(input.roomId),
+      tx.pure.address(input.winner),
+      tx.pure.address(input.loser),
+      tx.pure.vector("u8", input.matchDigest),
+      tx.pure.u64(input.nonce),
+      tx.pure.u64(input.deadlineMs),
+      tx.pure.vector("u8", input.signature),
+      tx.pure.vector("u8", input.signerPubkey),
+      tx.object(CLOCK_OBJECT_ID),
+    ],
+  });
+
+  return tx;
+}
+
+export function base64SignatureToBytes(signatureBytes: string): number[] {
+  return base64ToBytes(signatureBytes);
+}

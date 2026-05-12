@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { env } from "../../config/env";
-import { getPrismaClient } from "../../infra/db/prisma";
-import { AppError } from "../../shared/errors";
+import { env } from "../../config/env.js";
+import { getPrismaClient } from "../../infra/db/prisma.js";
+import { AppError } from "../../shared/errors.js";
 import type {
   Challenge,
   ChallengeResultRecord,
   CreateChallengeInput,
   MatchMode,
-} from "./challenge.types";
+} from "./challenge.types.js";
 
 function nowMs(): number {
   return Date.now();

@@ -14,9 +14,19 @@ const item = {
 
 interface InventoryScrapSectionProps {
   scraps: ScrapItem[];
+  onRecycleScrap: (scrap: ScrapItem) => void;
+  onFuseScraps: (scraps: ScrapItem[]) => void;
+  fusing: boolean;
+  recyclingScrapId?: string | null;
 }
 
-export default function InventoryScrapSection({ scraps }: InventoryScrapSectionProps) {
+export default function InventoryScrapSection({
+  scraps,
+  onRecycleScrap,
+  onFuseScraps,
+  fusing,
+  recyclingScrapId,
+}: InventoryScrapSectionProps) {
   if (scraps.length === 0) return null;
 
   return (
@@ -27,6 +37,22 @@ export default function InventoryScrapSection({ scraps }: InventoryScrapSectionP
           {scraps.length}
         </span>
       </h2>
+      <div className="mb-4 flex flex-wrap gap-2">
+        <button
+          onClick={() => onRecycleScrap(scraps[0])}
+          disabled={Boolean(recyclingScrapId) || fusing || scraps.length === 0}
+          className="rounded-xl border-2 border-green-300 bg-green-50 px-4 py-2 text-sm font-black text-green-700 disabled:opacity-50"
+        >
+          {recyclingScrapId ? "Dang recycle..." : "Recycle 1 Scrap -> Chun"}
+        </button>
+        <button
+          onClick={() => onFuseScraps(scraps)}
+          disabled={fusing || scraps.length < 20}
+          className="rounded-xl border-2 border-playful-purple bg-purple-50 px-4 py-2 text-sm font-black text-playful-purple disabled:opacity-50"
+        >
+          {fusing ? "Dang fuse..." : "Fuse 20 Scrap -> 1 Bronze"}
+        </button>
+      </div>
       <motion.div
         variants={container}
         initial="hidden"

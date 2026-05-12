@@ -16,6 +16,12 @@ type AppFactory = {
   matchmakingService: {
     reset: () => Promise<void>;
   };
+  valuationRoomService: {
+    resetForTests: () => Promise<void>;
+  };
+  valuationRoomEvents: {
+    emit: (eventName: "roomCreated" | "roomJoined" | "roomActivated", event: any) => void;
+  };
 };
 
 function waitForConnect(socket: ClientSocket) {
@@ -31,13 +37,24 @@ async function loadAppFactory(): Promise<AppFactory> {
   process.env.MATCHMAKING_BACKEND = "memory";
   process.env.CHAIN_ADAPTER = "mock";
   process.env.NODE_ENV = "test";
+  process.env.ADMIN_SECRET_KEY = "";
+  process.env.LOBBY_SIGNER_SECRET_KEY = "";
 
-  const [{ createApp }, { attachMultiplayerGateway }, { challengeService }, { matchmakingService }] =
+  const [
+    { createApp },
+    { attachMultiplayerGateway },
+    { challengeService },
+    { matchmakingService },
+    { valuationRoomService },
+    { valuationRoomEvents },
+  ] =
     await Promise.all([
-      import("../app/create-app"),
-      import("../gateways/socket/multiplayer.gateway"),
-      import("../modules/challenge/challenge.service"),
-      import("../modules/matchmaking/matchmaking.service"),
+      import("../app/create-app.js"),
+      import("../gateways/socket/multiplayer.gateway.js"),
+      import("../modules/challenge/challenge.service.js"),
+      import("../modules/matchmaking/matchmaking.service.js"),
+      import("../modules/valuation-room/valuation-room.service.js"),
+      import("../gateways/socket/valuation-room-events.js"),
     ]);
 
   return {
@@ -45,6 +62,8 @@ async function loadAppFactory(): Promise<AppFactory> {
     attachMultiplayerGateway,
     challengeService,
     matchmakingService,
+    valuationRoomService,
+    valuationRoomEvents,
   };
 }
 
@@ -97,6 +116,7 @@ async function testApiFlow(factory: AppFactory) {
 async function testSocketFlow(factory: AppFactory) {
   await factory.matchmakingService.reset();
   await factory.challengeService.resetForTests();
+  await factory.valuationRoomService.resetForTests();
   const app = factory.createApp();
   const server = createServer(app);
   factory.attachMultiplayerGateway(server);
@@ -114,170 +134,139 @@ async function testSocketFlow(factory: AppFactory) {
 
     try {
       await Promise.all([waitForConnect(clientA), waitForConnect(clientB)]);
-      const matchStartA = new Promise<{
+
+      const matchFoundA = new Promise<{
         roomId: string;
-        players: string[];
         challengeId: string;
+        creator: string;
+        joiner: string;
+        tier: string;
       }>((resolve) => {
-        clientA.once(
-          "match.start",
-          (payload: { roomId: string; players: string[]; challengeId: string }) =>
-            resolve(payload),
-        );
+        clientA.once("match.found", (payload) => resolve(payload));
       });
-      const matchStartB = new Promise<{
+      const matchFoundB = new Promise<{
         roomId: string;
-        players: string[];
         challengeId: string;
+        creator: string;
+        joiner: string;
+        tier: string;
       }>((resolve) => {
-        clientB.once(
-          "match.start",
-          (payload: { roomId: string; players: string[]; challengeId: string }) =>
-            resolve(payload),
-        );
+        clientB.once("match.found", (payload) => resolve(payload));
       });
 
-      const initialTurn = new Promise<{
-        challengeId: string;
-        currentTurnWallet: string;
-      }>((resolve) => {
-        clientA.once(
-          "match.turn",
-          (payload: { challengeId: string; currentTurnWallet: string }) => resolve(payload),
-        );
-      });
+      const nftA = { id: "0xa1", name: "Bronze A", tier: 1 };
+      const nftB = { id: "0xb2", name: "Bronze B", tier: 1 };
 
       const ackA = await new Promise<{ ok: boolean; result: { matched: boolean } }>((resolve) => {
-        clientA.emit("queue.join", (payload: { ok: boolean; result: { matched: boolean } }) => {
-          resolve(payload);
-        });
+        clientA.emit(
+          "queue.join",
+          { tier: "0_5_SUI", nft: nftA },
+          (payload: { ok: boolean; result: { matched: boolean } }) => resolve(payload),
+        );
       });
       assert.equal(ackA.ok, true);
       assert.equal(ackA.result.matched, false);
 
       const ackB = await new Promise<{
         ok: boolean;
-        result: {
-          matched: boolean;
-          opponentWallet?: string;
-          roomId?: string;
-          challengeId?: string;
-        };
+        result: { matched: boolean; roomId?: string; challengeId?: string; tier?: string };
       }>((resolve) => {
         clientB.emit(
           "queue.join",
+          { tier: "0_5_SUI", nft: nftB },
           (payload: {
             ok: boolean;
-            result: {
-              matched: boolean;
-              opponentWallet?: string;
-              roomId?: string;
-              challengeId?: string;
-            };
+            result: { matched: boolean; roomId?: string; challengeId?: string; tier?: string };
           }) => resolve(payload),
         );
       });
-
       assert.equal(ackB.ok, true);
       assert.equal(ackB.result.matched, true);
-      assert.equal(ackB.result.opponentWallet, "wallet_A");
-      assert.equal(Boolean(ackB.result.roomId?.includes("match:")), true);
+      assert.equal(ackB.result.tier, "0_5_SUI");
       assert.equal(Boolean(ackB.result.challengeId), true);
 
+      const [foundA, foundB] = await Promise.all([matchFoundA, matchFoundB]);
+      assert.equal(foundA.challengeId, ackB.result.challengeId);
+      assert.equal(foundB.challengeId, ackB.result.challengeId);
+      assert.equal(foundA.creator, "wallet_A");
+      assert.equal(foundA.joiner, "wallet_B");
+
+      const roomReadyB = new Promise<{ tempRoomId: string; suiRoomId: string }>((resolve) => {
+        clientB.once("match.roomReady", (payload) => resolve(payload));
+      });
+      const suiRoomId = "0xabc123";
+      factory.valuationRoomEvents.emit("roomCreated", {
+        roomId: suiRoomId,
+        creator: "wallet_A",
+        txDigest: "tx_room_created",
+        eventSeq: "0",
+      });
+      const ready = await roomReadyB;
+      assert.equal(ready.suiRoomId, suiRoomId);
+
+      const matchStartA = new Promise<{ roomId: string; challengeId: string }>((resolve) => {
+        clientA.once("match.start", (payload) => resolve(payload));
+      });
+      const matchStartB = new Promise<{ roomId: string; challengeId: string }>((resolve) => {
+        clientB.once("match.start", (payload) => resolve(payload));
+      });
+      factory.valuationRoomEvents.emit("roomJoined", {
+        roomId: suiRoomId,
+        joiner: "wallet_B",
+        txDigest: "tx_room_joined",
+        eventSeq: "1",
+      });
+      factory.valuationRoomEvents.emit("roomActivated", {
+        roomId: suiRoomId,
+        txDigest: "tx_room_joined",
+        eventSeq: "2",
+      });
       const [startA, startB] = await Promise.all([matchStartA, matchStartB]);
-      assert.equal(startA.challengeId, ackB.result.challengeId);
+      assert.equal(startA.roomId, suiRoomId);
       assert.equal(startB.challengeId, ackB.result.challengeId);
 
-      const challengeId = ackB.result.challengeId as string;
-
-      const firstTurn = await initialTurn;
-      assert.equal(firstTurn.challengeId, challengeId);
-      assert.equal(firstTurn.currentTurnWallet, "wallet_A");
-
-      const shotReceivedByB = new Promise<{
-        challengeId: string;
-        byWallet: string;
-        seq: number;
-        shot: { x: number; y: number; force: number };
-        nextTurnWallet: string;
-      }>((resolve) => {
-        clientB.once(
-          "match.shot.received",
-          (payload: {
-            challengeId: string;
-            byWallet: string;
-            seq: number;
-            shot: { x: number; y: number; force: number };
-            nextTurnWallet: string;
-          }) => resolve(payload),
-        );
+      const shotSeenByB = new Promise<{ byWallet: string; seq: number }>((resolve) => {
+        clientB.once("match.shot.received", (payload) => resolve(payload));
       });
-
-      const shotAck = await new Promise<{
-        ok: boolean;
-        result?: { seq: number; nextTurnWallet: string };
-      }>((resolve) => {
+      const shotAck = await new Promise<{ ok: boolean; result?: { seq: number } }>((resolve) => {
         clientA.emit(
           "match.shot.submit",
-          { challengeId, x: 128, y: 256, force: 820 },
-          (payload: { ok: boolean; result?: { seq: number; nextTurnWallet: string } }) =>
-            resolve(payload),
+          { challengeId: ackB.result.challengeId, x: 0.5, y: 0.4, force: 1200 },
+          (payload: { ok: boolean; result?: { seq: number } }) => resolve(payload),
         );
       });
-
       assert.equal(shotAck.ok, true);
       assert.equal(shotAck.result?.seq, 1);
-      assert.equal(shotAck.result?.nextTurnWallet, "wallet_B");
+      const shot = await shotSeenByB;
+      assert.equal(shot.byWallet, "wallet_A");
 
-      const shotEvent = await shotReceivedByB;
-      assert.equal(shotEvent.challengeId, challengeId);
-      assert.equal(shotEvent.byWallet, "wallet_A");
-      assert.equal(shotEvent.seq, 1);
-      assert.equal(shotEvent.shot.x, 128);
-      assert.equal(shotEvent.shot.y, 256);
-      assert.equal(shotEvent.shot.force, 820);
-      assert.equal(shotEvent.nextTurnWallet, "wallet_B");
-
-      const finalizeEvent = new Promise<{
-        challengeId: string;
-        winnerWallet: string | null;
-        txDigest: string | null;
-      }>((resolve) => {
-        clientA.once(
-          "match.result.finalized",
-          (payload: { challengeId: string; winnerWallet: string | null; txDigest: string | null }) =>
-            resolve(payload),
-        );
+      const finalizedA = new Promise<{ challengeId: string; winnerWallet: string | null }>((resolve) => {
+        clientA.once("match.result.finalized", (payload) => resolve(payload));
       });
 
-      const submitA = await new Promise<{ ok: boolean; result?: { totalSubmissions: number } }>(
-        (resolve) => {
-          clientA.emit(
-            "match.result.submit",
-            { challengeId, result: "WIN" },
-            (payload: { ok: boolean; result?: { totalSubmissions: number } }) => resolve(payload),
-          );
-        },
-      );
-      assert.equal(submitA.ok, true);
-      assert.equal(submitA.result?.totalSubmissions, 1);
+      const resultA = await new Promise<{ ok: boolean; result?: { totalSubmissions: number } }>((resolve) => {
+        clientA.emit(
+          "match.result.submit",
+          { challengeId: ackB.result.challengeId, result: "WIN" },
+          (payload: { ok: boolean; result?: { totalSubmissions: number } }) => resolve(payload),
+        );
+      });
+      assert.equal(resultA.ok, true);
+      assert.equal(resultA.result?.totalSubmissions, 1);
 
-      const submitB = await new Promise<{ ok: boolean; result?: { totalSubmissions: number } }>(
-        (resolve) => {
-          clientB.emit(
-            "match.result.submit",
-            { challengeId, result: "LOSE" },
-            (payload: { ok: boolean; result?: { totalSubmissions: number } }) => resolve(payload),
-          );
-        },
-      );
-      assert.equal(submitB.ok, true);
-      assert.equal(submitB.result?.totalSubmissions, 2);
+      const resultB = await new Promise<{ ok: boolean; finalized?: { winnerWallet: string | null } }>((resolve) => {
+        clientB.emit(
+          "match.result.submit",
+          { challengeId: ackB.result.challengeId, result: "LOSE" },
+          (payload: { ok: boolean; finalized?: { winnerWallet: string | null } }) => resolve(payload),
+        );
+      });
+      assert.equal(resultB.ok, true);
+      assert.equal(Boolean(resultB.finalized), true);
 
-      const finalized = await finalizeEvent;
-      assert.equal(finalized.challengeId, challengeId);
+      const finalized = await finalizedA;
+      assert.equal(finalized.challengeId, ackB.result.challengeId);
       assert.equal(finalized.winnerWallet, "wallet_A");
-      assert.equal(Boolean(finalized.txDigest), true);
       console.log("PASS socket flow");
     } finally {
       clientA.disconnect();
@@ -287,7 +276,6 @@ async function testSocketFlow(factory: AppFactory) {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 }
-
 async function run() {
   const factory = await loadAppFactory();
   await testServiceFlow(factory);

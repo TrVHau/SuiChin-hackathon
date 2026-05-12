@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
-import { AppError } from "../shared/errors";
-import { logger } from "../shared/logger";
+import { AppError } from "../shared/errors.js";
+import { logger } from "../shared/logger.js";
 
 export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction) {
   if (err instanceof AppError) {

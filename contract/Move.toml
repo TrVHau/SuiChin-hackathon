@@ -6,4 +6,6 @@ edition = "2024.beta"
 [addresses]
 suichin = "0x0"
 
-[dependencies]
+[environments]
+devnet = "8e04f6e7"
+testnet = "4fe43958"

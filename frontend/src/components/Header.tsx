@@ -9,6 +9,7 @@ interface HeaderProps {
   tier2?: number;
   tier3?: number;
   totalPoints: number;
+  suiBalanceMist?: number;
   address: string;
 }
 
@@ -26,6 +27,7 @@ export default function Header({
   tier2 = 0,
   tier3 = 0,
   totalPoints,
+  suiBalanceMist = 0,
   address,
 }: HeaderProps) {
   const navigate = useNavigate();
@@ -33,6 +35,7 @@ export default function Header({
   const { mutate: disconnect } = useDisconnectWallet();
 
   const shortAddress = `${address.slice(0, 6)}...${address.slice(-4)}`;
+  const suiBalance = suiBalanceMist / 1_000_000_000;
 
   const handleLogout = () => {
     disconnect();
@@ -92,6 +95,18 @@ export default function Header({
 
             {/* Stats + Logout */}
             <div className="flex items-center gap-3">
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                className="bg-white px-4 py-2 rounded-full border-4 border-sky-300 shadow-lg"
+              >
+                <p className="text-xs text-gray-500 font-bold leading-none">
+                  SUI hiện có
+                </p>
+                <p className="font-display font-black text-xl text-sky-700 leading-tight">
+                  {suiBalance.toFixed(3)}
+                </p>
+              </motion.div>
+
               {/* Total Points */}
               <motion.div
                 whileHover={{ scale: 1.05 }}

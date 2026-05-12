@@ -6,10 +6,30 @@ export const NETWORK = (import.meta.env.VITE_SUI_NETWORK || "devnet") as
 
 export const PACKAGE_ID =
   import.meta.env.VITE_SUI_PACKAGE_ID ||
-  "0x07d3079c4715d16b119517112e3dba807d64ca10bcb1399617be2c8e49194421";
+  "0xf057bdceaab0bf96a661bfbdf326ae5e6b476fae978f7b1fff629aecf894d5a6";
+export const LOBBY_PACKAGE_ID =
+  import.meta.env.VITE_LOBBY_PACKAGE_ID || PACKAGE_ID;
+export const LOBBY_CONFIG_OBJECT_ID =
+  import.meta.env.VITE_LOBBY_CONFIG_OBJECT_ID ||
+  "0xabc6d0569b20fbf830045ddbec0d2e7cd665ff538f89811ea11a53dbe0017688";
+export const LOBBY_SIGNER_PUBKEY =
+  import.meta.env.VITE_LOBBY_SIGNER_PUBKEY ||
+  "AM0K19eocENUQLaqfPXy5BCZ/+Iwki1bYo/6rwiDSX/X";
+export const LOBBY_DEFAULT_TARGET_POINTS = Number(
+  import.meta.env.VITE_LOBBY_DEFAULT_TARGET_POINTS || 1000,
+);
+export const LOBBY_DEFAULT_COIN_MIST = BigInt(
+  import.meta.env.VITE_LOBBY_DEFAULT_COIN_MIST || "100000000",
+);
 export const MARKET_OBJECT_ID = import.meta.env.VITE_MARKET_OBJECT_ID || "";
 export const TREASURY_OBJECT_ID = import.meta.env.VITE_TREASURY_OBJECT_ID || "";
+export const CRAFT_CONFIG_OBJECT_ID =
+  import.meta.env.VITE_CRAFT_CONFIG_OBJECT_ID ||
+  "0x133b585d2dab95bd9d02690f0cc2d6d6270ccc8e17514e927eb0fa91f40a1847";
+export const RANDOM_OBJECT_ID = import.meta.env.VITE_RANDOM_OBJECT_ID || "0x8";
 export const CLOCK_OBJECT_ID = "0x6";
+export const BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
 
 export const RPC_ENDPOINTS = {
   testnet: "https://fullnode.testnet.sui.io:443",
@@ -34,11 +54,12 @@ export const BADGE_TYPE = `${PACKAGE_ID}::${MODULES.ACHIEVEMENT}::AchievementBad
 export const PLAYER_PROFILE_TYPE = `${PACKAGE_ID}::${MODULES.PLAYER_PROFILE}::PlayerProfile`;
 
 export const CRAFT_CHUN_COST = 10;
-export const CRAFT_FEE_MIST = 100_000_000n;
+export const CRAFT_POOL_CONTRIBUTION_MIST = 100_000_000n;
 export const MAX_DELTA_CHUN = 20;
-export const COOLDOWN_MS = 10_000;
+export const COOLDOWN_MS = 3_000;
 
-export const FAUCET_COOLDOWN_MS = 60_000;
+// Must stay in sync with `player_profile.move` (FAUCET_COOLDOWN_MS = 7_200_000).
+export const FAUCET_COOLDOWN_MS = 7_200_000;
 export const FAUCET_MAX_STACK = 10;
 
 export const HALVING_INTERVAL = 1_000;
@@ -54,6 +75,15 @@ export const BACKEND_WS_URL =
   import.meta.env.VITE_BACKEND_WS_URL ?? "http://localhost:4000/multiplayer";
 export const BACKEND_REST_URL =
   import.meta.env.VITE_BACKEND_REST_URL ?? "http://localhost:4000";
+
+export const ENOKI_PUBLIC_API_KEY =
+  import.meta.env.VITE_ENOKI_PUBLIC_API_KEY ?? "";
+export const ENOKI_GOOGLE_CLIENT_ID =
+  import.meta.env.VITE_ENOKI_GOOGLE_CLIENT_ID ?? "";
+export const ENOKI_FACEBOOK_CLIENT_ID =
+  import.meta.env.VITE_ENOKI_FACEBOOK_CLIENT_ID ?? "";
+export const ENOKI_TWITCH_CLIENT_ID =
+  import.meta.env.VITE_ENOKI_TWITCH_CLIENT_ID ?? "";
 
 export const ACHIEVEMENT_MILESTONES = {
   BEGINNER: 1,

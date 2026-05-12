@@ -7,10 +7,9 @@ module suichin::player_profile {
     use sui::event;
 
     // ─── Constants ───────────────────────────────────────────────────────────────
-    const COOLDOWN_MS: u64          = 10_000;     // 10 giây giữa hai lần report_result
+    const COOLDOWN_MS: u64          = 3_000;      // 3 giay giua hai lan report_result
     const MAX_DELTA_CHUN: u64       = 20;          // delta tối đa mỗi ván
-    //const FAUCET_COOLDOWN_MS: u64   = 7_200_000;  // 2 giờ giữa mỗi 1 chun tich lũy
-    const FAUCET_COOLDOWN_MS: u64   = 60_000;     // (test-only) 1 phút giữa mỗi 1 chun tich lũy
+    const FAUCET_COOLDOWN_MS: u64   = 7_200_000;  // 7200 giay (2h) giua moi 1 chun tich luy
     const FAUCET_MAX_STACK: u64     = 10;          // tối đa chun stack được
 
     // ─── Error codes ────────────────────────────────────────────────────────────
@@ -20,6 +19,7 @@ module suichin::player_profile {
     const E_INSUFFICIENT_CHUN:        u64 = 103;
     const E_FAUCET_NOTHING_TO_CLAIM:  u64 = 104;
     const E_INSUFFICIENT_STAKED:      u64 = 105;
+    const EVENT_VERSION:              u64 = 1;
 
     // ─── Structs ──────────────────────────────────────────────────────────────
     /// 1 object per wallet — owned bởi sender sau init_profile()
@@ -67,6 +67,28 @@ module suichin::player_profile {
         winner: address,
         loser: address,
         amount: u64,
+    }
+
+    public struct ProfileUpdated has copy, drop {
+        version: u64,
+        owner: address,
+        chun_raw: u64,
+        wins: u64,
+        losses: u64,
+        streak: u64,
+        staked_chun: u64,
+    }
+
+    fun emit_profile_updated(profile: &PlayerProfile) {
+        event::emit(ProfileUpdated {
+            version: EVENT_VERSION,
+            owner: profile.owner,
+            chun_raw: profile.chun_raw,
+            wins: profile.wins,
+            losses: profile.losses,
+            streak: profile.streak,
+            staked_chun: profile.staked_chun,
+        });
     }
 
     // ─── Init ───────────────────────────────────────────────────────────────
@@ -135,6 +157,7 @@ module suichin::player_profile {
             is_win,
             new_chun_raw: profile.chun_raw,
         });
+        emit_profile_updated(profile);
     }
 
     // ─── Public Accessors ─────────────────────────────────────────────────────
@@ -163,6 +186,13 @@ module suichin::player_profile {
     public(package) fun spend_chun(profile: &mut PlayerProfile, amount: u64) {
         assert!(profile.chun_raw >= amount, E_INSUFFICIENT_CHUN);
         profile.chun_raw = profile.chun_raw - amount;
+        emit_profile_updated(profile);
+    }
+
+    /// Cong chun_raw vao profile (chi package internal duoc goi).
+    public(package) fun credit_chun(profile: &mut PlayerProfile, amount: u64) {
+        profile.chun_raw = profile.chun_raw + amount;
+        emit_profile_updated(profile);
     }
 
     /// Hoàn trả staked chun vào chun_raw (dùng khi match bị hủy).
@@ -170,6 +200,7 @@ module suichin::player_profile {
         assert!(profile.staked_chun >= amount, E_INSUFFICIENT_STAKED);
         profile.staked_chun = profile.staked_chun - amount;
         profile.chun_raw = profile.chun_raw + amount;
+        emit_profile_updated(profile);
     }
 
     // ─── Faucet ──────────────────────────────────────────────────────────────
@@ -191,6 +222,7 @@ module suichin::player_profile {
             amount,
             new_chun_raw: profile.chun_raw,
         });
+        emit_profile_updated(profile);
     }
 
     // ─── PvP Staking ─────────────────────────────────────────────────────────
@@ -207,6 +239,7 @@ module suichin::player_profile {
         profile.chun_raw = profile.chun_raw - amount;
         profile.staked_chun = profile.staked_chun + amount;
         event::emit(MatchLocked { owner: profile.owner, amount });
+        emit_profile_updated(profile);
     }
 
     /// Chuyển `amount` staked_chun từ loser → winner.chun_raw.
@@ -225,6 +258,8 @@ module suichin::player_profile {
             loser: loser.owner,
             amount,
         });
+        emit_profile_updated(winner);
+        emit_profile_updated(loser);
     }
 
     // ─── Test-only Helpers ────────────────────────────────────────────────────
@@ -239,3 +274,4 @@ module suichin::player_profile {
         MatchOracle { id: object::new(ctx) }
     }
 }
+

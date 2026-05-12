@@ -1,5 +1,5 @@
 import type { Request } from "express";
-import { AppError } from "./errors";
+import { AppError } from "./errors.js";
 
 export function getWalletAddress(req: Request): string {
   const wallet = req.header("x-wallet-address")?.trim();

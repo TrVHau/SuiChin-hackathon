@@ -1,16 +1,19 @@
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
-import pinoHttp from "pino-http";
+import { createRequire } from "node:module";
 import rateLimit from "express-rate-limit";
-import { corsOrigins } from "../config/env";
-import { errorHandler } from "./error-handler";
-import { registerRoutes } from "./routes";
-import { logger } from "../shared/logger";
+import { corsOrigins } from "../config/env.js";
+import { errorHandler } from "./error-handler.js";
+import { registerRoutes } from "./routes.js";
+import { logger } from "../shared/logger.js";
+
+const require = createRequire(import.meta.url);
+const pinoHttp = require("pino-http") as (options: unknown) => express.RequestHandler;
 
 export function createApp() {
   const app = express();
-  app.use(helmet());
+  app.use(helmet({ crossOriginOpenerPolicy: false }));
   app.use(cors({ origin: corsOrigins, credentials: true }));
   app.use(express.json({ limit: "1mb" }));
   app.use(rateLimit({ windowMs: 60_000, limit: 120 }));

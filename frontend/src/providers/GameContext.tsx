@@ -1,4 +1,10 @@
-import { createContext, useContext, ReactNode, useEffect, useState } from "react";
+import {
+  createContext,
+  useContext,
+  ReactNode,
+  useEffect,
+  useState,
+} from "react";
 import { useSuiProfile } from "@/hooks/useSuiProfile";
 
 interface PlayerData {
@@ -11,6 +17,7 @@ interface PlayerData {
   staked_chun?: number;
   last_faucet_ms?: number;
   objectId?: string;
+  suiBalanceMist?: number;
 }
 
 interface GameContextType {
@@ -20,13 +27,16 @@ interface GameContextType {
   playerData: PlayerData | null;
   loading: boolean;
   hasProfile: boolean;
-  createProfile: (onSuccess?: () => void, onError?: () => void) => Promise<void>;
+  createProfile: (
+    onSuccess?: () => void,
+    onError?: () => void,
+  ) => Promise<void>;
   reportResult: (
     isWin: boolean,
     onDone?: () => void,
-    onError?: () => void
+    onError?: () => void,
   ) => void;
-  refreshProfile: () => Promise<void>;
+  refreshProfile: () => Promise<unknown | null>;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -37,6 +47,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     profile,
     loading,
     hasProfile,
+    suiBalanceMist,
     createProfile,
     reportResult,
     refreshProfile,
@@ -45,15 +56,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [authResolved, setAuthResolved] = useState(false);
 
   useEffect(() => {
+    if (loading) return; // Wait until useSuiProfile completes its initial fetch
+
     if (account) {
       setAuthResolved(true);
       return;
     }
 
     // Give wallet auto-connect a short window on hard refresh before redirecting.
-    const timer = setTimeout(() => setAuthResolved(true), 1500);
+    const timer = setTimeout(() => setAuthResolved(true), 2500);
     return () => clearTimeout(timer);
-  }, [account]);
+  }, [account, loading]);
 
   const playerData: PlayerData | null = profile
     ? {
@@ -66,8 +79,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
         staked_chun: profile.staked_chun,
         last_faucet_ms: profile.last_faucet_ms,
         objectId: profile.objectId,
+        suiBalanceMist,
       }
-    : null;
+    : account
+      ? {
+          chun_raw: 0,
+          wins: 0,
+          losses: 0,
+          streak: 0,
+          address: account.address,
+          last_played_ms: 0,
+          suiBalanceMist,
+        }
+      : null;
 
   const value: GameContextType = {
     account,
@@ -81,9 +105,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     refreshProfile,
   };
 
-  return (
-    <GameContext.Provider value={value}>{children}</GameContext.Provider>
-  );
+  return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 }
 
 export function useGame() {

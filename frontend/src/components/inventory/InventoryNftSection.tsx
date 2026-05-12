@@ -1,6 +1,8 @@
 import { motion } from "framer-motion";
 import type { CuonChunNFT } from "@/hooks/useOwnedNFTs";
-import InventoryFilterTabs, { type TierFilter } from "@/components/inventory/InventoryFilterTabs";
+import InventoryFilterTabs, {
+  type TierFilter,
+} from "@/components/inventory/InventoryFilterTabs";
 import InventoryNFTCard from "@/components/inventory/InventoryNFTCard";
 
 const container = {
@@ -20,6 +22,13 @@ interface InventoryNftSectionProps {
   setTierFilter: (filter: TierFilter) => void;
   onOpenMarketplace: () => void;
   onOpenTradeUp: () => void;
+  onRedeem: (nft: CuonChunNFT) => void;
+  onRecycleNft: (nft: CuonChunNFT) => void;
+  isRecyclingNft: (objectId: string) => boolean;
+  isRedeeming: (objectId: string) => boolean;
+  getRedeemLabel: (tier: number) => string;
+  isRedeemDisabled: (tier: number) => boolean;
+  getRedeemDisabledReason: (tier: number) => string | undefined;
 }
 
 export default function InventoryNftSection({
@@ -29,6 +38,13 @@ export default function InventoryNftSection({
   setTierFilter,
   onOpenMarketplace,
   onOpenTradeUp,
+  onRedeem,
+  onRecycleNft,
+  isRecyclingNft,
+  isRedeeming,
+  getRedeemLabel,
+  isRedeemDisabled,
+  getRedeemDisabledReason,
 }: InventoryNftSectionProps) {
   if (cuonChuns.length === 0) return null;
 
@@ -52,7 +68,9 @@ export default function InventoryNftSection({
       <InventoryFilterTabs value={tierFilter} onChange={setTierFilter} />
 
       {filteredNFTs.length === 0 ? (
-        <p className="text-gray-500 font-semibold py-4">Không có NFT tier này.</p>
+        <p className="text-gray-500 font-semibold py-4">
+          Không có NFT tier này.
+        </p>
       ) : (
         <motion.div
           variants={container}
@@ -65,7 +83,16 @@ export default function InventoryNftSection({
               <InventoryNFTCard
                 nft={nft}
                 onList={onOpenMarketplace}
-                onTradeUp={nft.tier === 1 || nft.tier === 2 ? onOpenTradeUp : undefined}
+                onTradeUp={
+                  nft.tier === 1 || nft.tier === 2 ? onOpenTradeUp : undefined
+                }
+                onRedeem={() => onRedeem(nft)}
+                onRecycle={() => onRecycleNft(nft)}
+                recycling={isRecyclingNft(nft.objectId)}
+                redeeming={isRedeeming(nft.objectId)}
+                redeemLabel={getRedeemLabel(nft.tier)}
+                redeemDisabled={isRedeemDisabled(nft.tier)}
+                redeemDisabledReason={getRedeemDisabledReason(nft.tier)}
               />
             </motion.div>
           ))}

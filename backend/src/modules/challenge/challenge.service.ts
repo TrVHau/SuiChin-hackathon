@@ -1,12 +1,12 @@
-import type { IChainAdapter } from "../../infra/chain/chain-adapter";
-import { buildChainAdapter } from "../../infra/chain/build-chain-adapter";
-import { AppError } from "../../shared/errors";
-import { challengeRepository, normalizeCreateInput } from "./challenge.repository";
+import type { IChainAdapter } from "../../infra/chain/chain-adapter.js";
+import { buildChainAdapter } from "../../infra/chain/build-chain-adapter.js";
+import { AppError } from "../../shared/errors.js";
+import { challengeRepository, normalizeCreateInput } from "./challenge.repository.js";
 import type {
   Challenge,
   CreateChallengeInput,
   MatchResult,
-} from "./challenge.types";
+} from "./challenge.types.js";
 
 function isExpired(challenge: Challenge): boolean {
   return Date.now() >= challenge.expiresAtMs;

@@ -41,7 +41,10 @@ export function useFaucet(profileId: string | undefined) {
 
   const pendingFaucet = useCallback((lastFaucetMs: number): number => {
     const now = Date.now();
-    const elapsed = now - lastFaucetMs;
+    // Normalize: some on-chain values may be in seconds instead of ms.
+    const normalizedLast =
+      lastFaucetMs > 1e12 ? lastFaucetMs : Math.floor(lastFaucetMs * 1000);
+    const elapsed = now - normalizedLast;
     return Math.min(Math.floor(elapsed / FAUCET_COOLDOWN_MS), FAUCET_MAX_STACK);
   }, []);
 

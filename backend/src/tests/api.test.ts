@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import request from "supertest";
 import { beforeEach, describe, it } from "node:test";
-import { createApp } from "../app/create-app";
-import { challengeService } from "../modules/challenge/challenge.service";
+import { createApp } from "../app/create-app.js";
+import { challengeService } from "../modules/challenge/challenge.service.js";
 
 describe("API", () => {
   const app = createApp();

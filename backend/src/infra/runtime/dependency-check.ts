@@ -1,6 +1,6 @@
-import { env } from "../../config/env";
-import { getRedisClient } from "../cache/redis";
-import { getPrismaClient } from "../db/prisma";
+import { env } from "../../config/env.js";
+import { getRedisClient } from "../cache/redis.js";
+import { getPrismaClient } from "../db/prisma.js";
 
 type DependencyStatus = "ready" | "disabled" | "failed";
 
