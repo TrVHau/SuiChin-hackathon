@@ -82,6 +82,13 @@ const BETTING_LOBBIES: Array<{
   },
 ];
 
+function resolveNftImage(nft: { image_url?: string; tier: number; variant?: number }) {
+  if (nft.image_url) return nft.image_url;
+  const tier = Math.min(3, Math.max(1, Number(nft.tier) || 1));
+  const variant = Math.min(4, Math.max(1, Number(nft.variant) || 1));
+  return `/nft/tier${tier}_v${variant}.png`;
+}
+
 export default function PvPScreen() {
   const navigate = useNavigate();
   const { account, playerData, profile } = useGame();
@@ -798,27 +805,6 @@ export default function PvPScreen() {
           </div>
 
           <div className="p-6 md:p-8">
-            <div className="mb-6 grid gap-3 md:grid-cols-3">
-              {[
-                ["1", "Chon sanh", "0.5 / 1 / 2 SUI"],
-                ["2", "Chon NFT", "NFT nay se duoc khoa khi match"],
-                ["3", "Ban chun", "Thang thua theo ket qua tran dau"],
-              ].map(([step, title, copy]) => (
-                <div
-                  key={step}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
-                >
-                  <p className="text-xs font-black uppercase text-slate-400">
-                    Buoc {step}
-                  </p>
-                  <p className="mt-1 font-black text-slate-950">{title}</p>
-                  <p className="mt-1 text-xs font-semibold text-slate-500">
-                    {copy}
-                  </p>
-                </div>
-              ))}
-            </div>
-
             <div className="grid gap-3 md:grid-cols-3">
               {BETTING_LOBBIES.map((lobby) => {
                 const active = selectedBetTier === lobby.id;
@@ -870,28 +856,34 @@ export default function PvPScreen() {
                 </span>
               </div>
 
-              <div className="grid max-h-72 gap-3 overflow-auto pr-1 md:grid-cols-2">
+              <div className="grid max-h-[440px] gap-3 overflow-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
                 {eligibleLobbyNfts.map((nft) => {
                   const selected = selectedLobbyNfts.includes(nft.objectId);
                   return (
                     <button
                       key={nft.objectId}
                       onClick={() => toggleLobbyNft(nft.objectId)}
-                      className={`rounded-2xl border-2 p-4 text-left transition-all ${
+                      className={`relative overflow-hidden rounded-2xl border-2 bg-white p-3 text-left transition-all ${
                         selected
                           ? "border-emerald-500 bg-emerald-50 shadow-lg shadow-emerald-100"
                           : "border-slate-200 bg-white hover:border-emerald-300"
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate font-black text-slate-950">
-                            {nft.name || "Cuon Chun"}
-                          </p>
-                          <p className="mt-1 break-all text-xs font-semibold text-slate-400">
-                            {nft.objectId}
-                          </p>
-                        </div>
+                      {selected && (
+                        <CheckCircle2 className="absolute right-4 top-4 z-10 size-6 rounded-full bg-white text-emerald-600" />
+                      )}
+                      <img
+                        src={resolveNftImage(nft)}
+                        alt={nft.name || "Cuon Chun"}
+                        onError={(event) => {
+                          event.currentTarget.src = "/nft/tier1_v1.png";
+                        }}
+                        className="mb-3 aspect-square w-full rounded-xl bg-slate-100 object-cover"
+                      />
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="min-w-0 truncate font-black text-slate-950">
+                          {nft.name || "Cuon Chun"}
+                        </p>
                         <span className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-black text-slate-600">
                           Tier {nft.tier}
                         </span>
@@ -1080,8 +1072,8 @@ export default function PvPScreen() {
         />
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 pb-20">
-        <div className="mb-6 rounded-[28px] border border-amber-200 bg-white/75 backdrop-blur p-5 shadow-[0_20px_50px_rgba(238,174,77,0.16)]">
+      <div className="mx-auto max-w-5xl px-4 pb-20">
+        <div className="hidden">
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
             <div className="rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 border border-amber-200 px-4 py-3">
               <p className="text-xs font-bold tracking-wider uppercase text-amber-700">
@@ -1118,10 +1110,10 @@ export default function PvPScreen() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6">
+        <div className="space-y-6">
           <div className="space-y-6">
             <div className="bg-white/90 backdrop-blur rounded-[32px] border border-red-200 shadow-[0_20px_50px_rgba(239,68,68,0.12)] p-6 md:p-8">
-              <div className="flex flex-wrap items-center gap-3 mb-4">
+              <div className="hidden">
                 <span className="inline-flex items-center gap-2 rounded-full bg-red-100 border border-red-200 px-4 py-2 text-sm font-bold text-red-700">
                   <Swords className="size-4" />
                   Realtime PvP
@@ -1133,10 +1125,52 @@ export default function PvPScreen() {
               </div>
 
               {renderContent()}
+
+              {createdRoomId && (
+                <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-black uppercase text-emerald-700">
+                        Escrow
+                      </p>
+                      <p className="mt-1 text-sm font-bold text-emerald-950">
+                        {roomStatusLabel}
+                      </p>
+                    </div>
+                    {roomStatus === 0 &&
+                      sameAddress(roomCreator, account?.address) && (
+                        <button
+                          onClick={cancelLobbyRoom}
+                          className="rounded-full border-2 border-red-200 bg-red-50 px-4 py-2 text-sm font-black text-red-700"
+                        >
+                          Huy dat cuoc
+                        </button>
+                      )}
+                    {roomStatus === 1 && (
+                      <button
+                        onClick={emergencyRefundOnChain}
+                        disabled={
+                          escrowSubmitting ||
+                          Boolean(
+                            emergencyRefundReadyAt &&
+                              emergencyRefundRemainingMs > 0,
+                          )
+                        }
+                        className="rounded-full border-2 border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-800 disabled:opacity-60"
+                      >
+                        {emergencyRefundReadyAt &&
+                        emergencyRefundRemainingMs > 0
+                          ? `Emergency refund sau ${emergencyRefundRemainingMin} phut`
+                          : "Emergency refund"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {(pvp.status === "playing" || pvp.status === "submitting") && (
-              <div className="bg-white/85 backdrop-blur rounded-[28px] border border-cyan-200 shadow-[0_12px_30px_rgba(34,211,238,0.15)] p-5">
+              <div className="hidden">
                 <div className="flex items-center gap-3 mb-3">
                   <AlertCircle className="size-5 text-sky-600" />
                   <h3 className="font-black text-lg text-gray-900">
@@ -1152,7 +1186,7 @@ export default function PvPScreen() {
             )}
           </div>
 
-          <aside className="space-y-6">
+          <aside className="hidden">
             <div className="bg-white/90 backdrop-blur rounded-[28px] border border-sky-200 shadow-[0_18px_40px_rgba(14,116,144,0.14)] p-6">
               <div className="flex items-center gap-3 mb-4">
                 <Users className="size-6 text-playful-blue" />

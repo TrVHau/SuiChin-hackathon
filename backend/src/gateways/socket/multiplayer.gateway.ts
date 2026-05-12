@@ -131,9 +131,14 @@ const RoomJoinedPayloadSchema = z.object({
   suiRoomId: z.string().trim().min(1),
 });
 
-function buildTempRoomId(walletA: string, walletB: string, tier: BettingTier): string {
+function buildTempRoomId(
+  walletA: string,
+  walletB: string,
+  tier: BettingTier,
+  challengeId: string,
+): string {
   const [first, second] = [walletA, walletB].sort();
-  return `valuation:${tier}:${first}:${second}`;
+  return `valuation:${tier}:${first}:${second}:${challengeId}`;
 }
 
 export function attachMultiplayerGateway(server: HttpServer) {
@@ -384,7 +389,12 @@ export function attachMultiplayerGateway(server: HttpServer) {
             });
             await challengeService.acceptChallenge(challenge.id, walletAddress);
 
-            const tempRoomId = buildTempRoomId(walletAddress, opponent.walletAddress, tier);
+            const tempRoomId = buildTempRoomId(
+              walletAddress,
+              opponent.walletAddress,
+              tier,
+              challenge.id,
+            );
             challengeByRoom.set(tempRoomId, challenge.id);
             roomByChallenge.set(challenge.id, tempRoomId);
             joinWalletSocketsToRoom(namespace, walletAddress, tempRoomId);

@@ -7,7 +7,11 @@ import {
   useCurrentAccount,
   useWallets,
 } from "@mysten/dapp-kit";
-import { EnokiClient, createDefaultEncryption, isEnokiWallet } from "@mysten/enoki";
+import {
+  EnokiClient,
+  createDefaultEncryption,
+  isEnokiWallet,
+} from "@mysten/enoki";
 import { createStore, get, set } from "idb-keyval";
 import { toast } from "sonner";
 import { useLoginHandler } from "@/hooks/useLoginHandler";
@@ -65,8 +69,15 @@ async function persistEnokiCallbackSession() {
 
   const enokiClient = new EnokiClient({ apiKey: ENOKI_PUBLIC_API_KEY });
   const { address, publicKey } = await enokiClient.getZkLogin({ jwt });
-  const stateStore = createStore(`${ENOKI_PUBLIC_API_KEY}_${clientId}`, "enoki");
-  await set(ENOKI_STATE_KEY, JSON.stringify({ address, publicKey }), stateStore);
+  const stateStore = createStore(
+    `${ENOKI_PUBLIC_API_KEY}_${clientId}`,
+    "enoki",
+  );
+  await set(
+    ENOKI_STATE_KEY,
+    JSON.stringify({ address, publicKey }),
+    stateStore,
+  );
 
   const sessionStore = createStore(
     `${ENOKI_PUBLIC_API_KEY}_${NETWORK}_${clientId}`,
@@ -171,7 +182,9 @@ export default function LoginScreen() {
         window.close();
       } catch (error) {
         if (!disposed) {
-          setCallbackError(error instanceof Error ? error.message : String(error));
+          setCallbackError(
+            error instanceof Error ? error.message : String(error),
+          );
         }
       }
     };
@@ -183,7 +196,12 @@ export default function LoginScreen() {
   }, [isEnokiCallbackWindow]);
 
   useEffect(() => {
-    if (isEnokiCallbackWindow || account || connectingWallet || socialLoginPending) {
+    if (
+      isEnokiCallbackWindow ||
+      account ||
+      connectingWallet ||
+      socialLoginPending
+    ) {
       return;
     }
 
@@ -192,7 +210,9 @@ export default function LoginScreen() {
     ) as SocialProvider | null;
     if (!pendingProvider) return;
 
-    const wallet = enokiWallets.find((item) => item.provider === pendingProvider);
+    const wallet = enokiWallets.find(
+      (item) => item.provider === pendingProvider,
+    );
     if (!wallet) return;
 
     setSocialLoginPending(pendingProvider);
@@ -405,7 +425,7 @@ export default function LoginScreen() {
             className="w-full rounded-3xl border-4 border-playful-blue bg-white/95 p-4 text-center shadow-lg transition-transform hover:-translate-y-1 hover:shadow-xl"
           >
             <p className="text-sm font-black uppercase tracking-wide text-playful-blue">
-              Cần SUI devnet?
+              Cần SUI?
             </p>
             <p className="mt-1 text-base font-bold text-gray-900">
               Mở Sui Faucet để nhận SUI gas
