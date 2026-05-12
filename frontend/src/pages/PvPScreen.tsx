@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -85,6 +85,7 @@ function resolveNftImage(nft: {
 }
 
 export default function PvPScreen() {
+  const ESCROW_ROOM_STORAGE_KEY = "pvp:last-escrow-room-id";
   const navigate = useNavigate();
   const { account, playerData, profile } = useGame();
   const {
@@ -124,6 +125,7 @@ export default function PvPScreen() {
   const [signerState, setSignerState] = useState<
     "loading" | "ready" | "missing" | "error"
   >("loading");
+  const restoredRoomRef = useRef(false);
 
   const handleBack = () => navigate("/dashboard");
   const sameAddress = (a?: string | null, b?: string | null) =>
@@ -174,6 +176,17 @@ export default function PvPScreen() {
     return selectedLobbyNfts.filter((id) => ownedNftIdSet.has(id));
   };
 
+  const shouldWarnUnsafeLeave = useMemo(() => {
+    if (!createdRoomId) return false;
+    if (roomStatus === 0 || roomStatus === 1) return true;
+    return (
+      pvp.status === "awaiting_deposit" ||
+      pvp.status === "matched" ||
+      pvp.status === "playing" ||
+      pvp.status === "submitting"
+    );
+  }, [createdRoomId, pvp.status, roomStatus]);
+
   const cancelLobbyRoomTx = async (roomId: string): Promise<boolean> => {
     return new Promise((resolve) => {
       const tx = buildCancelValuationLobbyRoomTx(roomId);
@@ -218,6 +231,17 @@ export default function PvPScreen() {
   };
 
   const handleLeave = async () => {
+    if (shouldWarnUnsafeLeave) {
+      const leaveConfirmed = window.confirm(
+        roomStatus === 0
+          ? "Ban dang co room escrow WAITING. Neu thoat, he thong se thu huy room de tra NFT ve vi. Ban chac chan muon thoat?"
+          : 'Room dang ACTIVE, NFT dang khoa trong escrow. Neu thoat/reload luc nay, ban can quay lai room hoac doi "Emergency refund". Ban van muon thoat?',
+      );
+      if (!leaveConfirmed) {
+        return;
+      }
+    }
+
     if (createdRoomId) {
       if (roomStatus == null) {
         toast.error(
@@ -244,8 +268,14 @@ export default function PvPScreen() {
           return;
         }
       } else if (roomStatus === 1) {
+        const refundText =
+          emergencyRefundRemainingMs > 0
+            ? `Emergency refund khả dụng sau ${emergencyRefundRemainingMin} phút. NFT sẽ được hoàn tự động.`
+            : `Bấm nút "Emergency refund" bên dưới để hoàn NFT ngay.`;
+
         toast.error(
-          "Room đang ACTIVE. Không thể thoát an toàn lúc này. Hãy settle hoặc đợi emergency refund để tránh kẹt tài sản.",
+          `⚠️ Room ACTIVE - NFT bị khóa trong escrow. ${refundText}`,
+          { duration: 10000 },
         );
         return;
       }
@@ -255,26 +285,58 @@ export default function PvPScreen() {
     navigate("/dashboard");
   };
 
-  const selectedLobbyNFTPoints = useMemo(
-    () =>
-      selectedLobbyNfts.reduce((total, nftId) => {
-        const nft = cuonChuns.find((item) => item.objectId === nftId);
-        if (!nft) return total;
-        if (nft.tier === 3) return total + 1000;
-        if (nft.tier === 2) return total + 250;
-        return total + 100;
-      }, 0),
-    [cuonChuns, selectedLobbyNfts],
-  );
-  const estimatedLobbyTotalPoints = selectedLobbyNFTPoints;
+  const resolveNftPoints = (nftId: string): number => {
+    const ownedNft = cuonChuns.find((item) => item.objectId === nftId);
+    const tier =
+      ownedNft?.tier ?? (pvp.myNft?.id === nftId ? pvp.myNft.tier : 0);
+    if (tier === 3) return 1000;
+    if (tier === 2) return 250;
+    if (tier === 1) return 100;
+    return 0;
+  };
 
   useEffect(() => {
     setSelectedLobbyNfts((prev) => prev.filter((id) => ownedNftIdSet.has(id)));
   }, [ownedNftIdSet]);
 
   useEffect(() => {
+    if (createdRoomId) {
+      window.sessionStorage.setItem(ESCROW_ROOM_STORAGE_KEY, createdRoomId);
+      return;
+    }
+
+    if (!restoredRoomRef.current && !joinRoomId.trim()) {
+      const savedRoomId = window.sessionStorage.getItem(
+        ESCROW_ROOM_STORAGE_KEY,
+      );
+      if (savedRoomId) {
+        restoredRoomRef.current = true;
+        setJoinRoomId(savedRoomId);
+        toast.info(
+          `Da khoi phuc room escrow truoc do: ${savedRoomId.slice(0, 10)}...`,
+        );
+      }
+    }
+  }, [ESCROW_ROOM_STORAGE_KEY, createdRoomId, joinRoomId]);
+
+  useEffect(() => {
     setSelectedLobbyNfts([]);
   }, [account?.address]);
+
+  useEffect(() => {
+    if (!shouldWarnUnsafeLeave) return;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue =
+        "NFT dang bi khoa trong escrow. Ban se can quay lai room hoac emergency refund.";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [shouldWarnUnsafeLeave]);
 
   useEffect(() => {
     setEscrowTargetPoints(selectedBettingLobby.targetPoints);
@@ -467,9 +529,9 @@ export default function PvPScreen() {
     const roomCreated = (txBlock.objectChanges ?? []).find(
       (change) =>
         change.type === "created" &&
-        String(("objectType" in change ? change.objectType : "") ?? "").includes(
-          "::nft_valuation_lobby::Room",
-        ),
+        String(
+          ("objectType" in change ? change.objectType : "") ?? "",
+        ).includes("::nft_valuation_lobby::Room"),
     );
 
     const fallbackRoomId =
@@ -522,9 +584,13 @@ export default function PvPScreen() {
     if (!validateSelectedLobbyNfts()) {
       return;
     }
-    if (estimatedLobbyTotalPoints < escrowTargetPoints) {
+    const lockedNftPoints = lockedNftIds.reduce(
+      (total, nftId) => total + resolveNftPoints(nftId),
+      0,
+    );
+    if (lockedNftPoints < escrowTargetPoints) {
       toast.error(
-        `Tổng điểm hiện tại ${estimatedLobbyTotalPoints} chưa đủ target ${escrowTargetPoints}.`,
+        `Tổng điểm hiện tại ${lockedNftPoints} chưa đủ target ${escrowTargetPoints}.`,
       );
       return;
     }
@@ -597,7 +663,10 @@ export default function PvPScreen() {
       return;
     }
 
-    if (roomStatus === 1 && (createdRoomId === targetRoomId || joinRoomId.trim() === targetRoomId)) {
+    if (
+      roomStatus === 1 &&
+      (createdRoomId === targetRoomId || joinRoomId.trim() === targetRoomId)
+    ) {
       notifyRoomJoined(targetRoomId);
       toast.info("Room da ACTIVE. Dang dong bo de vao tran.");
       return;
@@ -636,7 +705,9 @@ export default function PvPScreen() {
               result.digest,
               `${LOBBY_PACKAGE_ID}::nft_valuation_lobby::RoomJoined`,
             );
-            joinedRoomId = String(parsed?.room_id ?? fallbackRoomId ?? targetRoomId);
+            joinedRoomId = String(
+              parsed?.room_id ?? fallbackRoomId ?? targetRoomId,
+            );
           } catch (error) {
             console.error(error);
           }
@@ -660,18 +731,18 @@ export default function PvPScreen() {
             setCreatedRoomId(targetRoomId);
             setJoinRoomId(targetRoomId);
             notifyRoomJoined(targetRoomId);
-            toast.info("NFT nay da duoc khoa vao room. Dang dong bo de vao tran.", {
-              id: "lobby-join",
-            });
+            toast.info(
+              "NFT nay da duoc khoa vao room. Dang dong bo de vao tran.",
+              {
+                id: "lobby-join",
+              },
+            );
             setEscrowSubmitting(false);
             return;
           }
-          toast.error(
-            `Join phòng escrow thất bại: ${message}`,
-            {
-              id: "lobby-join",
-            },
-          );
+          toast.error(`Join phòng escrow thất bại: ${message}`, {
+            id: "lobby-join",
+          });
           setEscrowSubmitting(false);
         },
       },
@@ -806,6 +877,12 @@ export default function PvPScreen() {
             : roomStatus === 4
               ? "EMERGENCY_REFUNDED"
               : "UNKNOWN";
+
+  useEffect(() => {
+    if (roomStatus === 2 || roomStatus === 3 || roomStatus === 4) {
+      window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
+    }
+  }, [ESCROW_ROOM_STORAGE_KEY, roomStatus]);
 
   const emergencyRefundReadyAt =
     roomDeadlineMs && emergencyRefundDelayMs
