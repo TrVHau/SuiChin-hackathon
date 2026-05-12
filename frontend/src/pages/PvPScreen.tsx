@@ -545,6 +545,11 @@ export default function PvPScreen() {
     };
   };
 
+  const extractOwnedByRoomId = (message: string): string | null => {
+    const match = message.match(/owned by object\s+(0x[a-fA-F0-9]+)/i);
+    return match?.[1] ?? null;
+  };
+
   const createLobbyRoom = async () => {
     if (escrowSubmitting) return;
     if (!account?.address) {
@@ -639,12 +644,30 @@ export default function PvPScreen() {
           setEscrowSubmitting(false);
         },
         onError: (error) => {
-          toast.error(
-            `Tạo phòng escrow thất bại: ${String(error?.message ?? error)}`,
-            {
-              id: "lobby-escrow",
-            },
-          );
+          const message = String(error?.message ?? error);
+          if (message.includes("owned by object")) {
+            const existingRoomId =
+              extractOwnedByRoomId(message) ?? pvp.roomId ?? joinRoomId.trim();
+            if (existingRoomId) {
+              setCreatedRoomId(existingRoomId);
+              setJoinRoomId(existingRoomId);
+              notifyRoomCreated(existingRoomId);
+              toast.info(
+                "NFT đã được khóa từ trước. Đang đồng bộ lại room escrow hiện có.",
+                { id: "lobby-escrow" },
+              );
+            } else {
+              toast.error(
+                "NFT đã bị khóa trong escrow nhưng không đọc được room ID để đồng bộ.",
+                { id: "lobby-escrow" },
+              );
+            }
+            setEscrowSubmitting(false);
+            return;
+          }
+          toast.error(`Tạo phòng escrow thất bại: ${message}`, {
+            id: "lobby-escrow",
+          });
           setEscrowSubmitting(false);
         },
       },
@@ -728,9 +751,11 @@ export default function PvPScreen() {
         onError: (error) => {
           const message = String(error?.message ?? error);
           if (message.includes("owned by object")) {
-            setCreatedRoomId(targetRoomId);
-            setJoinRoomId(targetRoomId);
-            notifyRoomJoined(targetRoomId);
+            const existingRoomId =
+              extractOwnedByRoomId(message) ?? targetRoomId;
+            setCreatedRoomId(existingRoomId);
+            setJoinRoomId(existingRoomId);
+            notifyRoomJoined(existingRoomId);
             toast.info(
               "NFT nay da duoc khoa vao room. Dang dong bo de vao tran.",
               {
@@ -1074,10 +1099,13 @@ export default function PvPScreen() {
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs font-black uppercase text-slate-400">
-                  Vai tro
+                  Doi thu
                 </p>
                 <p className="mt-1 text-2xl font-black text-slate-950">
-                  {pvp.role === "CREATOR" ? "Nguoi 1" : "Nguoi 2"}
+                  {pvp.opponentNft?.name ?? "Dang tai..."}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  {pvp.role === "CREATOR" ? "Joiner" : "Creator"}
                 </p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
