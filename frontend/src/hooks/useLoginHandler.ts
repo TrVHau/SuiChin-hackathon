@@ -45,9 +45,7 @@ export function useLoginHandler() {
         navigate("/dashboard", { replace: true });
       },
       () => {
-        toast.error("Khong the tao profile on-chain luc nay", {
-          id: "createProfile",
-        });
+        toast.dismiss("createProfile");
         navigate("/dashboard", { replace: true });
       },
     );

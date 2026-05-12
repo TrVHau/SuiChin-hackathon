@@ -1,8 +1,10 @@
 import {
   useCurrentAccount,
+  useCurrentWallet,
   useSignAndExecuteTransaction,
   useSuiClient,
 } from "@mysten/dapp-kit";
+import { isEnokiWallet } from "@mysten/enoki";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -53,6 +55,7 @@ function pickBestProfile(profiles: PlayerProfileData[]): PlayerProfileData {
 
 export function useSuiProfile() {
   const account = useCurrentAccount();
+  const { currentWallet } = useCurrentWallet();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const suiClient = useSuiClient();
   const setStoreProfile = useGameStore((s) => s.setProfile);
@@ -252,10 +255,16 @@ export function useSuiProfile() {
             );
           } else if (
             message.includes("JWK not found") ||
-            message.includes("Invalid user signature")
+            (message.includes("Invalid user signature") &&
+              currentWallet &&
+              isEnokiWallet(currentWallet))
           ) {
             toast.error(
               "Chu ky zkLogin khong hop le hoac JWK chua sync. Hay dang nhap lai Google/Twitch/Facebook va thu lai.",
+            );
+          } else if (message.includes("Invalid user signature")) {
+            toast.error(
+              "Chu ky vi khong hop le. Hay disconnect, ket noi lai dung vi va thu tao profile lai.",
             );
           } else {
             toast.error(`Tao profile that bai: ${message || "unknown error"}`);

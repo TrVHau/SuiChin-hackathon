@@ -40,12 +40,19 @@ async function main() {
     throw new Error("Unable to resolve LobbyAdminCap type");
   }
 
-  const secretKey = env.LOBBY_SIGNER_SECRET_KEY ?? env.ADMIN_SECRET_KEY;
-  const keypair = parseEd25519Keypair(secretKey);
-  const signerPubkey = Array.from(keypair.getPublicKey().toRawBytes());
+  if (!env.ADMIN_SECRET_KEY) {
+    throw new Error("ADMIN_SECRET_KEY is required because the admin wallet must hold LobbyAdminCap");
+  }
+  if (!env.LOBBY_SIGNER_SECRET_KEY) {
+    throw new Error("LOBBY_SIGNER_SECRET_KEY is required because its public key is registered on LobbyConfig");
+  }
+
+  const adminKeypair = parseEd25519Keypair(env.ADMIN_SECRET_KEY);
+  const settlementKeypair = parseEd25519Keypair(env.LOBBY_SIGNER_SECRET_KEY);
+  const signerPubkey = Array.from(settlementKeypair.getPublicKey().toRawBytes());
 
   const ownedCaps = await suiClient.getOwnedObjects({
-    owner: keypair.toSuiAddress(),
+    owner: adminKeypair.toSuiAddress(),
     filter: { StructType: LOBBY_ADMIN_CAP_TYPE },
     options: { showType: true },
   });
@@ -53,7 +60,7 @@ async function main() {
   const adminCapId = ownedCaps.data?.[0]?.data?.objectId;
   if (!adminCapId) {
     throw new Error(
-      `No LobbyAdminCap found for ${keypair.toSuiAddress()}. Make sure the admin wallet holds the cap.`,
+      `No LobbyAdminCap found for ${adminKeypair.toSuiAddress()}. Make sure the admin wallet holds the cap.`,
     );
   }
 
@@ -67,7 +74,7 @@ async function main() {
     ],
   });
 
-  const response = await keypair.signAndExecuteTransaction({
+  const response = await adminKeypair.signAndExecuteTransaction({
     transaction: tx,
     client: suiClient,
   });
@@ -82,6 +89,8 @@ async function main() {
         ok: true,
         txDigest,
         adminCapId,
+        adminAddress: adminKeypair.toSuiAddress(),
+        signerAddress: settlementKeypair.toSuiAddress(),
         signerPubkey,
       },
       null,

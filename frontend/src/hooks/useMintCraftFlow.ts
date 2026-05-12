@@ -58,6 +58,20 @@ export const MINT_TIER_CONFIG = {
 export type MintVisualConfig =
   (typeof MINT_TIER_CONFIG)[keyof typeof MINT_TIER_CONFIG];
 
+const sleep = (ms: number) =>
+  new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+
+function isTransactionNotIndexedError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return (
+    message.includes("Could not find the referenced transaction") ||
+    message.includes("Could not find transaction") ||
+    message.includes("TransactionDigest")
+  );
+}
+
 export function useMintCraftFlow() {
   const { playerData, refreshProfile } = useGame();
   const resolvedProfileId = playerData?.objectId ?? "";
@@ -104,11 +118,35 @@ export function useMintCraftFlow() {
     [craftResult],
   );
 
+  const getCraftTransactionBlock = async (digest: string) => {
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      try {
+        return await suiClient.getTransactionBlock({
+          digest,
+          options: {
+            showEvents: true,
+            showEffects: true,
+            showObjectChanges: true,
+          },
+        });
+      } catch (error) {
+        lastError = error;
+        if (!isTransactionNotIndexedError(error)) {
+          throw error;
+        }
+        await sleep(900 + attempt * 350);
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("Transaction chua duoc index tren RPC");
+  };
+
   const parseCraftEvent = async (digest: string): Promise<CraftResultData> => {
-    const txBlock = await suiClient.getTransactionBlock({
-      digest,
-      options: { showEvents: true, showEffects: true, showObjectChanges: true },
-    });
+    const txBlock = await getCraftTransactionBlock(digest);
 
     const status = (
       txBlock.effects as
@@ -259,6 +297,8 @@ export function useMintCraftFlow() {
 
     setCrafting(true);
     toast.loading("Dang craft Cuon Chun NFT...", { id: "craft" });
+    const beforeCraftChun = displayChunRaw;
+    const beforeCraftCost = craftCost;
 
     const useRandomnessCraft = await canUseRandomnessCraft();
     if (CRAFT_CONFIG_OBJECT_ID && !useRandomnessCraft) {
@@ -304,14 +344,27 @@ export function useMintCraftFlow() {
           } catch (err) {
             const message =
               err instanceof Error ? err.message : "Unknown error";
-            toast.error(`Craft that bai: ${message}`, { id: "craft" });
             try {
               const { liveChun, liveCost } = await readLiveCraftState();
               setDisplayChunRaw(liveChun);
               setCraftCost(liveCost);
+
+              if (
+                isTransactionNotIndexedError(err) &&
+                liveChun <= beforeCraftChun - beforeCraftCost
+              ) {
+                toast.success(
+                  "Craft da len chain, dang dong bo ket qua NFT/Scrap...",
+                  { id: "craft" },
+                );
+                void refreshProfile();
+                setCrafting(false);
+                return;
+              }
             } catch {
               // Ignore extra read errors here.
             }
+            toast.error(`Craft that bai: ${message}`, { id: "craft" });
             void refreshProfile();
             setCrafting(false);
             return;

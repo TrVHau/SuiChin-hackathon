@@ -60,12 +60,14 @@ export default function Dashboard() {
           <StreakCard />
         </motion.div>
 
+        <FeatureCards />
+
         <motion.div
           id="faucet-panel"
           variants={container}
           initial="hidden"
           animate="show"
-          className="mb-8 scroll-mt-32"
+          className="mt-8 scroll-mt-32"
         >
           <motion.div
             variants={item}
@@ -114,8 +116,6 @@ export default function Dashboard() {
             )}
           </motion.div>
         </motion.div>
-
-        <FeatureCards />
       </main>
     </div>
   );

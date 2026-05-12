@@ -32,6 +32,10 @@ function getClientIdForProvider(provider: SocialProvider) {
   return ENOKI_TWITCH_CLIENT_ID;
 }
 
+function clearPendingEnokiCallback() {
+  window.localStorage.removeItem(ENOKI_CALLBACK_PROVIDER_KEY);
+}
+
 function inferProviderFromCallback(): SocialProvider {
   const hash = new URLSearchParams(
     window.location.hash.startsWith("#")
@@ -348,10 +352,12 @@ export default function LoginScreen() {
                 </>
               ) : null}
 
-              <ConnectButton
-                className="!w-full !h-20 !rounded-full !shadow-2xl !border-4 !border-white !bg-gradient-to-r !from-playful-blue !to-playful-purple"
-                walletFilter={(wallet) => !isEnokiWallet(wallet)}
-              />
+              <div onPointerDown={clearPendingEnokiCallback}>
+                <ConnectButton
+                  className="!w-full !h-20 !rounded-full !shadow-2xl !border-4 !border-white !bg-gradient-to-r !from-playful-blue !to-playful-purple"
+                  walletFilter={(wallet) => !isEnokiWallet(wallet)}
+                />
+              </div>
             </div>
           ) : (
             <motion.button
@@ -391,6 +397,23 @@ export default function LoginScreen() {
               </div>
             ) : null}
           </div>
+
+          <a
+            href="https://faucet.sui.io/"
+            target="_blank"
+            rel="noreferrer"
+            className="w-full rounded-3xl border-4 border-playful-blue bg-white/95 p-4 text-center shadow-lg transition-transform hover:-translate-y-1 hover:shadow-xl"
+          >
+            <p className="text-sm font-black uppercase tracking-wide text-playful-blue">
+              Cần SUI devnet?
+            </p>
+            <p className="mt-1 text-base font-bold text-gray-900">
+              Mở Sui Faucet để nhận SUI gas
+            </p>
+            <p className="mt-1 text-xs font-semibold text-gray-500 break-all">
+              https://faucet.sui.io/
+            </p>
+          </a>
         </motion.div>
 
         {/* Features */}

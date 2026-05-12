@@ -594,15 +594,17 @@ export default function GameCanvas({
                 <ArrowLeft className="size-6 text-playful-blue" />
               </motion.button>
               <div className="flex items-center gap-3">
-                <span className="text-4xl">Target</span>
+                <span className="text-4xl" aria-hidden="true">
+                  🎯
+                </span>
                 <div>
                   <h1 className="font-display font-black text-2xl text-gray-900">
-                    Match
+                    Búng chun
                   </h1>
                   <p className="text-gray-600 font-semibold">
                     {mode === "bot"
-                      ? "De vong tron bot de thang!"
-                      : "De vong tron doi thu de thang!"}
+                      ? "Đè vòng tròn bot để thắng!"
+                      : "Đè vòng tròn đối thủ để thắng!"}
                   </p>
                 </div>
               </div>
