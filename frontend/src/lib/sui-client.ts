@@ -309,12 +309,10 @@ export function buildClaimBadgeTx(
 export function buildCreateValuationLobbyRoomTx(input: {
   nftIds: string[];
   targetPoints: number;
-  coinMist: bigint;
   deadlineMs: bigint;
   signerPubkey?: string | number[];
 }): Transaction {
   const tx = new Transaction();
-  const [coinInput] = tx.splitCoins(tx.gas, [input.coinMist]);
   const signerPubkeyBytes = Array.isArray(input.signerPubkey)
     ? input.signerPubkey
     : parseSignerPubkeyInput(input.signerPubkey ?? LOBBY_SIGNER_PUBKEY);
@@ -325,7 +323,6 @@ export function buildCreateValuationLobbyRoomTx(input: {
       tx.object(LOBBY_CONFIG_OBJECT_ID),
       tx.pure.u64(input.targetPoints),
       tx.makeMoveVec({ elements: input.nftIds.map((id) => tx.object(id)) }),
-      coinInput,
       tx.pure.vector("u8", signerPubkeyBytes),
       tx.pure.u64(input.deadlineMs),
       tx.object(CLOCK_OBJECT_ID),
@@ -338,10 +335,8 @@ export function buildCreateValuationLobbyRoomTx(input: {
 export function buildJoinValuationLobbyRoomTx(input: {
   roomId: string;
   nftIds: string[];
-  coinMist: bigint;
 }): Transaction {
   const tx = new Transaction();
-  const [coinInput] = tx.splitCoins(tx.gas, [input.coinMist]);
 
   tx.moveCall({
     target: `${LOBBY_PACKAGE_ID}::nft_valuation_lobby::join_room_with_deposit`,
@@ -349,7 +344,6 @@ export function buildJoinValuationLobbyRoomTx(input: {
       tx.object(LOBBY_CONFIG_OBJECT_ID),
       tx.object(input.roomId),
       tx.makeMoveVec({ elements: input.nftIds.map((id) => tx.object(id)) }),
-      coinInput,
       tx.object(CLOCK_OBJECT_ID),
     ],
   });

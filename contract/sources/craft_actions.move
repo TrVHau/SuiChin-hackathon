@@ -144,6 +144,28 @@ module suichin::craft_actions {
         vector::destroy_empty(scraps);
     }
 
+    public(package) fun tier_for_roll(roll: u64): u8 {
+        if (roll < ROLL_BRONZE_START) {
+            0
+        } else if (roll < ROLL_SILVER_START) {
+            1
+        } else if (roll < ROLL_GOLD_START) {
+            2
+        } else {
+            3
+        }
+    }
+
+    fun variant_count_for_tier(tier: u8): u64 {
+        if (tier == 1) {
+            BRONZE_VARIANTS
+        } else if (tier == 2) {
+            SILVER_VARIANTS
+        } else {
+            GOLD_VARIANTS
+        }
+    }
+
     /// Craft Chun NFT or Scrap using legacy pseudo-random roll.
     /// Requires SUI contribution to treasury on each craft.
     #[allow(lint(self_transfer))]
@@ -284,10 +306,13 @@ module suichin::craft_actions {
             correlation_id: craft_id,
         });
 
-        let success = random_value * 100 <= craft_config::craft_success_bps(config);
+        let roll = random_value - 1;
+        let tier = tier_for_roll(roll);
+        let success = tier > 0;
         if (success) {
-            let variant = random::generate_u8_in_range(&mut generator, 1, BRONZE_VARIANTS as u8);
-            let nft = cuon_chun::mint(1, variant, ctx);
+            let variant_count = variant_count_for_tier(tier);
+            let variant = random::generate_u8_in_range(&mut generator, 1, variant_count as u8);
+            let nft = cuon_chun::mint(tier, variant, ctx);
             let minted_nft_id = object::id(&nft);
             transfer::public_transfer(nft, sender);
             craft_treasury::increment_total_crafts(treasury);
@@ -298,7 +323,7 @@ module suichin::craft_actions {
                 player: sender,
                 random_value,
                 is_success: true,
-                tier: 1,
+                tier,
                 nft_minted_id: option::some(minted_nft_id),
                 timestamp_ms,
                 correlation_id: craft_id,
@@ -308,7 +333,7 @@ module suichin::craft_actions {
                 actor: sender,
                 action: b"CRAFT_MINT_NFT",
                 amount: 1,
-                tier: 1,
+                tier,
                 timestamp_ms,
                 correlation_id: craft_id,
             });
@@ -317,8 +342,8 @@ module suichin::craft_actions {
             event::emit(CraftResult {
                 crafter: sender,
                 success: true,
-                tier: 1,
-                roll: random_value - 1,
+                tier,
+                roll,
                 chun_spent: chun_cost,
                 sui_paid: deposit_amount,
             });
@@ -350,7 +375,7 @@ module suichin::craft_actions {
                 crafter: sender,
                 success: false,
                 tier: 0,
-                roll: random_value - 1,
+                roll,
                 chun_spent: chun_cost,
                 sui_paid: deposit_amount,
             });

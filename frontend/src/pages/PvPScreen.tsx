@@ -31,7 +31,6 @@ import {
 } from "@/components/pvp";
 import {
   LOBBY_CONFIG_OBJECT_ID,
-  LOBBY_DEFAULT_COIN_MIST,
   LOBBY_DEFAULT_TARGET_POINTS,
   LOBBY_PACKAGE_ID,
 } from "@/config/sui.config";
@@ -39,8 +38,6 @@ import {
 const BETTING_LOBBIES: Array<{
   id: BettingTier;
   name: string;
-  entrySui: number;
-  entryMist: bigint;
   targetPoints: number;
   requiredNftTier: 1 | 2 | 3;
   requiredNftLabel: string;
@@ -50,9 +47,7 @@ const BETTING_LOBBIES: Array<{
   {
     id: "0_5_SUI",
     name: "Binh dan",
-    entrySui: 0.5,
-    entryMist: 500_000_000n,
-    targetPoints: 5,
+    targetPoints: 100,
     requiredNftTier: 1,
     requiredNftLabel: "Dong",
     nftRule: "01 NFT Dong",
@@ -61,9 +56,7 @@ const BETTING_LOBBIES: Array<{
   {
     id: "1_SUI",
     name: "Trung luu",
-    entrySui: 1,
-    entryMist: 1_000_000_000n,
-    targetPoints: 10,
+    targetPoints: 250,
     requiredNftTier: 2,
     requiredNftLabel: "Bac",
     nftRule: "01 NFT Bac",
@@ -72,9 +65,7 @@ const BETTING_LOBBIES: Array<{
   {
     id: "2_SUI",
     name: "Dai gia",
-    entrySui: 2,
-    entryMist: 2_000_000_000n,
-    targetPoints: 20,
+    targetPoints: 1000,
     requiredNftTier: 3,
     requiredNftLabel: "Vang",
     nftRule: "01 NFT Vang",
@@ -113,7 +104,6 @@ export default function PvPScreen() {
   const [escrowTargetPoints, setEscrowTargetPoints] = useState(
     LOBBY_DEFAULT_TARGET_POINTS,
   );
-  const [escrowCoinMist, setEscrowCoinMist] = useState(LOBBY_DEFAULT_COIN_MIST);
   const [escrowDeadlineMinutes] = useState(30);
   const [createdRoomId, setCreatedRoomId] = useState<string | null>(null);
   const [joinRoomId, setJoinRoomId] = useState("");
@@ -261,10 +251,7 @@ export default function PvPScreen() {
       }, 0),
     [cuonChuns, selectedLobbyNfts],
   );
-  const estimatedLobbyTotalPoints = useMemo(() => {
-    const coinPoints = Number(escrowCoinMist / 100_000_000n);
-    return selectedLobbyNFTPoints + coinPoints;
-  }, [escrowCoinMist, selectedLobbyNFTPoints]);
+  const estimatedLobbyTotalPoints = selectedLobbyNFTPoints;
 
   useEffect(() => {
     const ownedIds = new Set(cuonChuns.map((item) => item.objectId));
@@ -276,7 +263,6 @@ export default function PvPScreen() {
   }, [account?.address]);
 
   useEffect(() => {
-    setEscrowCoinMist(selectedBettingLobby.entryMist);
     setEscrowTargetPoints(selectedBettingLobby.targetPoints);
     setSelectedLobbyNfts((prev) => {
       const selectedId = prev[0];
@@ -290,7 +276,6 @@ export default function PvPScreen() {
     });
   }, [
     cuonChuns,
-    selectedBettingLobby.entryMist,
     selectedBettingLobby.requiredNftTier,
     selectedBettingLobby.targetPoints,
   ]);
@@ -428,12 +413,12 @@ export default function PvPScreen() {
     }
     if (nft.tier !== selectedBettingLobby.requiredNftTier) {
       toast.error(
-        `Sanh ${selectedBettingLobby.entrySui} SUI chi chap nhan NFT ${selectedBettingLobby.requiredNftLabel}.`,
+        `Sanh ${selectedBettingLobby.name} chi chap nhan NFT ${selectedBettingLobby.requiredNftLabel}.`,
       );
       return;
     }
 
-    connectRoomSocket(selectedBettingLobby.entrySui, undefined, {
+    connectRoomSocket(0, undefined, {
       tier: selectedBettingLobby.id,
       nft,
     });
@@ -442,7 +427,7 @@ export default function PvPScreen() {
     const nft = cuonChuns.find((item) => item.objectId === nftId);
     if (!nft || nft.tier !== selectedBettingLobby.requiredNftTier) {
       toast.error(
-        `Sanh ${selectedBettingLobby.entrySui} SUI chi chap nhan NFT ${selectedBettingLobby.requiredNftLabel}.`,
+        `Sanh ${selectedBettingLobby.name} chi chap nhan NFT ${selectedBettingLobby.requiredNftLabel}.`,
       );
       return;
     }
@@ -514,7 +499,6 @@ export default function PvPScreen() {
     const tx = buildCreateValuationLobbyRoomTx({
       nftIds: lockedNftIds,
       targetPoints: pvp.betTier ? selectedBettingLobby.targetPoints : escrowTargetPoints,
-      coinMist: pvp.wagerMist ? BigInt(pvp.wagerMist) : escrowCoinMist,
       deadlineMs,
       signerPubkey: activeLobbySigner ?? undefined,
     });
@@ -589,7 +573,6 @@ export default function PvPScreen() {
     const tx = buildJoinValuationLobbyRoomTx({
       roomId: targetRoomId,
       nftIds: lockedNftIds,
-      coinMist: pvp.wagerMist ? BigInt(pvp.wagerMist) : escrowCoinMist,
     });
 
     signAndExecute(
@@ -786,11 +769,11 @@ export default function PvPScreen() {
                   Step 1
                 </p>
                 <h3 className="mt-2 text-2xl font-black tracking-tight md:text-3xl">
-                  Chon muc cuoc de tim doi thu
+                  Chon sanh NFT de tim doi thu
                 </h3>
                 <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-300">
                   Ban chi can chon sanh va 1 NFT. He thong tu ghep 2 nguoi
-                  cung muc cuoc, sau do moi yeu cau dat cuoc on-chain.
+                  cung tier, sau do moi yeu cau khoa NFT on-chain.
                 </p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-right">
@@ -828,7 +811,7 @@ export default function PvPScreen() {
                       )}
                     </div>
                     <p className="mt-2 text-3xl font-black text-emerald-700">
-                      {lobby.entrySui} SUI
+                      {lobby.requiredNftLabel}
                     </p>
                     <p className="mt-3 text-xs font-bold uppercase text-slate-500">
                       {lobby.nftRule}
@@ -906,7 +889,7 @@ export default function PvPScreen() {
               disabled={!selectedLobbyNft || !account?.address}
             >
               <Search className="size-5" />
-              Tim tran {selectedBettingLobby.entrySui} SUI
+              Tim tran sanh {selectedBettingLobby.requiredNftLabel}
             </button>
           </div>
         </div>
@@ -915,7 +898,7 @@ export default function PvPScreen() {
     if (pvp.status === "connecting" || pvp.status === "waiting") {
       return (
         <PvpSearchingCard
-          roomValue={pvp.wager}
+          roomValue={selectedBettingLobby.requiredNftLabel}
           onCancel={handleLeave}
           roomId={createdRoomId ?? (joinRoomId.trim() || undefined)}
         />
@@ -935,7 +918,7 @@ export default function PvPScreen() {
               Da tim thay doi thu
             </h3>
             <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-emerald-100/80">
-              Bay gio moi nguoi dat {pvp.wager} SUI va khoa 1 NFT. Phan
+              Bay gio moi nguoi khoa 1 NFT cung tier. Phan
               escrow on-chain duoc xu ly tu dong theo vai tro cua ban.
             </p>
           </div>
@@ -944,10 +927,10 @@ export default function PvPScreen() {
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs font-black uppercase text-slate-400">
-                  Muc cuoc
+                  Tai san khoa
                 </p>
                 <p className="mt-1 text-2xl font-black text-slate-950">
-                  {pvp.wager} SUI
+                  NFT {selectedBettingLobby.requiredNftLabel}
                 </p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -1001,9 +984,9 @@ export default function PvPScreen() {
             >
               <Wallet className="size-5" />
               {isCreator
-                ? `Dat cuoc ${pvp.wager} SUI va khoa NFT`
+                ? "Khoa NFT vao escrow"
                 : roomReadyForJoiner
-                  ? `Dat cuoc ${pvp.wager} SUI va khoa NFT`
+                  ? "Khoa NFT vao escrow"
                   : "Dang chuan bi escrow cho ban..."}
             </button>
 
@@ -1057,7 +1040,7 @@ export default function PvPScreen() {
         <PageHeader
           title="PvP Arena"
           emoji="⚔️"
-          subtitle="PvP ban chun realtime + escrow on-chain cho SUI va NFT"
+          subtitle="PvP ban chun realtime + escrow on-chain cho NFT cung tier"
           onBack={handleBack}
           backBorderClass="border-red-300"
           backIconClass="text-red-500"
@@ -1228,7 +1211,7 @@ export default function PvPScreen() {
                 </p>
                 <p className="text-sm text-sky-900 font-semibold leading-6">
                   PvP hien dung realtime socket cho ghep tran va gui cu ban.
-                  Escrow lobby chi khoa SUI + NFT, con thang thua lay tu ket
+                  Escrow lobby chi khoa NFT cung tier, con thang thua lay tu ket
                   qua ban chun. Active signer duoc doc tu LobbyConfig on-chain,
                   khong can thao tac admin tren UI nua.
                 </p>
@@ -1247,10 +1230,10 @@ export default function PvPScreen() {
               </div>
               <div className="space-y-3">
                 {[
-                  ["1", "Chon sanh", "Moi sanh co muc cuoc co dinh: 0.5, 1 hoac 2 SUI."],
-                  ["2", "Chon NFT", "NFT nay se duoc khoa khi ban dat cuoc."],
-                  ["3", "Tim tran", "Backend chi ghep nguoi choi trong cung muc cuoc."],
-                  ["4", "Dat cuoc", "Sau khi match, moi ben bam 1 nut de khoa SUI + NFT on-chain."],
+                  ["1", "Chon sanh", "Moi sanh yeu cau NFT cung tier: Dong, Bac hoac Vang."],
+                  ["2", "Chon NFT", "NFT nay se duoc khoa vao escrow."],
+                  ["3", "Tim tran", "Backend chi ghep nguoi choi trong cung sanh NFT."],
+                  ["4", "Khoa NFT", "Sau khi match, moi ben bam 1 nut de khoa NFT on-chain."],
                   ["5", "Ban chun", "Hai ben thi dau ban chun realtime va bao ket qua tran."],
                   ["6", "Nhan thuong", "Backend ky winner tu ket qua tran de claim escrow on-chain."],
                 ].map(([step, title, copy]) => (

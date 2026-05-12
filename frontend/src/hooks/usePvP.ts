@@ -205,8 +205,8 @@ export function usePvP(_profileId: string | undefined) {
         role: myWallet === event.creator ? "CREATOR" : "JOINER",
         challengeId: event.challengeId,
         opponent: opponentWallet,
-        wager: event.wager,
-        wagerMist: event.wagerMist ?? Math.round(event.wager * 1_000_000_000),
+        wager: 0,
+        wagerMist: 0,
         betTier: event.tier ?? prev.betTier,
         myNft:
           myWallet === event.creator
@@ -218,7 +218,7 @@ export function usePvP(_profileId: string | undefined) {
             : event.creatorNft ?? null,
       }));
 
-      toast.success("Da tim thay doi thu. Hay khoa SUI va NFT vao escrow.");
+      toast.success("Da tim thay doi thu. Hay khoa NFT vao escrow.");
     },
     [account?.address],
   );
@@ -235,11 +235,8 @@ export function usePvP(_profileId: string | undefined) {
         roomId: event.roomId,
         challengeId: event.challengeId,
         opponent: opponentWallet,
-        wager:
-          typeof event.wagerMist === "number"
-            ? event.wagerMist / 1_000_000_000
-            : event.wager ?? prev.wager,
-        wagerMist: event.wagerMist ?? prev.wagerMist,
+        wager: 0,
+        wagerMist: 0,
         betTier: event.tier ?? prev.betTier,
         myNft: event.nfts?.[myWallet] ?? prev.myNft,
         opponentNft:

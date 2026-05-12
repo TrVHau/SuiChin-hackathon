@@ -4,13 +4,10 @@
 /// Admin/configuration is split into `nft_valuation_lobby_config`.
 module suichin::nft_valuation_lobby {
     use std::bcs;
-    use sui::balance::{Self, Balance};
     use sui::clock::{Self, Clock};
-    use sui::coin::{Self, Coin};
     use sui::dynamic_object_field as dof;
     use sui::ed25519;
     use sui::event;
-    use sui::sui::SUI;
     use suichin::cuon_chun::{Self, CuonChunNFT};
     use suichin::nft_valuation_lobby_config::{Self as lobby_config, LobbyAdminCap, LobbyConfig};
     use suichin::scrap;
@@ -37,6 +34,8 @@ module suichin::nft_valuation_lobby {
     const E_INVALID_DEADLINE: u64 = 716;
     const E_SIGNER_MISMATCH: u64 = 717;
     const E_NO_JOINER: u64 = 718;
+    const E_EMPTY_NFT_DEPOSIT: u64 = 720;
+    const E_TIER_MISMATCH: u64 = 721;
 
     const SETTLEMENT_INTENT_SCOPE: u8 = 1;
 
@@ -52,14 +51,12 @@ module suichin::nft_valuation_lobby {
         signer_pubkey: vector<u8>,
         escrow_snapshot_hash: vector<u8>,
         nonce: u64,
+        stake_tier: u8,
 
-        creator_coin: Balance<SUI>,
-        joiner_coin: Balance<SUI>,
         creator_nft_ids: vector<ID>,
         joiner_nft_ids: vector<ID>,
         creator_points: u64,
         joiner_points: u64,
-        fee_bps: u16,
     }
 
     public struct SettlementMessage has drop, store {
@@ -111,7 +108,6 @@ module suichin::nft_valuation_lobby {
         room_id: ID,
         winner: address,
         loser: address,
-        fee_paid: u64,
         creator_points: u64,
         joiner_points: u64,
         match_digest: vector<u8>,
@@ -123,10 +119,6 @@ module suichin::nft_valuation_lobby {
         room_id: ID,
         refund_mode: u8, // 1 = timeout admin/any caller trigger
         timestamp_ms: u64,
-    }
-
-    fun points_from_coin(config: &LobbyConfig, coin_amount: u64): u64 {
-        coin_amount * lobby_config::coin_point_rate(config)
     }
 
     fun points_satisfy(config: &LobbyConfig, points: u64, target_points: u64): bool {
@@ -142,14 +134,22 @@ module suichin::nft_valuation_lobby {
         mut nfts: vector<CuonChunNFT>,
         is_creator: bool,
         config: &LobbyConfig,
-    ): u64 {
+    ): (u64, u8) {
         let mut points = 0;
         let len = vector::length(&nfts);
+        assert!(len > 0, E_EMPTY_NFT_DEPOSIT);
         let mut i = 0;
+        let mut stake_tier = 0;
         while (i < len) {
             let nft = vector::pop_back(&mut nfts);
             let nft_id = object::id(&nft);
-            points = points + lobby_config::points_for_tier(config, cuon_chun::tier(&nft));
+            let nft_tier = cuon_chun::tier(&nft);
+            if (i == 0) {
+                stake_tier = nft_tier;
+            } else {
+                assert!(nft_tier == stake_tier, E_TIER_MISMATCH);
+            };
+            points = points + lobby_config::points_for_tier(config, nft_tier);
             dof::add(&mut room.id, nft_id, nft);
             if (is_creator) {
                 vector::push_back(&mut room.creator_nft_ids, nft_id);
@@ -159,7 +159,7 @@ module suichin::nft_valuation_lobby {
             i = i + 1;
         };
         vector::destroy_empty(nfts);
-        points
+        (points, stake_tier)
     }
 
     fun transfer_nfts_from_ids(room_id: &mut UID, ids: &mut vector<ID>, recipient: address) {
@@ -170,15 +170,6 @@ module suichin::nft_valuation_lobby {
             let nft: CuonChunNFT = dof::remove(room_id, nft_id);
             transfer::public_transfer(nft, recipient);
             i = i + 1;
-        };
-    }
-
-    fun transfer_all_coin(balance_in: &mut Balance<SUI>, recipient: address, ctx: &mut TxContext) {
-        let amount = balance::value(balance_in);
-        if (amount > 0) {
-            let b = balance::withdraw_all(balance_in);
-            let c = coin::from_balance(b, ctx);
-            transfer::public_transfer(c, recipient);
         };
     }
 
@@ -239,22 +230,6 @@ module suichin::nft_valuation_lobby {
         lobby_config::set_point_rules(config, cap, bronze_points, silver_points, gold_points);
     }
 
-    public fun set_coin_point_rate(
-        config: &mut LobbyConfig,
-        cap: &LobbyAdminCap,
-        coin_point_rate: u64,
-    ) {
-        lobby_config::set_coin_point_rate(config, cap, coin_point_rate);
-    }
-
-    public fun set_platform_fee(
-        config: &mut LobbyConfig,
-        cap: &LobbyAdminCap,
-        platform_fee_bps: u16,
-    ) {
-        lobby_config::set_platform_fee(config, cap, platform_fee_bps);
-    }
-
     public fun set_emergency_refund_delay(
         config: &mut LobbyConfig,
         cap: &LobbyAdminCap,
@@ -269,14 +244,6 @@ module suichin::nft_valuation_lobby {
         chain_id: u8,
     ) {
         lobby_config::set_chain_id(config, cap, chain_id);
-    }
-
-    public fun set_treasury(
-        config: &mut LobbyConfig,
-        cap: &LobbyAdminCap,
-        treasury: address,
-    ) {
-        lobby_config::set_treasury(config, cap, treasury);
     }
 
     public fun set_strict_equal_points(
@@ -307,7 +274,6 @@ module suichin::nft_valuation_lobby {
         config: &LobbyConfig,
         target_points: u64,
         nfts: vector<CuonChunNFT>,
-        coin_input: Coin<SUI>,
         selected_signer: vector<u8>,
         deadline_ms: u64,
         clock: &Clock,
@@ -321,8 +287,6 @@ module suichin::nft_valuation_lobby {
         assert!(deadline_ms > now_ms, E_INVALID_DEADLINE);
 
         let creator = tx_context::sender(ctx);
-        let creator_balance = coin::into_balance(coin_input);
-        let creator_coin_points = points_from_coin(config, balance::value(&creator_balance));
 
         let mut room = BetRoom {
             id: object::new(ctx),
@@ -336,17 +300,16 @@ module suichin::nft_valuation_lobby {
             signer_pubkey: selected_signer,
             escrow_snapshot_hash: vector[],
             nonce: 0,
-            creator_coin: creator_balance,
-            joiner_coin: balance::zero<SUI>(),
+            stake_tier: 0,
             creator_nft_ids: vector[],
             joiner_nft_ids: vector[],
             creator_points: 0,
             joiner_points: 0,
-            fee_bps: lobby_config::platform_fee_bps(config),
         };
 
-        let nft_points = deposit_nfts_to_room(&mut room, nfts, true, config);
-        room.creator_points = creator_coin_points + nft_points;
+        let (nft_points, stake_tier) = deposit_nfts_to_room(&mut room, nfts, true, config);
+        room.stake_tier = stake_tier;
+        room.creator_points = nft_points;
         assert!(points_satisfy(config, room.creator_points, target_points), E_INSUFFICIENT_POINTS);
 
         room.escrow_snapshot_hash = bcs::to_bytes(&room.creator_points);
@@ -368,7 +331,6 @@ module suichin::nft_valuation_lobby {
         config: &LobbyConfig,
         room: &mut BetRoom,
         nfts: vector<CuonChunNFT>,
-        coin_input: Coin<SUI>,
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
@@ -381,13 +343,10 @@ module suichin::nft_valuation_lobby {
         let now_ms = clock::timestamp_ms(clock);
         assert!(now_ms <= room.deadline_ms, E_ROOM_EXPIRED);
 
-        let joiner_balance = coin::into_balance(coin_input);
-        let joiner_coin_points = points_from_coin(config, balance::value(&joiner_balance));
-        balance::join(&mut room.joiner_coin, joiner_balance);
-
         room.joiner = option::some(joiner);
-        let nft_points = deposit_nfts_to_room(room, nfts, false, config);
-        room.joiner_points = joiner_coin_points + nft_points;
+        let (nft_points, stake_tier) = deposit_nfts_to_room(room, nfts, false, config);
+        assert!(stake_tier == room.stake_tier, E_TIER_MISMATCH);
+        room.joiner_points = nft_points;
         assert!(
             points_satisfy(config, room.joiner_points, room.target_points),
             E_INSUFFICIENT_POINTS
@@ -423,7 +382,6 @@ module suichin::nft_valuation_lobby {
         let sender = tx_context::sender(ctx);
         assert!(sender == room.creator, E_NOT_CREATOR);
 
-        transfer_all_coin(&mut room.creator_coin, room.creator, ctx);
         transfer_nfts_from_ids(&mut room.id, &mut room.creator_nft_ids, room.creator);
         room.status = STATUS_CANCELLED;
 
@@ -469,24 +427,6 @@ module suichin::nft_valuation_lobby {
         );
         assert!(ed25519::ed25519_verify(&signature, &signer_pubkey, &msg), E_INVALID_SIGNATURE);
 
-        let mut pool = balance::withdraw_all(&mut room.creator_coin);
-        let joiner_pool = balance::withdraw_all(&mut room.joiner_coin);
-        balance::join(&mut pool, joiner_pool);
-        let gross_pool = balance::value(&pool);
-        let fee_paid = gross_pool * (room.fee_bps as u64) / 10_000;
-        if (fee_paid > 0) {
-            let fee_balance = balance::split(&mut pool, fee_paid);
-            let fee_coin = coin::from_balance(fee_balance, ctx);
-            transfer::public_transfer(fee_coin, lobby_config::treasury(config));
-        };
-        let winner_coin = balance::value(&pool);
-        if (winner_coin > 0) {
-            let payout_coin = coin::from_balance(pool, ctx);
-            transfer::public_transfer(payout_coin, winner);
-        } else {
-            balance::destroy_zero(pool);
-        };
-
         transfer_nfts_from_ids(&mut room.id, &mut room.creator_nft_ids, winner);
         transfer_nfts_from_ids(&mut room.id, &mut room.joiner_nft_ids, winner);
 
@@ -501,7 +441,6 @@ module suichin::nft_valuation_lobby {
             room_id,
             winner,
             loser,
-            fee_paid,
             creator_points: room.creator_points,
             joiner_points: room.joiner_points,
             match_digest,
@@ -513,7 +452,6 @@ module suichin::nft_valuation_lobby {
         config: &LobbyConfig,
         room: &mut BetRoom,
         clock: &Clock,
-        ctx: &mut TxContext,
     ) {
         assert!(!lobby_config::paused(config), E_PAUSED);
         assert!(room.status == STATUS_ACTIVE, E_INVALID_STATUS);
@@ -524,8 +462,6 @@ module suichin::nft_valuation_lobby {
         assert!(option::is_some(&room.joiner), E_NO_JOINER);
         let joiner = *option::borrow(&room.joiner);
 
-        transfer_all_coin(&mut room.creator_coin, room.creator, ctx);
-        transfer_all_coin(&mut room.joiner_coin, joiner, ctx);
         transfer_nfts_from_ids(&mut room.id, &mut room.creator_nft_ids, room.creator);
         transfer_nfts_from_ids(&mut room.id, &mut room.joiner_nft_ids, joiner);
         room.status = STATUS_EMERGENCY_REFUNDED;
@@ -556,10 +492,6 @@ module suichin::nft_valuation_lobby {
 
     public fun joiner_points(room: &BetRoom): u64 {
         room.joiner_points
-    }
-
-    public fun platform_fee_bps(config: &LobbyConfig): u16 {
-        lobby_config::platform_fee_bps(config)
     }
 
     public fun chain_id(config: &LobbyConfig): u8 {

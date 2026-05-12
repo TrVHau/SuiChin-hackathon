@@ -1,12 +1,10 @@
 /// Config + admin controls for NFT valuation lobby.
 module suichin::nft_valuation_lobby_config {
-    const E_FEE_TOO_HIGH: u64 = 713;
     const E_SIGNER_NOT_FOUND: u64 = 715;
     const E_INVALID_SIGNER: u64 = 708;
     const E_INVALID_TIER: u64 = 719;
 
     const EVENT_VERSION: u64 = 1;
-    const MAX_PLATFORM_FEE_BPS: u16 = 300; // <= 3%
 
     public struct LobbyAdminCap has key, store {
         id: UID,
@@ -17,14 +15,11 @@ module suichin::nft_valuation_lobby_config {
         tier_points_bronze: u64,
         tier_points_silver: u64,
         tier_points_gold: u64,
-        coin_point_rate: u64,
-        platform_fee_bps: u16,
         emergency_refund_delay_ms: u64,
         active_signer_pubkeys: vector<vector<u8>>,
         paused: bool,
         strict_equal_points: bool,
         chain_id: u8,
-        treasury: address,
         event_version: u64,
     }
 
@@ -35,14 +30,11 @@ module suichin::nft_valuation_lobby_config {
             tier_points_bronze: 100,
             tier_points_silver: 250,
             tier_points_gold: 1000,
-            coin_point_rate: 1,
-            platform_fee_bps: 100, // 1%
             emergency_refund_delay_ms: 86_400_000, // 24h
             active_signer_pubkeys: vector[],
             paused: false,
             strict_equal_points: false,
             chain_id: 0,
-            treasury: sender,
             event_version: EVENT_VERSION,
         };
         transfer::share_object(config);
@@ -83,14 +75,6 @@ module suichin::nft_valuation_lobby_config {
         config.event_version
     }
 
-    public fun coin_point_rate(config: &LobbyConfig): u64 {
-        config.coin_point_rate
-    }
-
-    public fun platform_fee_bps(config: &LobbyConfig): u16 {
-        config.platform_fee_bps
-    }
-
     public fun emergency_refund_delay_ms(config: &LobbyConfig): u64 {
         config.emergency_refund_delay_ms
     }
@@ -105,10 +89,6 @@ module suichin::nft_valuation_lobby_config {
 
     public fun chain_id(config: &LobbyConfig): u8 {
         config.chain_id
-    }
-
-    public fun treasury(config: &LobbyConfig): address {
-        config.treasury
     }
 
     public fun set_pause(config: &mut LobbyConfig, _cap: &LobbyAdminCap, paused: bool) {
@@ -127,23 +107,6 @@ module suichin::nft_valuation_lobby_config {
         config.tier_points_gold = gold_points;
     }
 
-    public fun set_coin_point_rate(
-        config: &mut LobbyConfig,
-        _cap: &LobbyAdminCap,
-        coin_point_rate: u64,
-    ) {
-        config.coin_point_rate = coin_point_rate;
-    }
-
-    public fun set_platform_fee(
-        config: &mut LobbyConfig,
-        _cap: &LobbyAdminCap,
-        platform_fee_bps: u16,
-    ) {
-        assert!(platform_fee_bps <= MAX_PLATFORM_FEE_BPS, E_FEE_TOO_HIGH);
-        config.platform_fee_bps = platform_fee_bps;
-    }
-
     public fun set_emergency_refund_delay(
         config: &mut LobbyConfig,
         _cap: &LobbyAdminCap,
@@ -158,14 +121,6 @@ module suichin::nft_valuation_lobby_config {
         chain_id: u8,
     ) {
         config.chain_id = chain_id;
-    }
-
-    public fun set_treasury(
-        config: &mut LobbyConfig,
-        _cap: &LobbyAdminCap,
-        treasury: address,
-    ) {
-        config.treasury = treasury;
     }
 
     public fun set_strict_equal_points(

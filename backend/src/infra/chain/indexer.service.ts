@@ -9,6 +9,26 @@ import { valuationRoomEvents } from "../../gateways/socket/valuation-room-events
 const PACKAGE_ID = env.SUI_PACKAGE_ID || "";
 const EVENT_MODULES = ["craft_actions", "nft_valuation_lobby"] as const;
 
+function extractObjectId(value: unknown): string | undefined {
+  if (!value) return undefined;
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const resolved = extractObjectId(item);
+      if (resolved) return resolved;
+    }
+    return undefined;
+  }
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["objectId", "id", "value", "vec", "fields"]) {
+      const resolved = extractObjectId(record[key]);
+      if (resolved) return resolved;
+    }
+  }
+  return undefined;
+}
+
 export class IndexerService {
   private isCatchingUp = false;
   private db: Record<string, any> | null = null;
@@ -167,9 +187,9 @@ export class IndexerService {
       switch (eventType) {
         case "CraftResult":
         case "CraftResultFinalized": {
-          const playerAddress = payload.player || payload.actor;
+          const playerAddress = payload.player || payload.actor || payload.crafter;
           const itemMintedId = String(
-            payload.nft_minted_id ??
+            extractObjectId(payload.nft_minted_id) ??
               payload.item_id ??
               payload.craft_id ??
               event.id.txDigest,

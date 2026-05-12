@@ -4,15 +4,15 @@ Tài liệu này đã được đồng bộ theo contract hiện tại trong `co
 
 ## 1. Mục tiêu chức năng
 
-Thiết kế cơ chế PvP 2 người chơi theo mô hình cược theo tổng giá trị điểm, không bắt buộc hai bên phải cược cùng loại tài sản.
+Thiết kế cơ chế PvP 2 người chơi theo mô hình cược NFT cùng tier.
 
 Nguyên tắc chính:
 
 - Mỗi trận có một mức `target_points`.
-- Người chơi có thể nạp hỗn hợp NFT `CuonChunNFT` và coin SUI miễn tổng điểm đạt luật định.
+- Người chơi nạp NFT `CuonChunNFT`; hai bên phải dùng NFT cùng tier.
 - Tài sản của cả hai bên bị khóa on-chain trong `BetRoom` trước khi trận bắt đầu.
 - Kết quả trận được backend game ký số và contract chỉ chấp nhận kết quả có chữ ký hợp lệ.
-- Settlement là atomic: người thắng nhận toàn bộ pool theo quy tắc, người thua nhận `Scrap`, hệ thống trích platform fee.
+- Settlement là atomic: người thắng nhận toàn bộ NFT escrow, người thua nhận `Scrap`.
 
 ## 2. Giá trị Web3 cần thể hiện
 
@@ -27,14 +27,14 @@ Mục tiêu trình bày với hội đồng và người không rành blockchain
 
 ### Bước 1: Create and Deposit
 
-- A chọn NFT cược và số coin bù.
+- A chọn NFT cược.
 - Contract định giá tất cả tài sản theo bảng quy đổi điểm trong `LobbyConfig`.
 - Nếu tổng điểm không đạt yêu cầu `target_points`, giao dịch bị reject.
 - Nếu hợp lệ, tạo `BetRoom` ở trạng thái `WAITING` và khóa tài sản A vào escrow.
 
 ### Bước 2: Match and Deposit
 
-- B nạp tài sản (NFT, coin, hoặc mix) sao cho đạt điều kiện theo luật điểm.
+- B nạp NFT cùng tier sao cho đạt điều kiện theo luật điểm.
 - Contract kiểm tra và khóa tài sản B vào cùng `BetRoom`.
 - Chuyển trạng thái `BetRoom` từ `WAITING` sang `ACTIVE`.
 - Từ thời điểm `ACTIVE`, không còn luồng cancel đơn phương.
@@ -51,7 +51,6 @@ Mục tiêu trình bày với hội đồng và người không rành blockchain
 - Nếu hợp lệ:
   - Phân phối toàn bộ escrow cho winner theo quy tắc.
   - Mint `Scrap` cho loser.
-  - Trích platform fee về treasury.
   - Đặt trạng thái `BetRoom` thành `SETTLED`.
 
 ### Bước 5: Emergency refund
@@ -79,32 +78,27 @@ Mục tiêu trình bày với hội đồng và người không rành blockchain
 - `signer_pubkey: vector<u8>`
 - `escrow_snapshot_hash: vector<u8>`
 - `nonce: u64`
-- `creator_coin: Balance<SUI>`
-- `joiner_coin: Balance<SUI>`
+- `stake_tier: u8`
 - `creator_nft_ids: vector<ID>`
 - `joiner_nft_ids: vector<ID>`
 - `creator_points: u64`
 - `joiner_points: u64`
-- `fee_bps: u16`
 
 ### 4.2 `LobbyConfig` (admin controlled shared object)
 
 - `tier_points_bronze: u64`
 - `tier_points_silver: u64`
 - `tier_points_gold: u64`
-- `coin_point_rate: u64`
-- `platform_fee_bps: u16`
 - `emergency_refund_delay_ms: u64`
 - `active_signer_pubkeys: vector<vector<u8>>`
 - `paused: bool`
 - `strict_equal_points: bool`
 - `chain_id: u8`
-- `treasury: address`
 - `event_version: u64`
 
 ### 4.3 Admin cap
 
-- `LobbyAdminCap` được dùng để gọi các hàm admin set pause, fee, signer, treasury, chain id, và rule điểm.
+- `LobbyAdminCap` được dùng để gọi các hàm admin set pause, signer, chain id, và rule điểm.
 
 ## 5. Luật định giá
 
@@ -113,13 +107,12 @@ Bắt buộc triển khai trực tiếp trong contract:
 - Bronze NFT = 100 điểm
 - Silver NFT = 250 điểm
 - Gold NFT = 1000 điểm
-- Coin quy đổi điểm theo `coin_point_rate`
 
 Quy tắc kiểm tra:
 
 - Mặc định: tổng điểm mỗi bên phải `>= target_points`.
 - Nếu bật `strict_equal_points = true`, mỗi bên phải đúng bằng `target_points`.
-- Contract hiện không yêu cầu 2 bên phải nạp cùng loại tài sản.
+- Contract yêu cầu mỗi deposit không rỗng và hai bên phải cược NFT cùng tier.
 
 ## 6. API/hàm contract hiện có
 
@@ -132,19 +125,16 @@ Quy tắc kiểm tra:
 
 - `set_pause(config, cap, paused)`
 - `set_point_rules(config, cap, bronze_points, silver_points, gold_points)`
-- `set_coin_point_rate(config, cap, coin_point_rate)`
-- `set_platform_fee(config, cap, platform_fee_bps)`
 - `set_emergency_refund_delay(config, cap, delay_ms)`
 - `set_chain_id(config, cap, chain_id)`
-- `set_treasury(config, cap, treasury)`
 - `set_strict_equal_points(config, cap, strict_equal_points)`
 - `add_signer_pubkey(config, cap, signer_pubkey)`
 - `remove_signer_pubkey(config, cap, signer_pubkey)`
 
 ### 6.3 Phòng cược
 
-- `create_room_with_deposit(config, target_points, nfts, coin_input, selected_signer, deadline_ms, clock, ctx)`
-- `join_room_with_deposit(config, room, nfts, coin_input, clock, ctx)`
+- `create_room_with_deposit(config, target_points, nfts, selected_signer, deadline_ms, clock, ctx)`
+- `join_room_with_deposit(config, room, nfts, clock, ctx)`
 - `cancel_waiting_room(config, room, clock, ctx)`
 
 ### 6.4 Settlement
@@ -153,7 +143,7 @@ Quy tắc kiểm tra:
 
 ### 6.5 Emergency
 
-- `emergency_refund(config, room, clock, ctx)`
+- `emergency_refund(config, room, clock)`
 
 ### 6.6 Helper getters
 
@@ -162,7 +152,6 @@ Quy tắc kiểm tra:
 - `target_points(room)`
 - `creator_points(room)`
 - `joiner_points(room)`
-- `platform_fee_bps(config)`
 - `chain_id(config)`
 
 ## 7. Verify chữ ký và anti-tampering
@@ -203,16 +192,12 @@ Trong `settle_room_with_signature` contract đang làm đúng các bước sau:
 
 Thứ tự xử lý settlement hiện tại:
 
-- Gộp toàn bộ coin của creator và joiner thành pool.
-- Tính `fee_paid = gross_pool * fee_bps / 10_000`.
-- Chuyển fee về `treasury`.
-- Chuyển coin còn lại cho winner.
-- Chuyển toàn bộ NFT escrow cho winner.
+- Chuyển toàn bộ NFT escrow cùng tier cho winner.
 - Mint `Scrap` cho loser thông qua `scrap::mint_for(loser, ctx)`.
 
 Lưu ý:
 
-- Fee hiện chỉ áp trên coin pool.
+- Không còn coin pool, platform fee, hay treasury trong PvP lobby.
 - NFT không bị chia nhỏ, toàn bộ NFT của room đi về winner.
 - Tất cả xử lý phải atomic trong một transaction.
 
@@ -254,14 +239,13 @@ Contract hiện emit các event sau:
 - `RoomJoined { version, room_id, joiner, joiner_points, timestamp_ms }`
 - `RoomActivated { version, room_id, activated_at_ms }`
 - `RoomCancelled { version, room_id, by, reason, timestamp_ms }`
-- `RoomSettled { version, room_id, winner, loser, fee_paid, creator_points, joiner_points, match_digest, timestamp_ms }`
+- `RoomSettled { version, room_id, winner, loser, creator_points, joiner_points, match_digest, timestamp_ms }`
 - `EmergencyRefunded { version, room_id, refund_mode, timestamp_ms }`
 
 ## 11. Security checklist cho dev contract
 
 - Validate ownership NFT trước khi nạp escrow.
-- Validate coin amount không overflow, không underflow.
-- Fee bps bị chặn max cứng ở `MAX_PLATFORM_FEE_BPS = 300`.
+- Validate NFT deposit không rỗng và hai bên cùng tier.
 - Không cho settle nếu signer không thuộc whitelist pubkey.
 - Không cho cancel khi room đã `ACTIVE`.
 - Không cho emergency refund khi chưa đủ thời gian.
@@ -298,9 +282,9 @@ Khuyến nghị:
 
 ### 13.2 Integration tests
 
-- A: NFT + coin, B: coin-only, settle success.
-- A: gold-only, B: mix nhiều tài sản, settle success.
-- Fee và scrap mint đúng.
+- A: bronze NFT, B: bronze NFT, settle success.
+- A: bronze NFT, B: silver NFT, join bị reject.
+- Scrap mint đúng cho loser.
 
 ### 13.3 Adversarial tests
 

@@ -6,6 +6,7 @@ module suichin::craft_tests {
     use sui::sui::SUI;
     use sui::test_scenario;
     use suichin::craft;
+    use suichin::craft_actions;
     use suichin::craft_treasury::Treasury;
     use suichin::cuon_chun::{Self, CuonChunNFT};
     use suichin::player_profile::{Self, PlayerProfile};
@@ -45,6 +46,18 @@ module suichin::craft_tests {
         };
 
         test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_craft_roll_maps_to_expected_tier() {
+        assert!(craft_actions::tier_for_roll(0) == 0, 0);
+        assert!(craft_actions::tier_for_roll(79) == 0, 1);
+        assert!(craft_actions::tier_for_roll(80) == 1, 2);
+        assert!(craft_actions::tier_for_roll(91) == 1, 3);
+        assert!(craft_actions::tier_for_roll(92) == 2, 4);
+        assert!(craft_actions::tier_for_roll(97) == 2, 5);
+        assert!(craft_actions::tier_for_roll(98) == 3, 6);
+        assert!(craft_actions::tier_for_roll(99) == 3, 7);
     }
 
     #[test]

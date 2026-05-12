@@ -2,7 +2,7 @@ import { Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface PvpSearchingCardProps {
-  roomValue: number;
+  roomValue: string;
   roomId?: string;
   onCancel: () => void;
 }
@@ -26,7 +26,7 @@ export default function PvpSearchingCard({ roomValue, roomId, onCancel }: PvpSea
           Đang ghép phòng riêng
         </p>
         <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/75">
-          Giá trị phòng hiện tại được khóa ở mức <span className="font-black text-white">{roomValue}</span>. Hệ thống đang chờ thêm một người chơi tương xứng để mở phòng.
+          Phong hien tai khoa NFT <span className="font-black text-white">{roomValue}</span>. He thong dang cho them mot nguoi choi cung tier de mo phong.
         </p>
 
         <div className="mt-6 grid gap-3 rounded-[28px] border border-white/10 bg-black/20 p-4 text-left text-sm text-white/80 backdrop-blur">
@@ -35,7 +35,7 @@ export default function PvpSearchingCard({ roomValue, roomId, onCancel }: PvpSea
             <span className="font-black text-amber-300">Đang mở phòng</span>
           </div>
           <div className="flex items-center justify-between gap-3">
-            <span className="font-semibold">Giá trị phòng</span>
+            <span className="font-semibold">NFT yeu cau</span>
             <span className="font-black text-white">{roomValue}</span>
           </div>
           <div className="flex items-center justify-between gap-3">

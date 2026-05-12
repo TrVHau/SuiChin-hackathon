@@ -2,8 +2,6 @@
 #[test_only]
 module suichin::nft_valuation_lobby_tests {
     use sui::clock::{Self, Clock};
-    use sui::coin;
-    use sui::sui::SUI;
     use sui::test_scenario;
     use suichin::cuon_chun;
     use suichin::nft_valuation_lobby::{Self, BetRoom};
@@ -24,8 +22,6 @@ module suichin::nft_valuation_lobby_tests {
             let cap = test_scenario::take_from_sender<LobbyAdminCap>(scenario);
             let mut config = test_scenario::take_shared<LobbyConfig>(scenario);
             nft_valuation_lobby::add_signer_pubkey(&mut config, &cap, b"signer_1");
-            nft_valuation_lobby::set_coin_point_rate(&mut config, &cap, 1);
-            nft_valuation_lobby::set_platform_fee(&mut config, &cap, 100);
             nft_valuation_lobby::set_emergency_refund_delay(&mut config, &cap, 1_000);
             test_scenario::return_to_sender(scenario, cap);
             test_scenario::return_shared(config);
@@ -37,18 +33,26 @@ module suichin::nft_valuation_lobby_tests {
         clock: &Clock,
         deadline_ms: u64,
     ) {
+        creator_create_waiting_room_with_tier(scenario, clock, deadline_ms, 1, 100);
+    }
+
+    fun creator_create_waiting_room_with_tier(
+        scenario: &mut test_scenario::Scenario,
+        clock: &Clock,
+        deadline_ms: u64,
+        tier: u8,
+        target_points: u64,
+    ) {
         test_scenario::next_tx(scenario, CREATOR);
         {
-            let nft = cuon_chun::mint(1, 1, test_scenario::ctx(scenario));
+            let nft = cuon_chun::mint(tier, 1, test_scenario::ctx(scenario));
             let mut nfts = vector[];
             vector::push_back(&mut nfts, nft);
-            let zero_coin = coin::zero<SUI>(test_scenario::ctx(scenario));
             let config = test_scenario::take_shared<LobbyConfig>(scenario);
             nft_valuation_lobby::create_room_with_deposit(
                 &config,
-                100,
+                target_points,
                 nfts,
-                zero_coin,
                 b"signer_1",
                 deadline_ms,
                 clock,
@@ -72,20 +76,50 @@ module suichin::nft_valuation_lobby_tests {
             let nft = cuon_chun::mint(1, 1, test_scenario::ctx(&mut scenario));
             let mut nfts = vector[];
             vector::push_back(&mut nfts, nft);
-            let zero_coin = coin::zero<SUI>(test_scenario::ctx(&mut scenario));
             let config = test_scenario::take_shared<LobbyConfig>(&scenario);
             let mut room = test_scenario::take_shared<BetRoom>(&scenario);
             nft_valuation_lobby::join_room_with_deposit(
                 &config,
                 &mut room,
                 nfts,
-                zero_coin,
                 &clock,
                 test_scenario::ctx(&mut scenario),
             );
             assert!(nft_valuation_lobby::status(&room) == 1, 0);
             assert!(nft_valuation_lobby::creator_points(&room) == 100, 1);
             assert!(nft_valuation_lobby::joiner_points(&room) == 100, 2);
+            test_scenario::return_shared(config);
+            test_scenario::return_shared(room);
+        };
+
+        clock::destroy_for_testing(clock);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 721, location = suichin::nft_valuation_lobby)]
+    fun test_join_rejects_different_tier_nft() {
+        let mut scenario = test_scenario::begin(ADMIN);
+        let mut clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+        clock::set_for_testing(&mut clock, 100_000);
+
+        setup_config(&mut scenario);
+        creator_create_waiting_room_with_tier(&mut scenario, &clock, 200_000, 1, 100);
+
+        test_scenario::next_tx(&mut scenario, JOINER);
+        {
+            let nft = cuon_chun::mint(2, 1, test_scenario::ctx(&mut scenario));
+            let mut nfts = vector[];
+            vector::push_back(&mut nfts, nft);
+            let config = test_scenario::take_shared<LobbyConfig>(&scenario);
+            let mut room = test_scenario::take_shared<BetRoom>(&scenario);
+            nft_valuation_lobby::join_room_with_deposit(
+                &config,
+                &mut room,
+                nfts,
+                &clock,
+                test_scenario::ctx(&mut scenario),
+            );
             test_scenario::return_shared(config);
             test_scenario::return_shared(room);
         };
@@ -136,14 +170,12 @@ module suichin::nft_valuation_lobby_tests {
             let nft = cuon_chun::mint(1, 1, test_scenario::ctx(&mut scenario));
             let mut nfts = vector[];
             vector::push_back(&mut nfts, nft);
-            let zero_coin = coin::zero<SUI>(test_scenario::ctx(&mut scenario));
             let config = test_scenario::take_shared<LobbyConfig>(&scenario);
             let mut room = test_scenario::take_shared<BetRoom>(&scenario);
             nft_valuation_lobby::join_room_with_deposit(
                 &config,
                 &mut room,
                 nfts,
-                zero_coin,
                 &clock,
                 test_scenario::ctx(&mut scenario),
             );
@@ -160,7 +192,6 @@ module suichin::nft_valuation_lobby_tests {
                 &config,
                 &mut room,
                 &clock,
-                test_scenario::ctx(&mut scenario),
             );
             assert!(nft_valuation_lobby::status(&room) == 4, 0);
             test_scenario::return_shared(config);

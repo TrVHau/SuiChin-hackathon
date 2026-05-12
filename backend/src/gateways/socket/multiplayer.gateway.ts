@@ -19,23 +19,23 @@ import { valuationRoomEvents } from "./valuation-room-events.js";
 const BETTING_TIERS = {
   "0_5_SUI": {
     label: "Binh dan",
-    wagerSui: 0.5,
-    wagerMist: 500_000_000,
-    targetPoints: 5,
+    wagerSui: 0,
+    wagerMist: 0,
+    targetPoints: 100,
     requiredNftTier: 1,
   },
   "1_SUI": {
     label: "Trung luu",
-    wagerSui: 1,
-    wagerMist: 1_000_000_000,
-    targetPoints: 10,
+    wagerSui: 0,
+    wagerMist: 0,
+    targetPoints: 250,
     requiredNftTier: 2,
   },
   "2_SUI": {
     label: "Dai gia",
-    wagerSui: 2,
-    wagerMist: 2_000_000_000,
-    targetPoints: 20,
+    wagerSui: 0,
+    wagerMist: 0,
+    targetPoints: 1000,
     requiredNftTier: 3,
   },
 } as const;
@@ -384,8 +384,8 @@ export function attachMultiplayerGateway(server: HttpServer) {
             const challenge = await challengeService.createChallenge(opponent.walletAddress, {
               mode: "REALTIME",
               opponentWallet: walletAddress,
-              stakeEnabled: true,
-              stakeAmount: tierConfig.wagerMist,
+              stakeEnabled: false,
+              stakeAmount: 0,
             });
             await challengeService.acceptChallenge(challenge.id, walletAddress);
 
