@@ -73,7 +73,11 @@ const BETTING_LOBBIES: Array<{
   },
 ];
 
-function resolveNftImage(nft: { image_url?: string; tier: number; variant?: number }) {
+function resolveNftImage(nft: {
+  image_url?: string;
+  tier: number;
+  variant?: number;
+}) {
   if (nft.image_url) return nft.image_url;
   const tier = Math.min(3, Math.max(1, Number(nft.tier) || 1));
   const variant = Math.min(4, Math.max(1, Number(nft.variant) || 1));
@@ -288,6 +292,13 @@ export default function PvPScreen() {
     return () => window.clearInterval(intervalId);
   }, []);
 
+  // Navigate to game session when match starts
+  useEffect(() => {
+    if (pvp.status === "playing") {
+      navigate("/pvp-session");
+    }
+  }, [pvp.status, navigate]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -408,7 +419,9 @@ export default function PvPScreen() {
 
     const nft = toValuationNft(selectedLobbyNft);
     if (!nft) {
-      toast.error(`Chon 01 NFT ${selectedBettingLobby.requiredNftLabel} de vao sanh nay.`);
+      toast.error(
+        `Chon 01 NFT ${selectedBettingLobby.requiredNftLabel} de vao sanh nay.`,
+      );
       return;
     }
     if (nft.tier !== selectedBettingLobby.requiredNftTier) {
@@ -431,9 +444,7 @@ export default function PvPScreen() {
       );
       return;
     }
-    setSelectedLobbyNfts((prev) =>
-      prev.includes(nftId) ? [] : [nftId],
-    );
+    setSelectedLobbyNfts((prev) => (prev.includes(nftId) ? [] : [nftId]));
   };
 
   const parseRoomEvent = async (digest: string, eventType: string) => {
@@ -498,7 +509,9 @@ export default function PvPScreen() {
     const deadlineMs = BigInt(Date.now() + escrowDeadlineMinutes * 60_000);
     const tx = buildCreateValuationLobbyRoomTx({
       nftIds: lockedNftIds,
-      targetPoints: pvp.betTier ? selectedBettingLobby.targetPoints : escrowTargetPoints,
+      targetPoints: pvp.betTier
+        ? selectedBettingLobby.targetPoints
+        : escrowTargetPoints,
       deadlineMs,
       signerPubkey: activeLobbySigner ?? undefined,
     });
@@ -772,8 +785,8 @@ export default function PvPScreen() {
                   Chon sanh NFT de tim doi thu
                 </h3>
                 <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-300">
-                  Ban chi can chon sanh va 1 NFT. He thong tu ghep 2 nguoi
-                  cung tier, sau do moi yeu cau khoa NFT on-chain.
+                  Ban chi can chon sanh va 1 NFT. He thong tu ghep 2 nguoi cung
+                  tier, sau do moi yeu cau khoa NFT on-chain.
                 </p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-right">
@@ -831,7 +844,8 @@ export default function PvPScreen() {
                     Step 2
                   </p>
                   <h4 className="text-xl font-black text-slate-950">
-                    Chon 1 NFT {selectedBettingLobby.requiredNftLabel} de vao tran
+                    Chon 1 NFT {selectedBettingLobby.requiredNftLabel} de vao
+                    tran
                   </h4>
                 </div>
                 <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-black text-slate-500">
@@ -876,7 +890,8 @@ export default function PvPScreen() {
                 })}
                 {eligibleLobbyNfts.length === 0 && (
                   <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm font-bold text-slate-500">
-                    Ban chua co NFT {selectedBettingLobby.requiredNftLabel} phu hop voi sanh nay.
+                    Ban chua co NFT {selectedBettingLobby.requiredNftLabel} phu
+                    hop voi sanh nay.
                   </div>
                 )}
               </div>
@@ -918,8 +933,8 @@ export default function PvPScreen() {
               Da tim thay doi thu
             </h3>
             <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-emerald-100/80">
-              Bay gio moi nguoi khoa 1 NFT cung tier. Phan
-              escrow on-chain duoc xu ly tu dong theo vai tro cua ban.
+              Bay gio moi nguoi khoa 1 NFT cung tier. Phan escrow on-chain duoc
+              xu ly tu dong theo vai tro cua ban.
             </p>
           </div>
 
@@ -1136,7 +1151,7 @@ export default function PvPScreen() {
                           escrowSubmitting ||
                           Boolean(
                             emergencyRefundReadyAt &&
-                              emergencyRefundRemainingMs > 0,
+                            emergencyRefundRemainingMs > 0,
                           )
                         }
                         className="rounded-full border-2 border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-800 disabled:opacity-60"
@@ -1224,18 +1239,36 @@ export default function PvPScreen() {
             <div className="bg-white/90 backdrop-blur rounded-[28px] border border-emerald-200 shadow-[0_18px_40px_rgba(16,185,129,0.16)] p-6">
               <div className="flex items-center gap-3 mb-4">
                 <ShieldCheck className="size-6 text-emerald-600" />
-                <h3 className="font-black text-2xl text-gray-900">
-                  Cach choi
-                </h3>
+                <h3 className="font-black text-2xl text-gray-900">Cach choi</h3>
               </div>
               <div className="space-y-3">
                 {[
-                  ["1", "Chon sanh", "Moi sanh yeu cau NFT cung tier: Dong, Bac hoac Vang."],
+                  [
+                    "1",
+                    "Chon sanh",
+                    "Moi sanh yeu cau NFT cung tier: Dong, Bac hoac Vang.",
+                  ],
                   ["2", "Chon NFT", "NFT nay se duoc khoa vao escrow."],
-                  ["3", "Tim tran", "Backend chi ghep nguoi choi trong cung sanh NFT."],
-                  ["4", "Khoa NFT", "Sau khi match, moi ben bam 1 nut de khoa NFT on-chain."],
-                  ["5", "Ban chun", "Hai ben thi dau ban chun realtime va bao ket qua tran."],
-                  ["6", "Nhan thuong", "Backend ky winner tu ket qua tran de claim escrow on-chain."],
+                  [
+                    "3",
+                    "Tim tran",
+                    "Backend chi ghep nguoi choi trong cung sanh NFT.",
+                  ],
+                  [
+                    "4",
+                    "Khoa NFT",
+                    "Sau khi match, moi ben bam 1 nut de khoa NFT on-chain.",
+                  ],
+                  [
+                    "5",
+                    "Ban chun",
+                    "Hai ben thi dau ban chun realtime va bao ket qua tran.",
+                  ],
+                  [
+                    "6",
+                    "Nhan thuong",
+                    "Backend ky winner tu ket qua tran de claim escrow on-chain.",
+                  ],
                 ].map(([step, title, copy]) => (
                   <div
                     key={step}
@@ -1281,7 +1314,7 @@ export default function PvPScreen() {
                       escrowSubmitting ||
                       Boolean(
                         emergencyRefundReadyAt &&
-                          emergencyRefundRemainingMs > 0,
+                        emergencyRefundRemainingMs > 0,
                       )
                     }
                     className="mt-3 rounded-full border-2 border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-800 disabled:opacity-60"
