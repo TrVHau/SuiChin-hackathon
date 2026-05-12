@@ -137,6 +137,10 @@ export default function PvPScreen() {
   const selectedLobbyNft = cuonChuns.find(
     (item) => item.objectId === selectedLobbyNfts[0],
   );
+  const ownedNftIdSet = useMemo(
+    () => new Set(cuonChuns.map((item) => item.objectId)),
+    [cuonChuns],
+  );
 
   const toValuationNft = (nft: typeof selectedLobbyNft): ValuationNft | null =>
     nft
@@ -149,18 +153,25 @@ export default function PvPScreen() {
       : null;
 
   const validateSelectedLobbyNfts = (): boolean => {
-    const ownedIds = new Set(cuonChuns.map((item) => item.objectId));
-    const invalid = selectedLobbyNfts.filter((id) => !ownedIds.has(id));
+    const invalid = selectedLobbyNfts.filter((id) => !ownedNftIdSet.has(id));
 
     if (invalid.length === 0) {
       return true;
     }
 
-    setSelectedLobbyNfts((prev) => prev.filter((id) => ownedIds.has(id)));
+    setSelectedLobbyNfts((prev) => prev.filter((id) => ownedNftIdSet.has(id)));
     toast.error(
       "Một số NFT đã không còn thuộc ví hiện tại (có thể đang bị khóa escrow). Hãy chọn lại NFT.",
     );
     return false;
+  };
+
+  const resolveLockedNftIds = (): string[] => {
+    const preferredId = pvp.myNft?.id;
+    if (preferredId && ownedNftIdSet.has(preferredId)) {
+      return [preferredId];
+    }
+    return selectedLobbyNfts.filter((id) => ownedNftIdSet.has(id));
   };
 
   const cancelLobbyRoomTx = async (roomId: string): Promise<boolean> => {
@@ -258,9 +269,8 @@ export default function PvPScreen() {
   const estimatedLobbyTotalPoints = selectedLobbyNFTPoints;
 
   useEffect(() => {
-    const ownedIds = new Set(cuonChuns.map((item) => item.objectId));
-    setSelectedLobbyNfts((prev) => prev.filter((id) => ownedIds.has(id)));
-  }, [cuonChuns]);
+    setSelectedLobbyNfts((prev) => prev.filter((id) => ownedNftIdSet.has(id)));
+  }, [ownedNftIdSet]);
 
   useEffect(() => {
     setSelectedLobbyNfts([]);
@@ -454,7 +464,23 @@ export default function PvPScreen() {
     });
 
     const event = txBlock.events?.find((item) => item.type === eventType);
-    return event?.parsedJson as Record<string, unknown> | undefined;
+    const roomCreated = (txBlock.objectChanges ?? []).find(
+      (change) =>
+        change.type === "created" &&
+        String(("objectType" in change ? change.objectType : "") ?? "").includes(
+          "::nft_valuation_lobby::Room",
+        ),
+    );
+
+    const fallbackRoomId =
+      roomCreated && "objectId" in roomCreated
+        ? String(roomCreated.objectId ?? "")
+        : "";
+
+    return {
+      parsed: event?.parsedJson as Record<string, unknown> | undefined,
+      fallbackRoomId,
+    };
   };
 
   const createLobbyRoom = async () => {
@@ -488,7 +514,7 @@ export default function PvPScreen() {
       return;
     }
 
-    const lockedNftIds = pvp.myNft?.id ? [pvp.myNft.id] : selectedLobbyNfts;
+    const lockedNftIds = resolveLockedNftIds();
     if (lockedNftIds.length === 0) {
       toast.error("Chọn ít nhất một NFT để khóa vào phòng.");
       return;
@@ -521,11 +547,11 @@ export default function PvPScreen() {
       {
         onSuccess: async (result) => {
           try {
-            const parsed = await parseRoomEvent(
+            const { parsed, fallbackRoomId } = await parseRoomEvent(
               result.digest,
               `${LOBBY_PACKAGE_ID}::nft_valuation_lobby::RoomCreated`,
             );
-            const roomId = String(parsed?.room_id ?? "");
+            const roomId = String(parsed?.room_id ?? fallbackRoomId ?? "");
             setCreatedRoomId(roomId || null);
             if (roomId) {
               setJoinRoomId(roomId);
@@ -571,7 +597,19 @@ export default function PvPScreen() {
       return;
     }
 
-    const lockedNftIds = pvp.myNft?.id ? [pvp.myNft.id] : selectedLobbyNfts;
+    if (roomStatus === 1 && (createdRoomId === targetRoomId || joinRoomId.trim() === targetRoomId)) {
+      notifyRoomJoined(targetRoomId);
+      toast.info("Room da ACTIVE. Dang dong bo de vao tran.");
+      return;
+    }
+
+    if (pvp.myNft?.id && !ownedNftIdSet.has(pvp.myNft.id)) {
+      notifyRoomJoined(targetRoomId);
+      toast.info("NFT cua ban da duoc khoa vao room. Dang dong bo tran dau...");
+      return;
+    }
+
+    const lockedNftIds = resolveLockedNftIds();
     if (lockedNftIds.length === 0) {
       toast.error("Chọn NFT để join phòng.");
       return;
@@ -592,35 +630,44 @@ export default function PvPScreen() {
       { transaction: tx },
       {
         onSuccess: async (result) => {
+          let joinedRoomId = targetRoomId;
           try {
-            const parsed = await parseRoomEvent(
+            const { parsed, fallbackRoomId } = await parseRoomEvent(
               result.digest,
               `${LOBBY_PACKAGE_ID}::nft_valuation_lobby::RoomJoined`,
             );
-            const joinedRoomId = String(parsed?.room_id ?? targetRoomId);
-            if (joinedRoomId) {
-              setCreatedRoomId(joinedRoomId);
-              setJoinRoomId(joinedRoomId);
-              setSelectedLobbyNfts([]);
-              notifyRoomJoined(joinedRoomId);
-            }
-            toast.success(
-              parsed?.room_id
-                ? `Đã join phòng escrow: ${String(parsed.room_id).slice(0, 16)}...`
-                : "Đã join phòng escrow on-chain.",
-              { id: "lobby-join" },
-            );
+            joinedRoomId = String(parsed?.room_id ?? fallbackRoomId ?? targetRoomId);
           } catch (error) {
             console.error(error);
-            toast.success("Đã gửi tx join phòng escrow on-chain.", {
-              id: "lobby-join",
-            });
           }
+          if (joinedRoomId) {
+            setCreatedRoomId(joinedRoomId);
+            setJoinRoomId(joinedRoomId);
+            setSelectedLobbyNfts([]);
+            notifyRoomJoined(joinedRoomId);
+          }
+          toast.success(
+            joinedRoomId
+              ? `Đã join phòng escrow: ${joinedRoomId.slice(0, 16)}...`
+              : "Đã join phòng escrow on-chain.",
+            { id: "lobby-join" },
+          );
           setEscrowSubmitting(false);
         },
         onError: (error) => {
+          const message = String(error?.message ?? error);
+          if (message.includes("owned by object")) {
+            setCreatedRoomId(targetRoomId);
+            setJoinRoomId(targetRoomId);
+            notifyRoomJoined(targetRoomId);
+            toast.info("NFT nay da duoc khoa vao room. Dang dong bo de vao tran.", {
+              id: "lobby-join",
+            });
+            setEscrowSubmitting(false);
+            return;
+          }
           toast.error(
-            `Join phòng escrow thất bại: ${String(error?.message ?? error)}`,
+            `Join phòng escrow thất bại: ${message}`,
             {
               id: "lobby-join",
             },

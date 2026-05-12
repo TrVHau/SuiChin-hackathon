@@ -3,9 +3,9 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { Target, Trophy } from "lucide-react";
-import GameCanvas from "../components/GameCanvas";
+import GameCanvas, { type PvPRemoteShot, type PvPShot, type Turn } from "../components/GameCanvas";
 import { useGame } from "@/providers/GameContext";
-import { usePvP, type PvPRemoteShot, type PvPShot, type Turn } from "@/hooks/usePvP";
+import { usePvP } from "@/hooks/usePvP";
 
 type Phase = "playing" | "submitting" | "resolved";
 

@@ -187,26 +187,27 @@ export function usePvP(_profileId: string | undefined) {
   const setMatchFoundFromEvent = useCallback(
     (event: MatchFoundEvent) => {
       const myWallet = account?.address ?? "";
-      const opponentWallet =
-        myWallet === event.creator ? event.joiner : event.creator;
+      const isMe = (wallet?: string | null) =>
+        Boolean(
+          myWallet && wallet && wallet.toLowerCase() === myWallet.toLowerCase(),
+        );
+      const opponentWallet = isMe(event.creator) ? event.joiner : event.creator;
 
       setPvP((prev) => ({
         ...prev,
         status: "awaiting_deposit",
         tempRoomId: event.roomId,
         roomId: null,
-        role: myWallet === event.creator ? "CREATOR" : "JOINER",
+        role: isMe(event.creator) ? "CREATOR" : "JOINER",
         challengeId: event.challengeId,
         opponent: opponentWallet,
         betTier: event.tier ?? prev.betTier,
-        myNft:
-          myWallet === event.creator
-            ? event.creatorNft ?? prev.myNft
-            : event.joinerNft ?? prev.myNft,
-        opponentNft:
-          myWallet === event.creator
-            ? event.joinerNft ?? null
-            : event.creatorNft ?? null,
+        myNft: isMe(event.creator)
+          ? (event.creatorNft ?? prev.myNft)
+          : (event.joinerNft ?? prev.myNft),
+        opponentNft: isMe(event.creator)
+          ? (event.joinerNft ?? null)
+          : (event.creatorNft ?? null),
       }));
 
       toast.success("Da tim thay doi thu. Hay khoa NFT vao escrow.");
@@ -217,8 +218,18 @@ export function usePvP(_profileId: string | undefined) {
   const setMatchedFromEvent = useCallback(
     (event: MatchStartEvent) => {
       const myWallet = account?.address ?? "";
+      const findNftByWallet = (wallet?: string | null) => {
+        if (!wallet) return undefined;
+        if (event.nfts?.[wallet]) return event.nfts[wallet];
+        const matchedEntry = Object.entries(event.nfts ?? {}).find(
+          ([address]) => address.toLowerCase() === wallet.toLowerCase(),
+        );
+        return matchedEntry?.[1];
+      };
       const opponentWallet =
-        event.players.find((wallet) => wallet !== myWallet) ?? null;
+        event.players.find(
+          (wallet) => wallet.toLowerCase() !== myWallet.toLowerCase(),
+        ) ?? null;
 
       setPvP((prev) => ({
         ...prev,
@@ -227,9 +238,9 @@ export function usePvP(_profileId: string | undefined) {
         challengeId: event.challengeId,
         opponent: opponentWallet,
         betTier: event.tier ?? prev.betTier,
-        myNft: event.nfts?.[myWallet] ?? prev.myNft,
+        myNft: findNftByWallet(myWallet) ?? prev.myNft,
         opponentNft:
-          (opponentWallet ? event.nfts?.[opponentWallet] : undefined) ??
+          (opponentWallet ? findNftByWallet(opponentWallet) : undefined) ??
           prev.opponentNft,
         scores: [0, 0],
         currentTurnWallet: null,
@@ -339,7 +350,12 @@ export function usePvP(_profileId: string | undefined) {
           };
         });
 
-        if (event.winnerWallet === account.address) {
+        const myAddress = account?.address;
+        if (
+          event.winnerWallet &&
+          myAddress &&
+          event.winnerWallet.toLowerCase() === myAddress.toLowerCase()
+        ) {
           toast.success("Ban thang!");
         } else if (!event.winnerWallet) {
           toast.info("Tran dau hoa");
@@ -356,7 +372,8 @@ export function usePvP(_profileId: string | undefined) {
             currentTurnWallet: event.currentTurnWallet,
             myTurn:
               Boolean(account?.address) &&
-              event.currentTurnWallet === account?.address,
+              event.currentTurnWallet.toLowerCase() ===
+                account?.address?.toLowerCase(),
           };
         });
       });
@@ -378,7 +395,8 @@ export function usePvP(_profileId: string | undefined) {
             currentTurnWallet: event.nextTurnWallet,
             myTurn:
               Boolean(account?.address) &&
-              event.nextTurnWallet === account?.address,
+              event.nextTurnWallet.toLowerCase() ===
+                account?.address?.toLowerCase(),
           };
         });
       });
@@ -397,7 +415,13 @@ export function usePvP(_profileId: string | undefined) {
         });
       });
     },
-    [account, pvp.status, safeDisconnect, setMatchFoundFromEvent, setMatchedFromEvent],
+    [
+      account,
+      pvp.status,
+      safeDisconnect,
+      setMatchFoundFromEvent,
+      setMatchedFromEvent,
+    ],
   );
 
   const leaveQueue = useCallback(() => {
@@ -446,7 +470,10 @@ export function usePvP(_profileId: string | undefined) {
       if (!pvp.challengeId) return;
       if (pvp.submittedResult) return;
 
-      const result: MatchResult = winnerId === account.address ? "WIN" : "LOSE";
+      const result: MatchResult =
+        winnerId.toLowerCase() === account.address.toLowerCase()
+          ? "WIN"
+          : "LOSE";
       const challengeId = pvp.challengeId;
 
       setPvP((prev) => ({
