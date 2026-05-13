@@ -1036,15 +1036,22 @@ export default function PvPScreen() {
   const isMe = (address: string) => sameAddress(address, account?.address);
 
   const settleOnChain = async () => {
+    if (!pvp.winner || !isMe(pvp.winner)) {
+      toast.error("Chỉ winner mới được settle on-chain.");
+      return;
+    }
+
+    const requestedRoomId =
+      pvp.settlementPayload?.roomId ||
+      pvp.roomId ||
+      joinRoomId.trim() ||
+      createdRoomId ||
+      undefined;
     let payload =
-      (await refreshSettlementPayload(createdRoomId ?? undefined)) ??
+      (await refreshSettlementPayload(requestedRoomId)) ??
       pvp.settlementPayload;
     if (!payload) {
       toast.error("Backend chưa cung cấp settlement payload.");
-      return;
-    }
-    if (!pvp.winner || !isMe(pvp.winner)) {
-      toast.error("Chỉ winner mới được settle on-chain.");
       return;
     }
     if (!sameAddress(payload.winner, account?.address)) {
@@ -1052,7 +1059,7 @@ export default function PvPScreen() {
       return;
     }
 
-    const settleRoomId = payload.roomId || createdRoomId || joinRoomId.trim();
+    const settleRoomId = payload.roomId || requestedRoomId;
     if (!settleRoomId) {
       toast.error("Không xác định được room để settle.");
       return;
@@ -1067,8 +1074,21 @@ export default function PvPScreen() {
       return;
     }
     if (roomSnapshot.status !== 1) {
+      if (roomSnapshot.status === 2) {
+        window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
+        setSavedEscrowRoomId(null);
+        setCreatedRoomId(null);
+        setJoinRoomId("");
+        setEscrowLocked(false);
+        setRoomStatus(2);
+        setRoomDeadlineMs(null);
+        toast.success("Room đã SETTLED on-chain. NFT đã được chốt theo kết quả.", {
+          id: "lobby-settle",
+        });
+        return;
+      }
       toast.error(
-        "Room không còn ở trạng thái ACTIVE. Hãy đồng bộ lại phòng trước khi settle.",
+        `Room không còn ACTIVE (status ${roomSnapshot.status}). Không thể settle room này.`,
       );
       return;
     }
