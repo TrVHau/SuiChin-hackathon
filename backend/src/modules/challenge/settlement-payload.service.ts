@@ -1,6 +1,7 @@
 import { bcs } from "@mysten/sui/bcs";
 import { decodeSuiPrivateKey } from "@mysten/sui/cryptography";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+import { Transaction } from "@mysten/sui/transactions";
 import { fromBase64, normalizeSuiAddress, toBase64 } from "@mysten/sui/utils";
 import { env } from "../../config/env.js";
 import { logger } from "../../shared/logger.js";
@@ -205,6 +206,56 @@ export class SettlementPayloadService {
     const signatureBytes = await this.keypair.sign(messageBytes);
     const signerPubkey = Array.from(this.keypair.getPublicKey().toRawBytes());
 
+    const simulateSettlement = async () => {
+      if (!env.LOBBY_CONFIG_OBJECT_ID) {
+        return { status: "skipped", error: "Missing LOBBY_CONFIG_OBJECT_ID" };
+      }
+
+      try {
+        const tx = new Transaction();
+        tx.setSender(normalizeSuiAddress(input.winner));
+        tx.moveCall({
+          target: `${config.packageId}::nft_valuation_lobby::settle_room_with_signature`,
+          arguments: [
+            tx.object(env.LOBBY_CONFIG_OBJECT_ID),
+            tx.object(normalizeSuiAddress(input.roomId)),
+            tx.pure.address(normalizeSuiAddress(input.winner)),
+            tx.pure.address(normalizeSuiAddress(input.loser)),
+            tx.pure.vector("u8", input.matchDigest),
+            tx.pure.u64(String(room.nonce)),
+            tx.pure.u64(String(deadlineMs)),
+            tx.pure.vector("u8", Array.from(signatureBytes)),
+            tx.pure.vector("u8", signerPubkey),
+            tx.object("0x6"),
+          ],
+        });
+
+        const kindBytes = await tx.build({
+          client: suiClient,
+          onlyTransactionKind: true,
+        });
+        const inspect = await suiClient.devInspectTransactionBlock({
+          sender: normalizeSuiAddress(input.winner),
+          transactionBlock: kindBytes,
+        });
+
+        return {
+          status: inspect.effects?.status?.status ?? "unknown",
+          error:
+            inspect.effects?.status?.status === "failure"
+              ? inspect.effects?.status?.error
+              : undefined,
+        };
+      } catch (error) {
+        return {
+          status: "error",
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    };
+
+    const simulation = await simulateSettlement();
+
     const roomSignerMatches =
       signerPubkey.length === room.signerPubkey.length &&
       signerPubkey.every((byte, index) => byte === room.signerPubkey[index]);
@@ -236,6 +287,8 @@ export class SettlementPayloadService {
         signerPubkeyB64: toBase64(new Uint8Array(signerPubkey)),
         messageB64: Buffer.from(messageBytes).toString("base64"),
         signatureB64: Buffer.from(signatureBytes).toString("base64"),
+        devInspectStatus: simulation.status,
+        devInspectError: simulation.error,
       },
       "Built settlement payload",
     );
