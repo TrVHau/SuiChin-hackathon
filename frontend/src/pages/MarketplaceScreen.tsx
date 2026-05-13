@@ -32,7 +32,7 @@ export default function MarketplaceScreen() {
   const navigate = useNavigate();
   const handleBack = () => navigate("/dashboard");
   const account = useCurrentAccount();
-  const currentWallet = useCurrentWallet();
+  const { currentWallet } = useCurrentWallet();
   const { mutate: disconnectWallet } = useDisconnectWallet();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const {

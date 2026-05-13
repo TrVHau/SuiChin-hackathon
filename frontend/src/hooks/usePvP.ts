@@ -79,6 +79,7 @@ export interface SettlementPayload {
   signerPubkey: number[];
   debugMessageB64?: string;
   debugSignatureB64?: string;
+  fallbackPayloads?: SettlementPayload[];
 }
 
 interface MatchTurnEvent {

@@ -29,6 +29,9 @@ export interface SettlementPayload {
   deadlineMs: number;
   signature: number[];
   signerPubkey: number[];
+  debugMessageB64?: string;
+  debugSignatureB64?: string;
+  fallbackPayloads?: SettlementPayload[];
 }
 
 interface ParsedRoomData {
@@ -39,6 +42,7 @@ interface ParsedRoomData {
 
 interface ParsedLobbyConfig {
   chainId: number;
+  packageId: string | null;
 }
 
 function tryNormalizeAddress(value: string | null | undefined): string | null {
@@ -154,7 +158,7 @@ async function getLobbyConfig(): Promise<ParsedLobbyConfig> {
   });
 
   const content = configObject.data?.content as
-    | { fields?: Record<string, unknown> }
+    | { type?: string; fields?: Record<string, unknown> }
     | undefined;
   const fields = content?.fields;
   if (!fields) {
@@ -167,7 +171,14 @@ async function getLobbyConfig(): Promise<ParsedLobbyConfig> {
     throw new Error("Invalid LobbyConfig chain_id");
   }
 
-  return { chainId };
+  return {
+    chainId,
+    packageId: tryNormalizeAddress(content?.type?.split("::")?.[0] ?? null),
+  };
+}
+
+function uniquePackageIds(ids: Array<string | null | undefined>): string[] {
+  return [...new Set(ids.filter(Boolean) as string[])];
 }
 
 export class SettlementPayloadService {
@@ -191,21 +202,7 @@ export class SettlementPayloadService {
 
     const nowMs = Date.now();
     const deadlineMs = nowMs + env.LOBBY_SETTLEMENT_TTL_MS;
-    const messageBytes = SettlementMessageBcs.serialize({
-      intent_scope: SETTLEMENT_INTENT_SCOPE,
-      chain_id: config.chainId,
-      package_id: room.packageId,
-      room_id: normalizeSuiAddress(input.roomId),
-      winner: normalizeSuiAddress(input.winner),
-      loser: normalizeSuiAddress(input.loser),
-      match_digest: input.matchDigest,
-      nonce: String(room.nonce),
-      deadline_ms: String(deadlineMs),
-    }).toBytes();
-
-    const signatureBytes = await this.keypair.sign(messageBytes);
     const signerPubkey = Array.from(this.keypair.getPublicKey().toRawBytes());
-
     const roomSignerMatches =
       signerPubkey.length === room.signerPubkey.length &&
       signerPubkey.every((byte, index) => byte === room.signerPubkey[index]);
@@ -215,15 +212,55 @@ export class SettlementPayloadService {
       );
     }
 
+    const roomId = normalizeSuiAddress(input.roomId);
+    const winner = normalizeSuiAddress(input.winner);
+    const loser = normalizeSuiAddress(input.loser);
+    const envPackageId = tryNormalizeAddress(
+      env.LOBBY_PACKAGE_ID || env.SUI_PACKAGE_ID,
+    );
+    const packageIds = uniquePackageIds([
+      room.packageId,
+      config.packageId,
+      envPackageId,
+    ]);
+    const buildForPackage = async (packageId: string): Promise<SettlementPayload> => {
+      const messageBytes = SettlementMessageBcs.serialize({
+        intent_scope: SETTLEMENT_INTENT_SCOPE,
+        chain_id: config.chainId,
+        package_id: packageId,
+        room_id: roomId,
+        winner,
+        loser,
+        match_digest: input.matchDigest,
+        nonce: String(room.nonce),
+        deadline_ms: String(deadlineMs),
+      }).toBytes();
+      const signatureBytes = await this.keypair.sign(messageBytes);
+      return {
+        roomId,
+        winner,
+        loser,
+        matchDigest: input.matchDigest,
+        nonce: room.nonce,
+        deadlineMs,
+        signature: Array.from(signatureBytes),
+        signerPubkey,
+        debugMessageB64: Buffer.from(messageBytes).toString("base64"),
+        debugSignatureB64: Buffer.from(signatureBytes).toString("base64"),
+      };
+    };
+
+    const [primaryPackageId, ...fallbackPackageIds] = packageIds;
+    if (!primaryPackageId) {
+      throw new Error("No package id candidates for settlement signing");
+    }
+    const primaryPayload = await buildForPackage(primaryPackageId);
+    const fallbackPayloads = await Promise.all(
+      fallbackPackageIds.map((packageId) => buildForPackage(packageId)),
+    );
     return {
-      roomId: normalizeSuiAddress(input.roomId),
-      winner: normalizeSuiAddress(input.winner),
-      loser: normalizeSuiAddress(input.loser),
-      matchDigest: input.matchDigest,
-      nonce: room.nonce,
-      deadlineMs,
-      signature: Array.from(signatureBytes),
-      signerPubkey,
+      ...primaryPayload,
+      fallbackPayloads,
     };
   }
 }
