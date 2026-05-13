@@ -272,16 +272,20 @@ export default function PvPScreen() {
           return;
         }
       } else if (roomStatus === 1) {
+        // Room ACTIVE - preserve room state in sessionStorage so user can come back
+        if (createdRoomId) {
+          window.sessionStorage.setItem(ESCROW_ROOM_STORAGE_KEY, createdRoomId);
+        }
+        
         const refundText =
           emergencyRefundRemainingMs > 0
-            ? `Emergency refund khả dụng sau ${emergencyRefundRemainingMin} phút. NFT sẽ được hoàn tự động.`
-            : `Bấm nút "Emergency refund" bên dưới để hoàn NFT ngay.`;
+            ? `Emergency refund khả dụng sau ${emergencyRefundRemainingMin} phút.`
+            : `Bấm "Emergency refund" để hoàn NFT ngay.`;
 
-        toast.error(
-          `⚠️ Room ACTIVE - NFT bị khóa trong escrow. ${refundText}`,
-          { duration: 10000 },
+        toast.info(
+          `📌 Phòng đã lưu. ${refundText} Quay lại sau để kiểm tra kết quả.`,
+          { duration: 6000 },
         );
-        return;
       }
     }
 
@@ -466,7 +470,7 @@ export default function PvPScreen() {
           setRoomCreator(
             typeof fields.creator === "string" ? fields.creator : null,
           );
-          
+
           // If backend missed a socket event, resync room state via role-specific notify.
           if (
             pvp.status === "awaiting_deposit" &&
@@ -686,7 +690,7 @@ export default function PvPScreen() {
                 "NFT đã được khóa từ trước. Đang đồng bộ lại room escrow hiện có.",
                 { id: "lobby-escrow" },
               );
-            }else {
+            } else {
               toast.error(
                 "NFT đã bị khóa trong escrow nhưng không đọc được room ID để đồng bộ.",
                 { id: "lobby-escrow" },
@@ -955,8 +959,45 @@ export default function PvPScreen() {
 
   const renderContent = () => {
     if (pvp.status === "idle" || pvp.status === "error") {
+      const pendingRoomId = joinRoomId.trim() || 
+        (createdRoomId && roomStatus === 1 ? createdRoomId : null);
+      
       return (
-        <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_18px_48px_rgba(15,23,42,0.12)]">
+        <div className="space-y-4">
+          {pendingRoomId && (
+            <div className="rounded-[28px] border border-amber-200 bg-amber-50 p-6 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-black uppercase text-amber-700">
+                    ⚠️ Phòng đang chờ
+                  </p>
+                  <p className="mt-2 text-base font-bold text-amber-900">
+                    Có phòng ACTIVE đang chờ kết quả. Bấm vào để quay lại.
+                  </p>
+                  <p className="mt-1 text-xs text-amber-800">
+                    Room: {pendingRoomId.slice(0, 12)}...
+                    {emergencyRefundRemainingMs > 0 && (
+                      <span> • Emergency refund sau {emergencyRefundRemainingMin}p</span>
+                    )}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    // Reconnect to the room by joining the queue with the saved room ID
+                    const targetRoom = createdRoomId || joinRoomId.trim();
+                    if (targetRoom) {
+                      connectRoomSocket(targetRoom);
+                    }
+                  }}
+                  className="shrink-0 rounded-xl bg-amber-600 px-4 py-3 font-black text-white hover:bg-amber-700 transition-colors text-sm"
+                >
+                  Quay lại
+                </button>
+              </div>
+            </div>
+          )}
+          
+          <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_18px_48px_rgba(15,23,42,0.12)]">
           <div className="border-b border-slate-200 bg-slate-950 px-6 py-5 text-white md:px-8">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
@@ -1191,12 +1232,12 @@ export default function PvPScreen() {
               {roomStatus === 1
                 ? "Room da ACTIVE. Dang vao tran..."
                 : escrowLocked
-                ? "Da khoa NFT. Dang cho doi thu..."
-                : isCreator
-                  ? "Khoa NFT vao escrow"
-                  : roomReadyForJoiner
+                  ? "Da khoa NFT. Dang cho doi thu..."
+                  : isCreator
                     ? "Khoa NFT vao escrow"
-                    : "Dang chuan bi escrow cho ban..."}
+                    : roomReadyForJoiner
+                      ? "Khoa NFT vao escrow"
+                      : "Dang chuan bi escrow cho ban..."}
             </button>
 
             <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold leading-6 text-emerald-900">
