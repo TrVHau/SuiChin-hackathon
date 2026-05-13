@@ -1,226 +1,206 @@
 # SuiChin
 
-> **Game búng chun Web3 trên Sui Blockchain**  
-> Chơi game → kiếm Chun Raw → craft NFT → trade-up → PvP → bán trên marketplace.
+> Game búng chun Web3 trên Sui, kết hợp gameplay off-chain với quyền sở hữu tài sản on-chain.
 
 ![Sui](https://img.shields.io/badge/Sui-Testnet-blue) ![Move](https://img.shields.io/badge/Sui_Move-2024-blueviolet) ![React](https://img.shields.io/badge/React-18-61dafb) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6)
 
----
+## Tổng quan
 
-## Giới thiệu
+SuiChin là một game bắn chun 2D có tích hợp blockchain. Phần gameplay, UI, matchmaking và xử lý session diễn ra off-chain để phản hồi nhanh; phần tài sản, kinh tế game và xác thực giao dịch được quản lý bởi Sui Move.
 
-SuiChin là game **bắn chun 2D** (marble flicking) có tích hợp blockchain. Gameplay chạy hoàn toàn off-chain (không tốn gas), còn quyền sở hữu tài sản và kinh tế game được đảm bảo bởi **Sui Blockchain**.
+Luồng chính của dự án:
 
-**Vòng lặp chính:**
-
-```
-Chơi game / Faucet  →  Chun Raw  →  Craft NFT  →  Trade-Up  →  Marketplace / PvP
+```text
+Chơi game / Faucet -> Chun Raw -> Craft NFT -> Trade-Up -> Marketplace / PvP -> Achievement
 ```
 
-- Không token riêng, không lợi nhuận hứa hẹn
-- Blockchain làm đúng 1 việc: **chứng minh quyền sở hữu và thực thi giao dịch**
+Các mảng chính trong repo hiện tại:
 
----
+- Frontend React + TypeScript + Vite cho dashboard, workshop, inventory, trade-up, marketplace, PvP và achievements.
+- Backend Node.js + Express cho challenge, matchmaking, indexer API, valuation room và websocket multiplayer.
+- Smart contract Sui Move cho profile, craft, NFT, marketplace, achievement và lobby định giá NFT.
 
-## Tính năng
+## Tính năng hiện có
 
-| Tính năng             | Mô tả                                                                      |
-| --------------------- | -------------------------------------------------------------------------- |
-| **Game bắn chun**     | Physics-based marble game, đấu bot off-chain                               |
-| **Faucet on-chain**   | Nhận 1 Chun Raw mỗi 2 giờ, stack tối đa 10                                 |
-| **Craft NFT**         | Tiêu Chun Raw + SUI → Cuộn Chun NFT (Bronze / Silver / Gold)               |
-| **Halving**           | Chi phí craft tăng theo cơ chế halving (×2 mỗi 1.000 craft, tối đa 640)    |
-| **NFT Variants**      | Mỗi tier có nhiều skin: Bronze 4 skins, Silver 4 skins, Gold 3 skins       |
-| **Trade-Up**          | Burn 8 Bronze → 70% Silver; Burn 6 Silver → 55% Gold                       |
-| **Marketplace**       | Escrow on-chain, mua bán bằng SUI                                          |
-| **PvP Matchmaking**   | Khoá Chun NFT, đấu realtime qua WebSocket, thắng nhận phần thưởng on-chain |
-| **Achievement Badge** | Soulbound NFT mở khoá theo streak thắng                                    |
+| Tính năng           | Mô tả                                                                                     |
+| ------------------- | ----------------------------------------------------------------------------------------- |
+| Game bắn chun       | Màn chơi off-chain, điều khiển qua React UI và game state riêng.                          |
+| Chun Raw on-chain   | Lưu trong `PlayerProfile`, dùng cho craft và các luồng kinh tế.                           |
+| Craft NFT           | Tiêu Chun Raw + SUI để mint `CuonChunNFT` hoặc Scrap.                                     |
+| Trade-Up            | Nâng tier NFT bằng cách burn input và mint kết quả mới.                                   |
+| Marketplace         | List, mua, hủy listing NFT qua escrow on-chain.                                           |
+| PvP / Challenge     | Tạo challenge, ghép trận, xác nhận kết quả và finalize qua backend.                       |
+| Achievement         | Mint badge theo milestone streak.                                                         |
+| NFT Valuation Lobby | Cấu hình lobby, signer allowlist, settlement và refund khẩn cấp.                          |
+| Indexer API         | Cung cấp leaderboard, profile summary, inventory, lịch sử craft/match, floor marketplace. |
 
----
+## Kiến trúc ngắn gọn
 
-## Tài sản on-chain
+| Khối            | Vai trò                                                                                                                                                         |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend        | Login, dashboard, workshop, inventory, trade-up, marketplace, PvP và achievements.                                                                              |
+| Backend         | API challenge, matchmaking socket, indexer REST, room proof, settlement orchestration.                                                                          |
+| Contract        | `player_profile`, `craft`, `craft_config`, `cuon_chun`, `scrap`, `trade_up`, `marketplace`, `achievement`, `nft_valuation_lobby`, `nft_valuation_lobby_config`. |
+| Storage backend | Có thể chạy memory hoặc Prisma/Postgres tùy biến môi trường.                                                                                                    |
+| Matchmaking     | Có thể chạy memory hoặc Redis.                                                                                                                                  |
+| Chain adapter   | Có thể chạy mock hoặc `sui_cli`.                                                                                                                                |
 
-| Tài sản              | Nơi lưu                            | Vai trò                            |
-| -------------------- | ---------------------------------- | ---------------------------------- |
-| **Chun Raw**         | `PlayerProfile` (per wallet)       | Nguyên liệu craft                  |
-| **Cuộn Chun NFT**    | Sui owned object                   | Tài sản chính (3 tier, nhiều skin) |
-| **Scrap**            | Sui owned object                   | Byproduct craft/trade-up thất bại  |
-| **AchievementBadge** | Sui soulbound object               | Danh hiệu streak                   |
-| **MatchOracle**      | Sui shared object (backend wallet) | Ký kết quả PvP on-chain            |
+## Kho contract Move
 
----
+| Module                            | Mục đích                                                      |
+| --------------------------------- | ------------------------------------------------------------- |
+| `player_profile.move`             | Profile người chơi, Chun Raw, streak, faucet, PvP state.      |
+| `craft.move`                      | Facade cho craft, treasury, config và recycle.                |
+| `craft_treasury.move`             | Treasury, payout, redeem và cơ chế halving.                   |
+| `craft_config.move`               | Cấu hình craft, recycle, pool contribution, pause và version. |
+| `craft_actions.move`              | RNG, mint/burn, recycle và fuse logic.                        |
+| `cuon_chun.move`                  | NFT chính của game.                                           |
+| `scrap.move`                      | NFT phụ khi craft/trade-up thất bại.                          |
+| `trade_up.move`                   | Burn input NFT và mint reward theo xác suất.                  |
+| `marketplace.move`                | Escrow marketplace cho NFT.                                   |
+| `achievement.move`                | Badge thành tích dạng soulbound NFT.                          |
+| `nft_valuation_lobby_config.move` | Cấu hình lobby định giá NFT và signer allowlist.              |
+| `nft_valuation_lobby.move`        | Tạo room, deposit, settle và refund NFT valuation lobby.      |
 
-## Kinh tế học
+Tài liệu mô tả công dụng từng hàm: [docs/contract-functions.md](docs/contract-functions.md)
 
-### Nguồn tạo Chun Raw
+## Frontend
 
-- **Thắng ván** — `report_result()` cộng `1 + streak` chun (tối đa 20/ván, cooldown 10s)
-- **Faucet** — `claim_faucet()` cộng 1 chun mỗi 2 giờ, stack tối đa 10
+Các route chính của app:
 
-### Chi phí craft (Halving)
+- `/login`
+- `/dashboard`
+- `/workshop`
+- `/inventory`
+- `/trade-up`
+- `/marketplace`
+- `/pvp`
+- `/session`
+- `/achievements`
 
-| Tổng craft    | Bước | Chi phí            |
-| ------------- | ---- | ------------------ |
-| 0 – 999       | 0    | 10 Chun Raw        |
-| 1.000 – 1.999 | 1    | 20 Chun Raw        |
-| 2.000 – 2.999 | 2    | 40 Chun Raw        |
-| …             | …    | …                  |
-| ≥ 6.000       | ≥ 6  | 640 Chun Raw (cap) |
+Cấu trúc chính ở `frontend/src/` gồm `pages/`, `components/`, `hooks/`, `providers/`, `stores/`, `game/` và `config/`.
 
-> Phí SUI luôn cố định **0.1 SUI/lần** craft, vào Treasury admin có thể rút.
+Các biến cấu hình quan trọng trong frontend:
 
-### Xác suất craft
+- `VITE_SUI_NETWORK`
+- `VITE_SUI_PACKAGE_ID`
+- `VITE_LOBBY_PACKAGE_ID`
+- `VITE_LOBBY_CONFIG_OBJECT_ID`
+- `VITE_MARKET_OBJECT_ID`
+- `VITE_TREASURY_OBJECT_ID`
+- `VITE_CRAFT_CONFIG_OBJECT_ID`
+- `VITE_BACKEND_URL`
+- `VITE_BACKEND_WS_URL`
+- `VITE_BACKEND_REST_URL`
 
-| Kết quả    | Tỉ lệ |
-| ---------- | ----- |
-| Bronze NFT | ~12%  |
-| Silver NFT | ~6%   |
-| Gold NFT   | ~2%   |
-| Scrap      | ~80%  |
+## Backend
 
-### Trade-Up (sink NFT)
+Backend hiện dùng:
 
-```
-8 Bronze  →  70% Silver + 30% Scrap   (input luôn bị burn)
-6 Silver  →  55% Gold   + 45% Scrap   (input luôn bị burn)
-```
+- Express cho REST API.
+- Socket.IO cho multiplayer gateway.
+- Indexer module cho leaderboard, profile summary, inventory summary, craft history, room proof, match history và marketplace floor.
+- Challenge service cho create/accept/cancel/submit/finalize challenge.
+- Valuation-room service cho trạng thái phòng định giá.
+- Runtime dependency check và chain adapter để kiểm tra môi trường khi chạy.
 
----
+Biến môi trường chính của backend:
 
-## Stack công nghệ
+- `PORT`
+- `BACKEND_STORAGE` (`memory` hoặc `prisma`)
+- `MATCHMAKING_BACKEND` (`memory` hoặc `redis`)
+- `CHAIN_ADAPTER` (`mock` hoặc `sui_cli`)
+- `DATABASE_URL`
+- `REDIS_URL`
+- `ORACLE_API_KEY`
+- `SUI_NETWORK`
+- `SUI_RPC_URL`
+- `SUI_PACKAGE_ID`
+- `SUI_MATCH_ORACLE_ID`
+- `SUI_CLI_BIN`
+- `SUI_CLI_CONFIG_PATH`
+- `SUI_CLI_GAS_BUDGET`
+- `SUI_ORACLE_SENDER`
+- `ADMIN_SECRET_KEY`
+- `LOBBY_PACKAGE_ID`
+- `LOBBY_CONFIG_OBJECT_ID`
+- `LOBBY_SIGNER_SECRET_KEY`
+- `LOBBY_SETTLEMENT_TTL_MS`
+- `LOBBY_EMERGENCY_REFUND_DELAY_MS`
+- `PVP_QUEUE_TIMEOUT_MS`
+- `PVP_LOCK_TIMEOUT_MS`
+- `PVP_DISCONNECT_GRACE_MS`
 
-| Thành phần     | Công nghệ                             |
-| -------------- | ------------------------------------- |
-| Blockchain     | Sui Testnet                           |
-| Smart Contract | Sui Move (edition 2024)               |
-| Frontend       | React 18 + TypeScript + Vite          |
-| Canvas Game    | HTML5 Canvas (physics engine tự viết) |
-| Web3           | `@mysten/sui` SDK, `@mysten/dapp-kit` |
-| Backend        | Node.js + Express + WebSocket (`ws`)  |
-| Deploy Backend | Railway                               |
-
----
-
-## Cấu trúc thư mục
-
-```
-SuiChin-hackathon/
-├── contract/
-│   ├── Move.toml
-│   ├── sources/
-│   │   ├── player_profile.move  # PlayerProfile, faucet, staking PvP
-│   │   ├── cuon_chun.move       # NFT (3 tier, multi-skin variants)
-│   │   ├── scrap.move           # Byproduct
-│   │   ├── craft.move           # Craft, Treasury, halving cost
-│   │   ├── trade_up.move        # Trade-up Bronze→Silver→Gold
-│   │   ├── marketplace.move     # Escrow marketplace
-│   │   └── achievement.move     # Soulbound streak badge
-│   └── tests/                   # Unit tests cho từng module
-├── frontend/
-│   └── src/
-│       ├── game/                # Physics engine, canvas renderer, bot AI
-│       ├── components/          # UI screens (Dashboard, Mint, PvP, Marketplace…)
-│       ├── hooks/               # useFaucet, usePvP, useOwnedNFTs, useSuiProfile…
-│       ├── lib/sui-client.ts    # Transaction builders
-│       ├── config/sui.config.ts # Package IDs, halving helpers, constants
-│       └── providers/           # SuiProvider (dapp-kit)
-├── backend/
-│   └── src/
-│       ├── index.ts             # Express + WebSocket server
-│       ├── matchmaking.ts       # Queue & pairing logic
-│       ├── room-manager.ts      # Game room state
-│       ├── ws-handler.ts        # WebSocket message handler
-│       ├── sui-client.ts        # Oracle keypair, resolve_match() call
-│       ├── routes/game.ts       # REST: /craft-cost, /faucet-pending
-│       └── types.ts             # Shared types
-└── docs/                        # Tài liệu chi tiết
-```
-
----
-
-## Cài đặt & Chạy thử
+## Chạy local
 
 ### Yêu cầu
 
-- [Sui CLI](https://docs.sui.io/guides/developer/getting-started/sui-install) ≥ 1.18
-- Node.js ≥ 18
-- Ví Sui (Slippi / Sui Wallet) có SUI testnet
+- Node.js 22 cho backend.
+- Node.js 18+ cho frontend.
+- Sui CLI nếu muốn build hoặc publish contract.
+- Postgres và Redis nếu dùng backend với `prisma` hoặc `redis`.
 
-### 1. Build & test contract
+### 1. Contract
 
 ```bash
 cd contract
-
-# Build
 sui move build
-
-# Test
 sui move test
 ```
 
-### 2. Deploy lên Testnet
+### 2. Backend
+
+```bash
+cd backend
+npm install
+npm run dev
+```
+
+Nếu cần Postgres/Redis local:
+
+```bash
+cd backend
+npm run infra:up
+```
+
+REST chạy mặc định ở `http://localhost:4000`.
+
+### 3. Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Mặc định frontend chạy ở `http://localhost:5173`.
+
+## Contract publish
 
 ```bash
 cd contract
-
 sui client switch --env testnet
 sui client publish --gas-budget 200000000
 ```
 
-Sau khi publish, copy `PACKAGE_ID` và các object IDs vào `frontend/src/config/sui.config.ts` và `backend/.env`.
-
-### 3. Chạy frontend
-
-```bash
-cd frontend
-
-npm install
-npm run dev
-```
-
-Mở [http://localhost:5173](http://localhost:5173) và kết nối ví.
-
-### 4. Chạy backend (PvP matchmaking)
-
-```bash
-cd backend
-
-cp .env.example .env
-# Điền PACKAGE_ID, MATCH_ORACLE_ID, ORACLE_PRIVATE_KEY vào .env
-
-npm install
-npm run dev
-```
-
-Backend chạy tại `http://localhost:4000`, WebSocket tại `ws://localhost:4000/ws`.
-
----
-
-## Demo flow (5 phút)
-
-1. **Connect ví** → tạo `PlayerProfile` on-chain
-2. **Faucet** → nhận Chun Raw miễn phí (cooldown 2h, stack 10)
-3. **Chơi ván** → thắng → +Chun Raw có streak bonus
-4. **Workshop → Craft** (Chun Raw + 0.1 SUI) → ra Bronze NFT (hoặc Scrap)
-5. **Craft đủ 8 Bronze → Trade-Up** → 70% nhận Silver NFT
-6. **Marketplace → List** Silver với giá X SUI → ví khác Buy → SUI chuyển tay
-7. **PvP** → lock NFT → đấu realtime → thắng nhận thưởng on-chain
-8. Mở Sui Wallet → thấy **Cuộn Chun** hiển thị trong Collectibles
-
----
+Sau khi publish, cập nhật các object ID và package ID tương ứng vào frontend/backend config.
 
 ## Tài liệu
 
-| File                                         | Nội dung                                    |
-| -------------------------------------------- | ------------------------------------------- |
-| [docs/architecture.md](docs/architecture.md) | Kiến trúc hệ thống, sơ đồ luồng             |
-| [docs/gameplay.md](docs/gameplay.md)         | Cơ chế game, faucet, streak                 |
-| [docs/contracts.md](docs/contracts.md)       | Smart contracts: structs, functions, events |
-| [docs/economics.md](docs/economics.md)       | Halving, source/sink, rarity                |
-| [docs/frontend.md](docs/frontend.md)         | Frontend modules, hooks, Web3 layer         |
-| [docs/deployment.md](docs/deployment.md)     | Deploy contract, env config                 |
+| File                                                     | Nội dung                                          |
+| -------------------------------------------------------- | ------------------------------------------------- |
+| [docs/architecture.md](docs/architecture.md)             | Kiến trúc hệ thống và luồng dữ liệu               |
+| [docs/gameplay.md](docs/gameplay.md)                     | Cơ chế chơi game và kinh tế Chun Raw              |
+| [docs/contracts.md](docs/contracts.md)                   | Tổng quan smart contract                          |
+| [docs/contract-functions.md](docs/contract-functions.md) | Giải thích công dụng từng hàm trong contract Move |
+| [docs/economics.md](docs/economics.md)                   | Kinh tế, halving, source/sink                     |
+| [docs/frontend.md](docs/frontend.md)                     | Các phần của frontend                             |
+| [docs/deployment.md](docs/deployment.md)                 | Build, publish và cấu hình deploy                 |
 
----
+## Ghi chú
+
+- README này đã được cập nhật theo cấu trúc hiện tại của repo sau lần pull gần nhất.
+- Nếu bạn muốn, mình có thể tiếp tục làm một bản ngắn hơn, giống landing page hơn, hoặc làm thêm một sơ đồ luồng kiến trúc mới cho repo.
 
 ## License
 
