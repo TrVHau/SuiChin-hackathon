@@ -6,7 +6,7 @@ export const NETWORK = (import.meta.env.VITE_SUI_NETWORK || "devnet") as
 
 export const PACKAGE_ID =
   import.meta.env.VITE_SUI_PACKAGE_ID ||
-  "0xe892747fe1ffd30d15a1013cb7c5f801d0b3402831afa2b48090f64afa318e6b";
+  "0xb40ef16e8d1dd5a885ac25436bcf14b19a956fb05c575863b5cc21bfa2230525";
 export const LOBBY_PACKAGE_ID =
   import.meta.env.VITE_LOBBY_PACKAGE_ID || PACKAGE_ID;
 export const LOBBY_CONFIG_OBJECT_ID =
