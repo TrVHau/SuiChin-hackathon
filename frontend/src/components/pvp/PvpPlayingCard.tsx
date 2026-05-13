@@ -40,7 +40,7 @@ export default function PvpPlayingCard({
   onSubmitShot,
   onReportResult,
 }: PvpPlayingCardProps) {
-  const localSide: Turn = pvp.role === "JOINER" ? "bot" : "player";
+  const localSide: Turn = "player";
   const opponentSide = oppositeSide(localSide);
   const currentTurnSide: Turn | undefined = pvp.currentTurnWallet
     ? sameWallet(pvp.currentTurnWallet, myAddress)
@@ -59,8 +59,8 @@ export default function PvpPlayingCard({
       id: `${pvp.lastShot.byWallet}:${pvp.lastShot.seq}:${pvp.lastShot.atMs}`,
       side: opponentSide,
       velocity: {
-        x: pvp.lastShot.x,
-        y: pvp.lastShot.y,
+        x: -pvp.lastShot.x,
+        y: -pvp.lastShot.y,
       },
       pullLength: pvp.lastShot.force,
     };
@@ -170,8 +170,8 @@ export default function PvpPlayingCard({
             }
             localSide={localSide}
             currentTurnSide={currentTurnSide}
-            playerLabel={localSide === "player" ? "YOU" : "OPP"}
-            opponentLabel={localSide === "bot" ? "YOU" : "OPP"}
+            playerLabel="YOU"
+            opponentLabel="OPP"
             remoteShot={remoteShot}
             onShot={submitShot}
             onRoundResult={reportWinner}

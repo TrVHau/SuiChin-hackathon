@@ -1688,6 +1688,55 @@ export function attachMultiplayerGateway(server: HttpServer) {
         try {
           const walletAddress = getWalletFromSocket(socket);
           const parsed = SubmitResultSchema.parse(payload);
+          const ackFinalizedChallenge = async () => {
+            const existing = await challengeService.getChallenge(
+              parsed.challengeId,
+            );
+            if (!existing || existing.status !== "FINALIZED") {
+              return false;
+            }
+            const isParticipant =
+              sameWallet(existing.challengerWallet, walletAddress) ||
+              sameWallet(existing.opponentWallet ?? null, walletAddress);
+            if (!isParticipant) {
+              throw new Error("Wallet does not belong to this challenge");
+            }
+
+            const roomId =
+              roomByChallenge.get(parsed.challengeId) ??
+              (await valuationRoomService.findByChallengeId(parsed.challengeId))
+                ?.suiRoomId ??
+              undefined;
+            const winnerWallet = existing.winnerWallet;
+            const loserWallet =
+              winnerWallet && existing.opponentWallet
+                ? sameWallet(winnerWallet, existing.challengerWallet)
+                  ? existing.opponentWallet
+                  : existing.challengerWallet
+                : null;
+            const settlementPayload = await buildSettlementPayloadForRoom({
+              challengeId: parsed.challengeId,
+              roomId,
+              winnerWallet,
+              loserWallet,
+            });
+
+            ack?.({
+              ok: true,
+              result: { totalSubmissions: 2 },
+              finalized: {
+                winnerWallet,
+                txDigest: null,
+                settlementPayload,
+              },
+            });
+            return true;
+          };
+
+          if (await ackFinalizedChallenge()) {
+            return;
+          }
+
           const submitResult = await challengeService.submitResult(
             parsed.challengeId,
             walletAddress,
@@ -1780,10 +1829,54 @@ export function attachMultiplayerGateway(server: HttpServer) {
             },
           });
         } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (
+            message.includes("Challenge must be ACTIVE or SUBMITTED") ||
+            message.includes("Result already submitted")
+          ) {
+            const parsed = SubmitResultSchema.safeParse(payload);
+            if (parsed.success) {
+              const existing = await challengeService.getChallenge(
+                parsed.data.challengeId,
+              );
+              if (existing?.status === "FINALIZED") {
+                const roomId =
+                  roomByChallenge.get(parsed.data.challengeId) ??
+                  (
+                    await valuationRoomService.findByChallengeId(
+                      parsed.data.challengeId,
+                    )
+                  )?.suiRoomId ??
+                  undefined;
+                const winnerWallet = existing.winnerWallet;
+                const loserWallet =
+                  winnerWallet && existing.opponentWallet
+                    ? sameWallet(winnerWallet, existing.challengerWallet)
+                      ? existing.opponentWallet
+                      : existing.challengerWallet
+                    : null;
+                const settlementPayload = await buildSettlementPayloadForRoom({
+                  challengeId: parsed.data.challengeId,
+                  roomId,
+                  winnerWallet,
+                  loserWallet,
+                });
+                ack?.({
+                  ok: true,
+                  result: { totalSubmissions: 2 },
+                  finalized: {
+                    winnerWallet,
+                    txDigest: null,
+                    settlementPayload,
+                  },
+                });
+                return;
+              }
+            }
+          }
           ack?.({
             ok: false,
-            error:
-              err instanceof Error ? err.message : "match.result.submit failed",
+            error: message || "match.result.submit failed",
           });
         }
       },

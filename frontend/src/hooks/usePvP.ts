@@ -901,7 +901,7 @@ export function usePvP(_profileId: string | undefined) {
         (ack: SubmitResultAck) => {
           if (!ack.ok) {
             toast.error(ack.error ?? "Gui ket qua that bai");
-            setPvP((prev) => ({ ...prev, status: "error" }));
+            setPvP((prev) => ({ ...prev, status: "playing" }));
             return;
           }
 
