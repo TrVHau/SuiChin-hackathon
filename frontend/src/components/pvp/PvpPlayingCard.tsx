@@ -20,6 +20,12 @@ function shortWallet(wallet?: string | null) {
   return `${wallet.slice(0, 6)}...${wallet.slice(-4)}`;
 }
 
+function resolveNftImage(nft?: { imageUrl?: string; tier?: number } | null) {
+  if (nft?.imageUrl) return nft.imageUrl;
+  const tier = Math.min(3, Math.max(1, Number(nft?.tier) || 1));
+  return `/nft/tier${tier}_v1.png`;
+}
+
 function oppositeSide(side: Turn): Turn {
   return side === "player" ? "bot" : "player";
 }
@@ -37,6 +43,9 @@ export default function PvpPlayingCard({
       ? localSide
       : opponentSide
     : undefined;
+  const currentTurnLabel = pvp.myTurn
+    ? "Cua ban"
+    : pvp.opponentNft?.name ?? shortWallet(pvp.currentTurnWallet);
 
   const remoteShot = useMemo<PvPRemoteShot | null>(() => {
     if (!pvp.lastShot || pvp.lastShot.byWallet === myAddress) return null;
@@ -99,7 +108,7 @@ export default function PvpPlayingCard({
               Escrow: NFT
             </span>
             <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
-              Luot: {pvp.myTurn ? "Cua ban" : shortWallet(pvp.currentTurnWallet)}
+              Luot: {currentTurnLabel}
             </span>
           </div>
         </div>
@@ -107,11 +116,35 @@ export default function PvpPlayingCard({
         <div className="mb-4 grid gap-3 md:grid-cols-3">
           <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
             <p className="text-xs font-black uppercase text-white/45">Ban</p>
-            <p className="mt-1 font-black">{shortWallet(myAddress)}</p>
+            <div className="mt-2 flex items-center gap-3">
+              <img
+                src={resolveNftImage(pvp.myNft)}
+                alt={pvp.myNft?.name ?? "NFT cua ban"}
+                onError={(event) => {
+                  event.currentTarget.src = "/nft/tier1_v1.png";
+                }}
+                className="size-12 rounded-xl bg-white/10 object-cover"
+              />
+              <p className="min-w-0 truncate font-black">
+                {pvp.myNft?.name ?? shortWallet(myAddress)}
+              </p>
+            </div>
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
             <p className="text-xs font-black uppercase text-white/45">Doi thu</p>
-            <p className="mt-1 font-black">{shortWallet(pvp.opponent)}</p>
+            <div className="mt-2 flex items-center gap-3">
+              <img
+                src={resolveNftImage(pvp.opponentNft)}
+                alt={pvp.opponentNft?.name ?? "NFT doi thu"}
+                onError={(event) => {
+                  event.currentTarget.src = "/nft/tier1_v1.png";
+                }}
+                className="size-12 rounded-xl bg-white/10 object-cover"
+              />
+              <p className="min-w-0 truncate font-black">
+                {pvp.opponentNft?.name ?? shortWallet(pvp.opponent)}
+              </p>
+            </div>
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
             <p className="text-xs font-black uppercase text-white/45">Cu ban gan nhat</p>
@@ -126,7 +159,9 @@ export default function PvpPlayingCard({
             mode="pvp"
             showHeader={false}
             onBack={() => undefined}
-            enabled={pvp.status === "playing" && !pvp.submittedResult}
+            enabled={
+              pvp.status === "playing" && !pvp.submittedResult && !pvp.paused
+            }
             localSide={localSide}
             currentTurnSide={currentTurnSide}
             playerLabel={localSide === "player" ? "YOU" : "OPP"}
@@ -136,6 +171,13 @@ export default function PvpPlayingCard({
             onRoundResult={reportWinner}
           />
         </div>
+
+        {pvp.paused && (
+          <div className="mt-4 rounded-[22px] border border-amber-300/40 bg-amber-400/15 p-4 text-sm font-bold text-amber-100">
+            {pvp.pausedReason ??
+              "Tran dang tam dung de cho nguoi choi ket noi lai."}
+          </div>
+        )}
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[22px] border border-white/10 bg-white/5 p-4 text-sm text-white/75">
           <div className="flex items-center gap-2">

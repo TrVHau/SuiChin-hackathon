@@ -137,4 +137,26 @@ module suichin::cuon_chun_tests {
         };
         test_scenario::end(scenario);
     }
+
+    #[test]
+    #[expected_failure(abort_code = 1, location = suichin::cuon_chun)]
+    fun test_mint_rejects_invalid_tier() {
+        let mut scenario = test_scenario::begin(ADMIN);
+        {
+            let nft = cuon_chun::mint(0, 1, test_scenario::ctx(&mut scenario));
+            cuon_chun::burn(nft);
+        };
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 2, location = suichin::cuon_chun)]
+    fun test_mint_rejects_invalid_variant_for_gold() {
+        let mut scenario = test_scenario::begin(ADMIN);
+        {
+            let nft = cuon_chun::mint(3, 4, test_scenario::ctx(&mut scenario));
+            cuon_chun::burn(nft);
+        };
+        test_scenario::end(scenario);
+    }
 }

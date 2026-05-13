@@ -59,7 +59,7 @@ async function persistEnokiCallbackSession() {
       : window.location.hash,
   );
   const jwt = hash.get("id_token");
-  if (!jwt) return;
+  if (!jwt) return false;
 
   const provider = inferProviderFromCallback();
   const clientId = getClientIdForProvider(provider);
@@ -102,6 +102,7 @@ async function persistEnokiCallbackSession() {
   );
 
   window.localStorage.setItem(ENOKI_CALLBACK_PROVIDER_KEY, provider);
+  return true;
 }
 
 export default function LoginScreen() {
@@ -121,12 +122,7 @@ export default function LoginScreen() {
         ? window.location.hash.slice(1)
         : window.location.hash,
     );
-    return (
-      Boolean(window.opener) ||
-      search.has("enoki-callback") ||
-      hash.has("id_token") ||
-      hash.has("iss")
-    );
+    return search.has("enoki-callback") || hash.has("id_token");
   }, []);
 
   const socialLoginEnabled =
@@ -175,11 +171,21 @@ export default function LoginScreen() {
     let disposed = false;
     const completeCallback = async () => {
       try {
-        await persistEnokiCallbackSession();
-        if (window.opener && !window.opener.closed) {
-          window.opener.location.reload();
+        const completed = await persistEnokiCallbackSession();
+        if (!completed) {
+          setCallbackError("Khong tim thay id_token trong callback Google.");
+          return;
         }
-        window.close();
+        try {
+          window.opener?.location.reload();
+        } catch {
+          // COOP can block opener access after social-login redirects.
+        }
+        try {
+          window.close();
+        } catch {
+          // Some browsers also block programmatic close across COOP boundaries.
+        }
       } catch (error) {
         if (!disposed) {
           setCallbackError(

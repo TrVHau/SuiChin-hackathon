@@ -22,8 +22,7 @@ interface QueueJoinAck {
     opponentWallet?: string;
     challengeId?: string;
     tier?: BettingTier;
-    wager?: number;
-    wagerMist?: number;
+    targetPoints?: number;
   };
   error?: string;
 }
@@ -50,9 +49,8 @@ interface MatchStartEvent {
   roomId: string;
   players: string[];
   challengeId: string;
-  wager?: number;
-  wagerMist?: number;
   tier?: BettingTier;
+  targetPoints?: number;
   nfts?: Record<string, ValuationNft>;
 }
 
@@ -95,10 +93,9 @@ interface MatchShotEvent {
 interface MatchFoundEvent {
   roomId: string;
   challengeId: string;
-  wager: number;
-  wagerMist?: number;
   tier?: BettingTier;
   tierLabel?: string;
+  targetPoints?: number;
   status?: "AWAITING_DEPOSIT";
   creator: string;
   joiner: string;
@@ -112,6 +109,65 @@ interface MatchRoomReadyEvent {
   creator: string;
 }
 
+interface QueueTimeoutEvent {
+  tier?: BettingTier;
+  timeoutMs: number;
+  message?: string;
+}
+
+interface MatchCancelledEvent {
+  challengeId: string;
+  roomId: string;
+  tempRoomId: string;
+  suiRoomId: string | null;
+  reason:
+    | "PLAYER_LEFT"
+    | "DISCONNECT"
+    | "LOCK_TIMEOUT"
+    | "CREATOR_LEFT_LOCKED";
+  message?: string;
+  leftWallet?: string;
+  creatorWallet?: string;
+  needsCreatorCancel?: boolean;
+  cancelRoomId?: string | null;
+  canCancelWallet?: string;
+}
+
+interface MatchPlayerDisconnectedEvent {
+  challengeId: string;
+  wallet: string;
+  deadlineMs: number;
+  graceMs: number;
+  message?: string;
+}
+
+interface MatchPlayerReconnectedEvent {
+  challengeId: string;
+  wallet: string;
+  message?: string;
+}
+
+interface MatchRejoinAck {
+  ok: boolean;
+  result?: {
+    roomId: string;
+    challengeId: string;
+    status: "MATCHED" | "LOCKING" | "IN_GAME" | "FINISHED" | "CANCELLED";
+    players: string[];
+    tier?: BettingTier;
+    targetPoints?: number;
+    nfts?: Record<string, ValuationNft>;
+    currentTurnWallet?: string | null;
+  };
+  error?: string;
+}
+
+interface RoomSyncAck {
+  ok: boolean;
+  started?: boolean;
+  error?: string;
+}
+
 export type PvPStatus =
   | "idle"
   | "connecting"
@@ -121,6 +177,7 @@ export type PvPStatus =
   | "playing"
   | "submitting"
   | "resolved"
+  | "cancelled"
   | "error";
 
 export interface PvPState {
@@ -130,8 +187,6 @@ export interface PvPState {
   role: "CREATOR" | "JOINER" | null;
   challengeId: string | null;
   opponent: string | null;
-  wager: number;
-  wagerMist: number;
   betTier: BettingTier | null;
   round: number;
   scores: [number, number];
@@ -144,6 +199,13 @@ export interface PvPState {
   submittedResult: MatchResult | null;
   currentTurnWallet: string | null;
   myTurn: boolean;
+  paused: boolean;
+  pausedReason: string | null;
+  reconnectDeadlineMs: number | null;
+  cancelReason: string | null;
+  cancelRoomId: string | null;
+  needsCreatorCancel: boolean;
+  canCancelWallet: string | null;
   lastShot: {
     byWallet: string;
     seq: number;
@@ -161,8 +223,6 @@ const INITIAL_STATE: PvPState = {
   role: null,
   challengeId: null,
   opponent: null,
-  wager: 0,
-  wagerMist: 0,
   betTier: null,
   round: 1,
   scores: [0, 0],
@@ -175,13 +235,25 @@ const INITIAL_STATE: PvPState = {
   submittedResult: null,
   currentTurnWallet: null,
   myTurn: false,
+  paused: false,
+  pausedReason: null,
+  reconnectDeadlineMs: null,
+  cancelReason: null,
+  cancelRoomId: null,
+  needsCreatorCancel: false,
+  canCancelWallet: null,
   lastShot: null,
 };
 
 export function usePvP(_profileId: string | undefined) {
   const account = useCurrentAccount();
   const socketRef = useRef<Socket | null>(null);
+  const pvpRef = useRef<PvPState>(INITIAL_STATE);
   const [pvp, setPvP] = useState<PvPState>(INITIAL_STATE);
+
+  useEffect(() => {
+    pvpRef.current = pvp;
+  }, [pvp]);
 
   const safeDisconnect = useCallback(() => {
     const socket = socketRef.current;
@@ -194,28 +266,34 @@ export function usePvP(_profileId: string | undefined) {
   const setMatchFoundFromEvent = useCallback(
     (event: MatchFoundEvent) => {
       const myWallet = account?.address ?? "";
-      const opponentWallet =
-        myWallet === event.creator ? event.joiner : event.creator;
+      const isMe = (wallet?: string | null) =>
+        Boolean(
+          myWallet && wallet && wallet.toLowerCase() === myWallet.toLowerCase(),
+        );
+      const opponentWallet = isMe(event.creator) ? event.joiner : event.creator;
 
       setPvP((prev) => ({
         ...prev,
         status: "awaiting_deposit",
         tempRoomId: event.roomId,
         roomId: null,
-        role: myWallet === event.creator ? "CREATOR" : "JOINER",
+        role: isMe(event.creator) ? "CREATOR" : "JOINER",
         challengeId: event.challengeId,
         opponent: opponentWallet,
-        wager: 0,
-        wagerMist: 0,
         betTier: event.tier ?? prev.betTier,
-        myNft:
-          myWallet === event.creator
-            ? event.creatorNft ?? prev.myNft
-            : event.joinerNft ?? prev.myNft,
-        opponentNft:
-          myWallet === event.creator
-            ? event.joinerNft ?? null
-            : event.creatorNft ?? null,
+        paused: false,
+        pausedReason: null,
+        reconnectDeadlineMs: null,
+        cancelReason: null,
+        cancelRoomId: null,
+        needsCreatorCancel: false,
+        canCancelWallet: null,
+        myNft: isMe(event.creator)
+          ? (event.creatorNft ?? prev.myNft)
+          : (event.joinerNft ?? prev.myNft),
+        opponentNft: isMe(event.creator)
+          ? (event.joinerNft ?? null)
+          : (event.creatorNft ?? null),
       }));
 
       toast.success("Da tim thay doi thu. Hay khoa NFT vao escrow.");
@@ -226,8 +304,18 @@ export function usePvP(_profileId: string | undefined) {
   const setMatchedFromEvent = useCallback(
     (event: MatchStartEvent) => {
       const myWallet = account?.address ?? "";
+      const findNftByWallet = (wallet?: string | null) => {
+        if (!wallet) return undefined;
+        if (event.nfts?.[wallet]) return event.nfts[wallet];
+        const matchedEntry = Object.entries(event.nfts ?? {}).find(
+          ([address]) => address.toLowerCase() === wallet.toLowerCase(),
+        );
+        return matchedEntry?.[1];
+      };
       const opponentWallet =
-        event.players.find((wallet) => wallet !== myWallet) ?? null;
+        event.players.find(
+          (wallet) => wallet.toLowerCase() !== myWallet.toLowerCase(),
+        ) ?? null;
 
       setPvP((prev) => ({
         ...prev,
@@ -235,12 +323,10 @@ export function usePvP(_profileId: string | undefined) {
         roomId: event.roomId,
         challengeId: event.challengeId,
         opponent: opponentWallet,
-        wager: 0,
-        wagerMist: 0,
         betTier: event.tier ?? prev.betTier,
-        myNft: event.nfts?.[myWallet] ?? prev.myNft,
+        myNft: findNftByWallet(myWallet) ?? prev.myNft,
         opponentNft:
-          (opponentWallet ? event.nfts?.[opponentWallet] : undefined) ??
+          (opponentWallet ? findNftByWallet(opponentWallet) : undefined) ??
           prev.opponentNft,
         scores: [0, 0],
         currentTurnWallet: null,
@@ -251,6 +337,13 @@ export function usePvP(_profileId: string | undefined) {
         resultTx: null,
         settleTx: null,
         settlementPayload: null,
+        paused: false,
+        pausedReason: null,
+        reconnectDeadlineMs: null,
+        cancelReason: null,
+        cancelRoomId: null,
+        needsCreatorCancel: false,
+        canCancelWallet: null,
       }));
 
       toast.success("Da khoa du tai san. Bat dau ban chun!");
@@ -265,7 +358,6 @@ export function usePvP(_profileId: string | undefined) {
 
   const joinQueue = useCallback(
     (
-      wager: number,
       roomId?: string,
       options?: {
         tier?: BettingTier;
@@ -285,8 +377,6 @@ export function usePvP(_profileId: string | undefined) {
       setPvP({
         ...INITIAL_STATE,
         status: "connecting",
-        wager,
-        wagerMist: Math.round(wager * 1_000_000_000),
         betTier: options?.tier ?? null,
         myNft: options?.nft ?? null,
       });
@@ -298,10 +388,51 @@ export function usePvP(_profileId: string | undefined) {
       socketRef.current = socket;
 
       socket.on("connect", () => {
+        const current = pvpRef.current;
+        if (
+          current.challengeId &&
+          current.status !== "waiting" &&
+          current.status !== "connecting" &&
+          current.status !== "idle" &&
+          current.status !== "error" &&
+          current.status !== "cancelled"
+        ) {
+          socket.emit(
+            "match.rejoin",
+            {
+              challengeId: current.challengeId,
+              roomId: current.roomId ?? current.tempRoomId ?? undefined,
+            },
+            (ack: MatchRejoinAck) => {
+              if (!ack.ok) {
+                toast.error(ack.error ?? "Khong the ket noi lai tran");
+                return;
+              }
+              const result = ack.result;
+              if (!result) return;
+              setPvP((prev) => ({
+                ...prev,
+                roomId: result.roomId ?? prev.roomId,
+                challengeId: result.challengeId,
+                betTier: result.tier ?? prev.betTier,
+                currentTurnWallet:
+                  result.currentTurnWallet ?? prev.currentTurnWallet,
+                myTurn:
+                  Boolean(account?.address && result.currentTurnWallet) &&
+                  result.currentTurnWallet!.toLowerCase() ===
+                    account.address.toLowerCase(),
+                paused: false,
+                pausedReason: null,
+                reconnectDeadlineMs: null,
+              }));
+            },
+          );
+          return;
+        }
+
         socket.emit(
           "queue.join",
           {
-            wager,
             roomId,
             tier: options?.tier,
             nft: options?.nft,
@@ -319,8 +450,6 @@ export function usePvP(_profileId: string | undefined) {
                 status: "waiting",
                 roomId: ack.result?.roomId ?? roomId ?? prev.roomId,
                 betTier: ack.result?.tier ?? prev.betTier,
-                wager: ack.result?.wager ?? prev.wager,
-                wagerMist: ack.result?.wagerMist ?? prev.wagerMist,
               }));
             }
           },
@@ -339,8 +468,84 @@ export function usePvP(_profileId: string | undefined) {
         toast.info("Creator da tao escrow. Joiner hay khoa tai san vao phong.");
       });
 
+      socket.on("queue.timeout", (event: QueueTimeoutEvent) => {
+        toast.error(event.message ?? "Khong tim thay doi thu");
+        safeDisconnect();
+        setPvP(INITIAL_STATE);
+      });
+
+      socket.on("match.cancelled", (event: MatchCancelledEvent) => {
+        setPvP((prev) => {
+          if (prev.challengeId && prev.challengeId !== event.challengeId) {
+            return prev;
+          }
+          return {
+            ...prev,
+            status: "cancelled",
+            roomId: event.suiRoomId ?? prev.roomId,
+            tempRoomId: event.tempRoomId ?? prev.tempRoomId,
+            cancelReason:
+              event.message ??
+              (event.reason === "LOCK_TIMEOUT"
+                ? "Doi thu khong chot tai san dung han."
+                : "Doi thu da chay tron."),
+            cancelRoomId: event.cancelRoomId ?? event.suiRoomId ?? null,
+            needsCreatorCancel: Boolean(event.needsCreatorCancel),
+            canCancelWallet: event.canCancelWallet ?? event.creatorWallet ?? null,
+            paused: false,
+            pausedReason: null,
+            reconnectDeadlineMs: null,
+            myTurn: false,
+          };
+        });
+        toast.error(
+          event.message ??
+            (event.reason === "LOCK_TIMEOUT"
+              ? "Doi thu khong chot tai san dung han."
+              : "Doi thu da chay tron."),
+        );
+      });
+
       socket.on("match.start", (event: MatchStartEvent) => {
         setMatchedFromEvent(event);
+      });
+
+      socket.on("match.playerDisconnected", (event: MatchPlayerDisconnectedEvent) => {
+        setPvP((prev) => {
+          if (prev.challengeId !== event.challengeId) return prev;
+          return {
+            ...prev,
+            paused: true,
+            pausedReason:
+              event.message ?? "Doi thu mat ket noi. Dang cho reconnect.",
+            reconnectDeadlineMs: event.deadlineMs,
+            myTurn: false,
+          };
+        });
+        if (
+          account?.address &&
+          event.wallet.toLowerCase() !== account.address.toLowerCase()
+        ) {
+          toast.info("Doi thu mat ket noi, tran tam dung 15 giay.");
+        }
+      });
+
+      socket.on("match.playerReconnected", (event: MatchPlayerReconnectedEvent) => {
+        setPvP((prev) => {
+          if (prev.challengeId !== event.challengeId) return prev;
+          return {
+            ...prev,
+            paused: false,
+            pausedReason: null,
+            reconnectDeadlineMs: null,
+          };
+        });
+        if (
+          account?.address &&
+          event.wallet.toLowerCase() !== account.address.toLowerCase()
+        ) {
+          toast.success("Doi thu da ket noi lai.");
+        }
       });
 
       socket.on("match.result.finalized", (event: MatchFinalizedEvent) => {
@@ -353,10 +558,18 @@ export function usePvP(_profileId: string | undefined) {
             winner: event.winnerWallet,
             resultTx: event.txDigest,
             settlementPayload: event.settlementPayload ?? null,
+            paused: false,
+            pausedReason: null,
+            reconnectDeadlineMs: null,
           };
         });
 
-        if (event.winnerWallet === account.address) {
+        const myAddress = account?.address;
+        if (
+          event.winnerWallet &&
+          myAddress &&
+          event.winnerWallet.toLowerCase() === myAddress.toLowerCase()
+        ) {
           toast.success("Ban thang!");
         } else if (!event.winnerWallet) {
           toast.info("Tran dau hoa");
@@ -373,7 +586,8 @@ export function usePvP(_profileId: string | undefined) {
             currentTurnWallet: event.currentTurnWallet,
             myTurn:
               Boolean(account?.address) &&
-              event.currentTurnWallet === account?.address,
+              event.currentTurnWallet.toLowerCase() ===
+                account?.address?.toLowerCase(),
           };
         });
       });
@@ -395,7 +609,8 @@ export function usePvP(_profileId: string | undefined) {
             currentTurnWallet: event.nextTurnWallet,
             myTurn:
               Boolean(account?.address) &&
-              event.nextTurnWallet === account?.address,
+              event.nextTurnWallet.toLowerCase() ===
+                account?.address?.toLowerCase(),
           };
         });
       });
@@ -407,14 +622,44 @@ export function usePvP(_profileId: string | undefined) {
 
       socket.on("disconnect", () => {
         setPvP((prev) => {
-          if (prev.status === "resolved" || prev.status === "idle") {
+          if (
+            prev.status === "resolved" ||
+            prev.status === "idle" ||
+            prev.status === "cancelled"
+          ) {
             return prev;
+          }
+          if (
+            prev.status === "playing" ||
+            prev.status === "matched" ||
+            prev.status === "submitting"
+          ) {
+            return {
+              ...prev,
+              paused: true,
+              pausedReason: "Dang mat ket noi backend. He thong se thu reconnect.",
+              myTurn: false,
+            };
+          }
+          if (prev.status === "awaiting_deposit") {
+            return {
+              ...prev,
+              paused: true,
+              pausedReason: "Dang mat ket noi trong luc chot tai san.",
+              myTurn: false,
+            };
           }
           return { ...prev, status: "error" };
         });
       });
     },
-    [account, pvp.status, safeDisconnect, setMatchFoundFromEvent, setMatchedFromEvent],
+    [
+      account,
+      pvp.status,
+      safeDisconnect,
+      setMatchFoundFromEvent,
+      setMatchedFromEvent,
+    ],
   );
 
   const leaveQueue = useCallback(() => {
@@ -438,22 +683,87 @@ export function usePvP(_profileId: string | undefined) {
       socket.emit("queue.roomCreated", {
         tempRoomId: pvp.tempRoomId,
         suiRoomId,
+        challengeId: pvp.challengeId ?? undefined,
       });
     },
-    [pvp.tempRoomId],
+    [pvp.challengeId, pvp.tempRoomId],
   );
 
   const notifyRoomJoined = useCallback(
     (suiRoomId: string) => {
-      const socket = socketRef.current;
-      if (!socket || !pvp.tempRoomId) return;
+      const emitRoomJoined = (socket: Socket) => {
+        const current = pvpRef.current;
+        socket.emit(
+          "queue.roomJoined",
+          {
+            tempRoomId: current.tempRoomId ?? suiRoomId,
+            suiRoomId,
+            challengeId: current.challengeId ?? undefined,
+          },
+          (ack: RoomSyncAck) => {
+            if (!ack?.ok) {
+              toast.error(ack?.error ?? "Khong the dong bo room ACTIVE");
+            }
+          },
+        );
+      };
 
-      socket.emit("queue.roomJoined", {
-        tempRoomId: pvp.tempRoomId,
-        suiRoomId,
+      let socket = socketRef.current;
+      if (socket?.connected) {
+        emitRoomJoined(socket);
+        return;
+      }
+
+      if (!account?.address) {
+        toast.error("Vui long ket noi vi de dong bo room ACTIVE.");
+        return;
+      }
+
+      socket?.removeAllListeners();
+      socket?.disconnect();
+      socket = io(BACKEND_WS_URL, {
+        auth: { walletAddress: account.address },
+        transports: ["websocket"],
+      });
+      socketRef.current = socket;
+
+      socket.on("connect", () => {
+        emitRoomJoined(socket);
+      });
+      socket.on("match.start", (event: MatchStartEvent) => {
+        setMatchedFromEvent(event);
+      });
+      socket.on("match.turn", (event: MatchTurnEvent) => {
+        setPvP((prev) => {
+          if (prev.challengeId !== event.challengeId) return prev;
+          return {
+            ...prev,
+            currentTurnWallet: event.currentTurnWallet,
+            myTurn:
+              Boolean(account.address) &&
+              event.currentTurnWallet.toLowerCase() ===
+                account.address.toLowerCase(),
+          };
+        });
+      });
+      socket.on("connect_error", () => {
+        toast.error("Khong ket noi duoc backend de dong bo room ACTIVE.");
       });
     },
-    [pvp.tempRoomId],
+    [account?.address, setMatchedFromEvent],
+  );
+
+  const notifyRoomClosed = useCallback(
+    (suiRoomId: string) => {
+      const socket = socketRef.current;
+      if (!socket) return;
+
+      socket.emit("queue.roomClosed", {
+        roomId: suiRoomId,
+        challengeId: pvp.challengeId ?? undefined,
+      });
+    },
+    [pvp.challengeId],
   );
 
   const reportRound = useCallback(
@@ -462,8 +772,15 @@ export function usePvP(_profileId: string | undefined) {
       if (!socket || !account?.address) return;
       if (!pvp.challengeId) return;
       if (pvp.submittedResult) return;
+      if (pvp.paused) {
+        toast.info("Tran dang tam dung de cho reconnect.");
+        return;
+      }
 
-      const result: MatchResult = winnerId === account.address ? "WIN" : "LOSE";
+      const result: MatchResult =
+        winnerId.toLowerCase() === account.address.toLowerCase()
+          ? "WIN"
+          : "LOSE";
       const challengeId = pvp.challengeId;
 
       setPvP((prev) => ({
@@ -493,6 +810,9 @@ export function usePvP(_profileId: string | undefined) {
               winner: ack.finalized?.winnerWallet ?? null,
               resultTx: ack.finalized?.txDigest ?? null,
               settlementPayload: ack.finalized?.settlementPayload ?? null,
+              paused: false,
+              pausedReason: null,
+              reconnectDeadlineMs: null,
             }));
             return;
           }
@@ -502,7 +822,7 @@ export function usePvP(_profileId: string | undefined) {
         },
       );
     },
-    [account, pvp.challengeId, pvp.submittedResult],
+    [account, pvp.challengeId, pvp.paused, pvp.submittedResult],
   );
 
   const submitShot = useCallback(
@@ -511,6 +831,10 @@ export function usePvP(_profileId: string | undefined) {
       if (!socket || !account?.address) return;
       if (!pvp.challengeId) return;
       if (pvp.status !== "playing") return;
+      if (pvp.paused) {
+        toast.info("Tran dang tam dung de cho reconnect.");
+        return;
+      }
       if (!pvp.myTurn) {
         toast.info("Chua den luot ban");
         return;
@@ -534,7 +858,7 @@ export function usePvP(_profileId: string | undefined) {
         },
       );
     },
-    [account, pvp.challengeId, pvp.myTurn, pvp.status],
+    [account, pvp.challengeId, pvp.myTurn, pvp.paused, pvp.status],
   );
 
   const resolveLocalMatch = useCallback((winnerWallet: string | null) => {
@@ -572,6 +896,7 @@ export function usePvP(_profileId: string | undefined) {
     leaveQueue,
     notifyRoomCreated,
     notifyRoomJoined,
+    notifyRoomClosed,
     reportRound,
     submitShot,
     resolveLocalMatch,

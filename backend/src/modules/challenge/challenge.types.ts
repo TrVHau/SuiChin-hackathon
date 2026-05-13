@@ -15,8 +15,6 @@ export interface Challenge {
   status: ChallengeStatus;
   challengerWallet: string;
   opponentWallet: string | null;
-  stakeEnabled: boolean;
-  stakeAmount: number;
   winnerWallet: string | null;
   createdAtMs: number;
   expiresAtMs: number;
@@ -32,8 +30,6 @@ export interface ChallengeResultRecord {
 export interface CreateChallengeInput {
   mode: MatchMode;
   opponentWallet?: string;
-  stakeEnabled?: boolean;
-  stakeAmount?: number;
   expiresInSeconds?: number;
 }
 

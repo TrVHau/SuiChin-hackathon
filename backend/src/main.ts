@@ -16,15 +16,7 @@ async function bootstrap() {
     ensureRuntimeDependencies().catch((err) => {
       logger.error({ err }, "Runtime dependency check failed after startup");
     });
-    // Only run indexer when persistence backend is Prisma/Postgres.
-    if (env.BACKEND_STORAGE === "prisma") {
-      indexerService.start();
-    } else {
-      logger.info(
-        { backendStorage: env.BACKEND_STORAGE },
-        "Skipping indexer start because BACKEND_STORAGE is not prisma",
-      );
-    }
+    indexerService.start();
   });
 }
 

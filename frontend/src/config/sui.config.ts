@@ -6,20 +6,17 @@ export const NETWORK = (import.meta.env.VITE_SUI_NETWORK || "devnet") as
 
 export const PACKAGE_ID =
   import.meta.env.VITE_SUI_PACKAGE_ID ||
-  "0xf057bdceaab0bf96a661bfbdf326ae5e6b476fae978f7b1fff629aecf894d5a6";
+  "0xe892747fe1ffd30d15a1013cb7c5f801d0b3402831afa2b48090f64afa318e6b";
 export const LOBBY_PACKAGE_ID =
   import.meta.env.VITE_LOBBY_PACKAGE_ID || PACKAGE_ID;
 export const LOBBY_CONFIG_OBJECT_ID =
   import.meta.env.VITE_LOBBY_CONFIG_OBJECT_ID ||
-  "0xabc6d0569b20fbf830045ddbec0d2e7cd665ff538f89811ea11a53dbe0017688";
+  "0xa0fabdd9eaf6305ff9b4e58f1df6f0ce0d795b3502aa7665c7ebfb3aea917ea9";
 export const LOBBY_SIGNER_PUBKEY =
   import.meta.env.VITE_LOBBY_SIGNER_PUBKEY ||
-  "AM0K19eocENUQLaqfPXy5BCZ/+Iwki1bYo/6rwiDSX/X";
+  "zQrX16hwQ1RAtqp89fLkEJn/4jCSLVtij/qvCINJf9c=";
 export const LOBBY_DEFAULT_TARGET_POINTS = Number(
   import.meta.env.VITE_LOBBY_DEFAULT_TARGET_POINTS || 1000,
-);
-export const LOBBY_DEFAULT_COIN_MIST = BigInt(
-  import.meta.env.VITE_LOBBY_DEFAULT_COIN_MIST || "100000000",
 );
 export const MARKET_OBJECT_ID = import.meta.env.VITE_MARKET_OBJECT_ID || "";
 export const TREASURY_OBJECT_ID = import.meta.env.VITE_TREASURY_OBJECT_ID || "";

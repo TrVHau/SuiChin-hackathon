@@ -5,7 +5,7 @@ export interface ValuationPriceNft {
 
 export interface ValuationPriceInput {
   nft: ValuationPriceNft;
-  wagerSui: number;
+  targetPoints: number;
 }
 
 function hashOffset(value: string): number {
@@ -17,10 +17,10 @@ function hashOffset(value: string): number {
 }
 
 export class ValuationPriceService {
-  async getActualPriceSui(input: ValuationPriceInput): Promise<number> {
+  async getEstimatedNftPoints(input: ValuationPriceInput): Promise<number> {
     const multiplier =
       input.nft.tier === 3 ? 2.4 : input.nft.tier === 2 ? 1.45 : 0.85;
-    return Number((input.wagerSui * multiplier + hashOffset(input.nft.id)).toFixed(3));
+    return Math.round(input.targetPoints * multiplier + hashOffset(input.nft.id));
   }
 }
 

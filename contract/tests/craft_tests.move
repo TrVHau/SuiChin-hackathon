@@ -51,12 +51,12 @@ module suichin::craft_tests {
     #[test]
     fun test_craft_roll_maps_to_expected_tier() {
         assert!(craft_actions::tier_for_roll(0) == 0, 0);
-        assert!(craft_actions::tier_for_roll(79) == 0, 1);
-        assert!(craft_actions::tier_for_roll(80) == 1, 2);
-        assert!(craft_actions::tier_for_roll(91) == 1, 3);
-        assert!(craft_actions::tier_for_roll(92) == 2, 4);
-        assert!(craft_actions::tier_for_roll(97) == 2, 5);
-        assert!(craft_actions::tier_for_roll(98) == 3, 6);
+        assert!(craft_actions::tier_for_roll(59) == 0, 1);
+        assert!(craft_actions::tier_for_roll(60) == 1, 2);
+        assert!(craft_actions::tier_for_roll(84) == 1, 3);
+        assert!(craft_actions::tier_for_roll(85) == 2, 4);
+        assert!(craft_actions::tier_for_roll(94) == 2, 5);
+        assert!(craft_actions::tier_for_roll(95) == 3, 6);
         assert!(craft_actions::tier_for_roll(99) == 3, 7);
     }
 

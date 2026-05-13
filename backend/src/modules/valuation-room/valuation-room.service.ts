@@ -50,6 +50,10 @@ export class ValuationRoomService {
     return valuationRoomRepository.markFinalized(challengeId);
   }
 
+  markCancelled(challengeId: string): Promise<ValuationRoomRecord | null> {
+    return valuationRoomRepository.markCancelled(challengeId);
+  }
+
   resetForTests(): Promise<void> {
     return valuationRoomRepository.reset();
   }

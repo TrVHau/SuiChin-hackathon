@@ -1,4 +1,4 @@
-/// Craft, recycle and fusion gameplay actions.
+/// Mo-dun xu ly hanh dong craft, recycle va fusion.
 module suichin::craft_actions {
     use std::bcs;
     use sui::clock::{Self, Clock};
@@ -12,17 +12,14 @@ module suichin::craft_actions {
     use suichin::player_profile::{Self, PlayerProfile};
     use suichin::scrap;
 
-    // Variant counts per tier.
     const BRONZE_VARIANTS: u64 = 4;
     const SILVER_VARIANTS: u64 = 4;
     const GOLD_VARIANTS: u64 = 3;
 
-    // Roll ranges for legacy pseudo-random craft flow.
-    const ROLL_BRONZE_START: u64 = 80;
-    const ROLL_SILVER_START: u64 = 92;
-    const ROLL_GOLD_START: u64 = 98;
+    const ROLL_BRONZE_START: u64 = 60;
+    const ROLL_SILVER_START: u64 = 85;
+    const ROLL_GOLD_START: u64 = 95;
 
-    // Errors.
     const E_INSUFFICIENT_MINT_PAYMENT: u64 = 500;
     const E_NOT_OWNER: u64 = 501;
     const E_PAUSED: u64 = 508;
@@ -32,8 +29,8 @@ module suichin::craft_actions {
     public struct CraftResult has copy, drop {
         crafter: address,
         success: bool,
-        tier: u8, // 0 if Scrap
-        roll: u64, // raw roll 0..99
+        tier: u8,
+        roll: u64,
         chun_spent: u64,
         sui_paid: u64,
     }
@@ -73,7 +70,7 @@ module suichin::craft_actions {
         version: u64,
         actor: address,
         burned_asset_id: ID,
-        burned_asset_type: u8, // 1 = CuonChunNFT, 2 = Scrap
+        burned_asset_type: u8,
         reward_chun: u64,
         tier: u8,
         timestamp_ms: u64,
@@ -166,9 +163,47 @@ module suichin::craft_actions {
         }
     }
 
-    /// Craft Chun NFT or Scrap using legacy pseudo-random roll.
-    /// Requires SUI contribution to treasury on each craft.
-    #[allow(lint(self_transfer))]
+    fun variant_from_seed_for_tier(tier: u8, seed: u64): u8 {
+        ((seed % variant_count_for_tier(tier)) + 1) as u8
+    }
+
+    fun emit_legacy_craft_result(
+        sender: address,
+        success: bool,
+        tier: u8,
+        roll: u64,
+        chun_cost: u64,
+        deposit_amount: u64,
+    ) {
+        event::emit(CraftResult {
+            crafter: sender,
+            success,
+            tier,
+            roll,
+            chun_spent: chun_cost,
+            sui_paid: deposit_amount,
+        });
+    }
+
+    fun mint_nft_for_tier_and_transfer(
+        tier: u8,
+        variant: u8,
+        sender: address,
+        treasury: &mut Treasury,
+        ctx: &mut TxContext,
+    ): ID {
+        let nft = cuon_chun::mint(tier, variant, ctx);
+        let minted_nft_id = object::id(&nft);
+        transfer::public_transfer(nft, sender);
+        craft_treasury::increment_total_crafts(treasury);
+        minted_nft_id
+    }
+
+    fun mint_scrap_and_transfer(sender: address, ctx: &mut TxContext) {
+        let s = scrap::mint(ctx);
+        transfer::public_transfer(s, sender);
+    }
+
     public fun craft_chun(
         profile: &mut PlayerProfile,
         treasury: &mut Treasury,
@@ -196,62 +231,18 @@ module suichin::craft_actions {
 
         let roll = roll_rng(clock, ctx);
         let variant_seed = clock::timestamp_ms(clock) ^ craft_treasury::total_crafts(treasury);
+        let tier = tier_for_roll(roll);
 
-        if (roll < ROLL_BRONZE_START) {
-            let s = scrap::mint(ctx);
-            transfer::public_transfer(s, sender);
-            event::emit(CraftResult {
-                crafter: sender,
-                success: false,
-                tier: 0,
-                roll,
-                chun_spent: chun_cost,
-                sui_paid: deposit_amount,
-            });
-        } else if (roll < ROLL_SILVER_START) {
-            let variant = ((variant_seed % BRONZE_VARIANTS) + 1) as u8;
-            let nft = cuon_chun::mint(1, variant, ctx);
-            transfer::public_transfer(nft, sender);
-            craft_treasury::increment_total_crafts(treasury);
-            event::emit(CraftResult {
-                crafter: sender,
-                success: true,
-                tier: 1,
-                roll,
-                chun_spent: chun_cost,
-                sui_paid: deposit_amount,
-            });
-        } else if (roll < ROLL_GOLD_START) {
-            let variant = ((variant_seed % SILVER_VARIANTS) + 1) as u8;
-            let nft = cuon_chun::mint(2, variant, ctx);
-            transfer::public_transfer(nft, sender);
-            craft_treasury::increment_total_crafts(treasury);
-            event::emit(CraftResult {
-                crafter: sender,
-                success: true,
-                tier: 2,
-                roll,
-                chun_spent: chun_cost,
-                sui_paid: deposit_amount,
-            });
+        if (tier > 0) {
+            let variant = variant_from_seed_for_tier(tier, variant_seed);
+            let _minted_nft_id = mint_nft_for_tier_and_transfer(tier, variant, sender, treasury, ctx);
+            emit_legacy_craft_result(sender, true, tier, roll, chun_cost, deposit_amount);
         } else {
-            let variant = ((variant_seed % GOLD_VARIANTS) + 1) as u8;
-            let nft = cuon_chun::mint(3, variant, ctx);
-            transfer::public_transfer(nft, sender);
-            craft_treasury::increment_total_crafts(treasury);
-            event::emit(CraftResult {
-                crafter: sender,
-                success: true,
-                tier: 3,
-                roll,
-                chun_spent: chun_cost,
-                sui_paid: deposit_amount,
-            });
+            mint_scrap_and_transfer(sender, ctx);
+            emit_legacy_craft_result(sender, false, 0, roll, chun_cost, deposit_amount);
         };
     }
 
-    /// Native-random craft flow for indexer + VRF-like transparency.
-    #[allow(lint(public_random), lint(self_transfer))]
     public fun craft_chun_with_randomness(
         profile: &mut PlayerProfile,
         treasury: &mut Treasury,
@@ -312,10 +303,7 @@ module suichin::craft_actions {
         if (success) {
             let variant_count = variant_count_for_tier(tier);
             let variant = random::generate_u8_in_range(&mut generator, 1, variant_count as u8);
-            let nft = cuon_chun::mint(tier, variant, ctx);
-            let minted_nft_id = object::id(&nft);
-            transfer::public_transfer(nft, sender);
-            craft_treasury::increment_total_crafts(treasury);
+            let minted_nft_id = mint_nft_for_tier_and_transfer(tier, variant, sender, treasury, ctx);
 
             event::emit(CraftResultFinalized {
                 version: event_version,
@@ -338,18 +326,9 @@ module suichin::craft_actions {
                 correlation_id: craft_id,
             });
 
-            // Keep legacy event for backward compatibility with existing indexers.
-            event::emit(CraftResult {
-                crafter: sender,
-                success: true,
-                tier,
-                roll,
-                chun_spent: chun_cost,
-                sui_paid: deposit_amount,
-            });
+            emit_legacy_craft_result(sender, true, tier, roll, chun_cost, deposit_amount);
         } else {
-            let s = scrap::mint(ctx);
-            transfer::public_transfer(s, sender);
+            mint_scrap_and_transfer(sender, ctx);
 
             event::emit(CraftResultFinalized {
                 version: event_version,
@@ -371,14 +350,7 @@ module suichin::craft_actions {
                 timestamp_ms,
                 correlation_id: craft_id,
             });
-            event::emit(CraftResult {
-                crafter: sender,
-                success: false,
-                tier: 0,
-                roll,
-                chun_spent: chun_cost,
-                sui_paid: deposit_amount,
-            });
+            emit_legacy_craft_result(sender, false, 0, roll, chun_cost, deposit_amount);
         };
     }
 
@@ -559,8 +531,6 @@ module suichin::craft_actions {
         });
     }
 
-    /// Current economy recipe: 20 Scrap -> 1 Bronze NFT (no extra SUI fee).
-    #[allow(lint(self_transfer))]
     public fun fuse_scraps_for_bronze(
         config: &SystemConfig,
         scraps: vector<scrap::Scrap>,
@@ -603,8 +573,6 @@ module suichin::craft_actions {
         });
     }
 
-    /// Optional variant path using native randomness.
-    #[allow(lint(public_random), lint(self_transfer))]
     public fun fuse_scraps_for_bronze_with_randomness(
         config: &SystemConfig,
         scraps: vector<scrap::Scrap>,

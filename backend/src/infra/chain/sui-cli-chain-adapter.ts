@@ -112,18 +112,10 @@ export class SuiCliChainAdapter implements IChainAdapter {
       this.findBestProfileByOwner(loserWallet),
     ]);
 
-    const desiredAmount =
-      payload.stakeEnabled && payload.stakeAmount > 0
-        ? Math.max(0, Math.floor(payload.stakeAmount))
-        : 0;
-
-    // Safety: never transfer more than loser has actually locked.
-    const amount = Math.min(desiredAmount, loserProfile.stakedChun);
-
     const digest = await this.resolveMatch({
       winnerProfileId: winnerProfile.objectId,
       loserProfileId: loserProfile.objectId,
-      amount,
+      amount: 0,
     });
 
     return {

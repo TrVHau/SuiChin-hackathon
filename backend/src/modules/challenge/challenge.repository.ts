@@ -18,8 +18,6 @@ export interface ChallengeRepository {
     challengerWallet: string;
     mode: MatchMode;
     opponentWallet?: string;
-    stakeEnabled: boolean;
-    stakeAmount: number;
     expiresInSeconds: number;
   }): Promise<Challenge>;
   getById(id: string): Promise<Challenge | null>;
@@ -41,8 +39,6 @@ class InMemoryChallengeRepository implements ChallengeRepository {
     challengerWallet: string;
     mode: MatchMode;
     opponentWallet?: string;
-    stakeEnabled: boolean;
-    stakeAmount: number;
     expiresInSeconds: number;
   }): Promise<Challenge> {
     const challenge: Challenge = {
@@ -51,8 +47,6 @@ class InMemoryChallengeRepository implements ChallengeRepository {
       status: "OPEN",
       challengerWallet: input.challengerWallet,
       opponentWallet: input.opponentWallet ?? null,
-      stakeEnabled: input.stakeEnabled,
-      stakeAmount: input.stakeAmount,
       winnerWallet: null,
       createdAtMs: nowMs(),
       expiresAtMs: nowMs() + input.expiresInSeconds * 1000,
@@ -120,8 +114,6 @@ class PrismaChallengeRepository implements ChallengeRepository {
       status: row.status,
       challengerWallet: row.challengerWallet,
       opponentWallet: row.opponentWallet,
-      stakeEnabled: Boolean(row.stakeEnabled),
-      stakeAmount: Number(row.stakeAmount ?? 0),
       winnerWallet: row.winnerWallet,
       createdAtMs: new Date(row.createdAt).getTime(),
       expiresAtMs: new Date(row.expiresAt).getTime(),
@@ -132,8 +124,6 @@ class PrismaChallengeRepository implements ChallengeRepository {
     challengerWallet: string;
     mode: MatchMode;
     opponentWallet?: string;
-    stakeEnabled: boolean;
-    stakeAmount: number;
     expiresInSeconds: number;
   }): Promise<Challenge> {
     const row = await this.db.challenge.create({
@@ -143,8 +133,6 @@ class PrismaChallengeRepository implements ChallengeRepository {
         status: "OPEN",
         challengerWallet: input.challengerWallet,
         opponentWallet: input.opponentWallet ?? null,
-        stakeEnabled: input.stakeEnabled,
-        stakeAmount: input.stakeAmount,
         winnerWallet: null,
         createdAt: new Date(),
         expiresAt: new Date(Date.now() + input.expiresInSeconds * 1000),
@@ -166,8 +154,6 @@ class PrismaChallengeRepository implements ChallengeRepository {
         status: challenge.status,
         challengerWallet: challenge.challengerWallet,
         opponentWallet: challenge.opponentWallet,
-        stakeEnabled: challenge.stakeEnabled,
-        stakeAmount: challenge.stakeAmount,
         winnerWallet: challenge.winnerWallet,
         createdAt: new Date(challenge.createdAtMs),
         expiresAt: new Date(challenge.expiresAtMs),
@@ -244,8 +230,6 @@ export function normalizeCreateInput(input: CreateChallengeInput): Required<Crea
   return {
     mode: input.mode,
     opponentWallet: input.opponentWallet ?? "",
-    stakeEnabled: input.stakeEnabled ?? false,
-    stakeAmount: input.stakeAmount ?? 0,
     expiresInSeconds: input.expiresInSeconds ?? 5 * 60,
   };
 }

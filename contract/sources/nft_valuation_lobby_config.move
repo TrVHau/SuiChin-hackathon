@@ -1,4 +1,4 @@
-/// Config + admin controls for NFT valuation lobby.
+/// Mo-dun cau hinh va quan tri lobby dinh gia NFT.
 module suichin::nft_valuation_lobby_config {
     const E_SIGNER_NOT_FOUND: u64 = 715;
     const E_INVALID_SIGNER: u64 = 708;
@@ -30,7 +30,7 @@ module suichin::nft_valuation_lobby_config {
             tier_points_bronze: 100,
             tier_points_silver: 250,
             tier_points_gold: 1000,
-            emergency_refund_delay_ms: 86_400_000, // 24h
+            emergency_refund_delay_ms: 86_400_000,
             active_signer_pubkeys: vector[],
             paused: false,
             strict_equal_points: false,

@@ -1,26 +1,20 @@
-/// Module định nghĩa CuonChunNFT — NFT chính của SuiChin.
-/// Ba tier: Bronze (1) / Silver (2) / Gold (3).
-/// has key + store cho phép escrow trong marketplace.
-/// Chỉ package nội bộ mới có thể mint / burn.
+/// Mo-dun dinh nghia NFT CuonChun.
 module suichin::cuon_chun {
     use std::string::{Self, String};
     use sui::display;
     use sui::event;
     use sui::package;
 
-    // ─── One-Time Witness (cho Display) ───────────────────────────────────────
     public struct CUON_CHUN has drop {}
 
-    // ─── Struct ───────────────────────────────────────────────────────────────
     public struct CuonChunNFT has key, store {
         id: UID,
-        tier: u8,         // 1=Bronze, 2=Silver, 3=Gold
-        variant: u8,      // biến thể trong tier, bắt đầu từ 1
+        tier: u8,
+        variant: u8,
         name: String,
         image_url: String,
     }
 
-    // ─── Events ───────────────────────────────────────────────────────────────
     public struct ChunNFTMinted has copy, drop {
         nft_id: ID,
         tier: u8,
@@ -33,7 +27,9 @@ module suichin::cuon_chun {
         tier: u8,
     }
 
-    // ─── Init (Display setup) ─────────────────────────────────────────────────
+    const E_INVALID_TIER: u64 = 1;
+    const E_INVALID_VARIANT: u64 = 2;
+
     fun init(witness: CUON_CHUN, ctx: &mut TxContext) {
         let publisher = package::claim(witness, ctx);
         let mut disp = display::new<CuonChunNFT>(&publisher, ctx);
@@ -58,12 +54,12 @@ module suichin::cuon_chun {
         transfer::public_transfer(disp, tx_context::sender(ctx));
     }
 
-    // ─── Package-internal Functions ───────────────────────────────────────────
 
-    /// Mint CuonChunNFT mới. Chỉ gọi được từ trong cùng package.
-    /// tier: 1=Bronze, 2=Silver, 3=Gold
-    /// variant: 1–4 cho Bronze/Silver, 1–3 cho Gold
     public(package) fun mint(tier: u8, variant: u8, ctx: &mut TxContext): CuonChunNFT {
+        assert!(tier >= 1 && tier <= 3, E_INVALID_TIER);
+        let max_variant = if (tier == 3) 3 else 4;
+        assert!(variant >= 1 && variant <= max_variant, E_INVALID_VARIANT);
+
         let name_str = if (tier == 1) {
             string::utf8(b"Cuon Chun Dong")
         } else if (tier == 2) {
@@ -93,7 +89,6 @@ module suichin::cuon_chun {
         } else if (tier == 3 && variant == 2) {
             string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/nft/tier3_v2.png")
         } else {
-            // tier == 3 && variant == 3 (hoặc fallback)
             string::utf8(b"https://raw.githubusercontent.com/TrVHau/SuiChin-hackathon/refs/heads/main/frontend/public/nft/tier3_v3.png")
         };
 
@@ -115,16 +110,17 @@ module suichin::cuon_chun {
         nft
     }
 
-    /// Burn CuonChunNFT. Chỉ gọi được từ trong cùng package.
     public(package) fun burn(nft: CuonChunNFT) {
         let CuonChunNFT { id, tier, variant: _, name: _, image_url: _ } = nft;
         event::emit(ChunNFTBurned { nft_id: object::uid_to_inner(&id), tier });
         object::delete(id);
     }
 
-    // ─── Public Accessors ─────────────────────────────────────────────────────
     public fun tier(nft: &CuonChunNFT): u8         { nft.tier }
+
     public fun variant(nft: &CuonChunNFT): u8      { nft.variant }
+
     public fun name(nft: &CuonChunNFT): String     { nft.name }
+
     public fun image_url(nft: &CuonChunNFT): String { nft.image_url }
 }

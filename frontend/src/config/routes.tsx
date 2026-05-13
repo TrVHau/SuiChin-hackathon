@@ -11,6 +11,7 @@ const InventoryScreen = lazy(() => import("@/pages/InventoryScreen"));
 const TradeUpScreen = lazy(() => import("@/pages/TradeUpScreen"));
 const MarketplaceScreen = lazy(() => import("@/pages/MarketplaceScreen"));
 const PvPScreen = lazy(() => import("@/pages/PvPScreen"));
+const PvpGameSession = lazy(() => import("@/pages/PvpGameSession"));
 
 const LoadingFallback = () => (
   <div className="min-h-screen bg-sunny-gradient flex items-center justify-center">
@@ -116,6 +117,16 @@ export const routes: RouteObject[] = [
       <Suspense fallback={<LoadingFallback />}>
         <Protected>
           <PvPScreen />
+        </Protected>
+      </Suspense>
+    ),
+  },
+  {
+    path: "/pvp-session",
+    element: (
+      <Suspense fallback={<LoadingFallback />}>
+        <Protected>
+          <PvpGameSession />
         </Protected>
       </Suspense>
     ),
