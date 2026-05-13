@@ -42,7 +42,9 @@ interface ValuationRoomRepository {
   create(input: CreateValuationRoomInput): Promise<ValuationRoomRecord>;
   findByChallengeId(challengeId: string): Promise<ValuationRoomRecord | null>;
   findBySuiRoomId(suiRoomId: string): Promise<ValuationRoomRecord | null>;
-  findPendingByCreator(creatorWallet: string): Promise<ValuationRoomRecord | null>;
+  findPendingByCreator(
+    creatorWallet: string,
+  ): Promise<ValuationRoomRecord | null>;
   findPendingByJoiner(input: {
     joinerWallet: string;
     suiRoomId?: string;
@@ -77,10 +79,15 @@ function isPrismaUniqueConstraintOn(error: unknown, field: string): boolean {
   if (candidate?.code !== "P2002") return false;
 
   const target = candidate.meta?.target;
-  if (Array.isArray(target)) {
-    return target.includes(field);
-  }
-  return typeof target === "string" && target.includes(field);
+  if (!target) return true;
+
+  const normalizedTargets = Array.isArray(target)
+    ? target
+        .map((item) => String(item).replaceAll('"', "").toLowerCase())
+        .filter(Boolean)
+    : [String(target).replaceAll('"', "").toLowerCase()];
+  const normalizedField = field.toLowerCase();
+  return normalizedTargets.some((item) => item.includes(normalizedField));
 }
 
 class InMemoryValuationRoomRepository implements ValuationRoomRepository {
@@ -98,12 +105,16 @@ class InMemoryValuationRoomRepository implements ValuationRoomRepository {
     return cloneRecord(record);
   }
 
-  async findByChallengeId(challengeId: string): Promise<ValuationRoomRecord | null> {
+  async findByChallengeId(
+    challengeId: string,
+  ): Promise<ValuationRoomRecord | null> {
     const record = this.roomsByChallenge.get(challengeId);
     return record ? cloneRecord(record) : null;
   }
 
-  async findBySuiRoomId(suiRoomId: string): Promise<ValuationRoomRecord | null> {
+  async findBySuiRoomId(
+    suiRoomId: string,
+  ): Promise<ValuationRoomRecord | null> {
     for (const record of this.roomsByChallenge.values()) {
       if (record.suiRoomId === suiRoomId) {
         return cloneRecord(record);
@@ -112,7 +123,9 @@ class InMemoryValuationRoomRepository implements ValuationRoomRepository {
     return null;
   }
 
-  async findPendingByCreator(creatorWallet: string): Promise<ValuationRoomRecord | null> {
+  async findPendingByCreator(
+    creatorWallet: string,
+  ): Promise<ValuationRoomRecord | null> {
     for (const record of this.roomsByChallenge.values()) {
       if (
         record.creatorWallet === creatorWallet &&
@@ -139,12 +152,18 @@ class InMemoryValuationRoomRepository implements ValuationRoomRepository {
           return cloneRecord(record);
         }
       }
+      return null;
     }
 
     for (const record of this.roomsByChallenge.values()) {
       if (record.joinerWallet !== input.joinerWallet) continue;
-      if (record.status === "FINALIZED" || record.status === "PLAYING") continue;
-      if (input.suiRoomId && record.suiRoomId && record.suiRoomId !== input.suiRoomId) {
+      if (record.status === "FINALIZED" || record.status === "PLAYING")
+        continue;
+      if (
+        input.suiRoomId &&
+        record.suiRoomId &&
+        record.suiRoomId !== input.suiRoomId
+      ) {
         continue;
       }
       return cloneRecord(record);
@@ -156,6 +175,25 @@ class InMemoryValuationRoomRepository implements ValuationRoomRepository {
     challengeId: string;
     suiRoomId: string;
   }): Promise<ValuationRoomRecord> {
+    const current = this.requireRoom(input.challengeId);
+    if (
+      current.suiRoomId === input.suiRoomId &&
+      (current.status === "ROOM_CREATED" ||
+        current.status === "JOINED" ||
+        current.status === "PLAYING" ||
+        current.status === "FINALIZED" ||
+        current.status === "CANCELLED")
+    ) {
+      return cloneRecord(current);
+    }
+    if (
+      current.suiRoomId &&
+      current.suiRoomId !== input.suiRoomId &&
+      current.status !== "AWAITING_DEPOSIT"
+    ) {
+      return cloneRecord(current);
+    }
+
     const existing = await this.findBySuiRoomId(input.suiRoomId);
     if (existing && existing.challengeId !== input.challengeId) {
       return existing;
@@ -170,16 +208,33 @@ class InMemoryValuationRoomRepository implements ValuationRoomRepository {
       return existing;
     }
 
-    const record = this.requireRoom(input.challengeId);
-    record.suiRoomId = input.suiRoomId;
-    record.status = "ROOM_CREATED";
-    return cloneRecord(record);
+    current.suiRoomId = input.suiRoomId;
+    current.status = "ROOM_CREATED";
+    return cloneRecord(current);
   }
 
   async markRoomJoined(input: {
     challengeId: string;
     suiRoomId: string;
   }): Promise<ValuationRoomRecord> {
+    const current = this.requireRoom(input.challengeId);
+    if (
+      current.suiRoomId === input.suiRoomId &&
+      (current.status === "JOINED" ||
+        current.status === "PLAYING" ||
+        current.status === "FINALIZED" ||
+        current.status === "CANCELLED")
+    ) {
+      return cloneRecord(current);
+    }
+    if (
+      current.suiRoomId &&
+      current.suiRoomId !== input.suiRoomId &&
+      current.status !== "AWAITING_DEPOSIT"
+    ) {
+      return cloneRecord(current);
+    }
+
     const existing = await this.findBySuiRoomId(input.suiRoomId);
     if (existing && existing.challengeId !== input.challengeId) {
       return existing;
@@ -193,10 +248,9 @@ class InMemoryValuationRoomRepository implements ValuationRoomRepository {
       return existing;
     }
 
-    const record = this.requireRoom(input.challengeId);
-    record.suiRoomId = input.suiRoomId;
-    record.status = "JOINED";
-    return cloneRecord(record);
+    current.suiRoomId = input.suiRoomId;
+    current.status = "JOINED";
+    return cloneRecord(current);
   }
 
   async markPlaying(challengeId: string): Promise<ValuationRoomRecord | null> {
@@ -206,14 +260,18 @@ class InMemoryValuationRoomRepository implements ValuationRoomRepository {
     return cloneRecord(record);
   }
 
-  async markFinalized(challengeId: string): Promise<ValuationRoomRecord | null> {
+  async markFinalized(
+    challengeId: string,
+  ): Promise<ValuationRoomRecord | null> {
     const record = this.roomsByChallenge.get(challengeId);
     if (!record) return null;
     record.status = "FINALIZED";
     return cloneRecord(record);
   }
 
-  async markCancelled(challengeId: string): Promise<ValuationRoomRecord | null> {
+  async markCancelled(
+    challengeId: string,
+  ): Promise<ValuationRoomRecord | null> {
     const record = this.roomsByChallenge.get(challengeId);
     if (!record) return null;
     record.status = "CANCELLED";
@@ -252,17 +310,27 @@ class PrismaValuationRoomRepository implements ValuationRoomRepository {
     return this.toRecord(row);
   }
 
-  async findByChallengeId(challengeId: string): Promise<ValuationRoomRecord | null> {
-    const row = await this.db.valuationRoom.findUnique({ where: { challengeId } });
+  async findByChallengeId(
+    challengeId: string,
+  ): Promise<ValuationRoomRecord | null> {
+    const row = await this.db.valuationRoom.findUnique({
+      where: { challengeId },
+    });
     return row ? this.toRecord(row) : null;
   }
 
-  async findBySuiRoomId(suiRoomId: string): Promise<ValuationRoomRecord | null> {
-    const row = await this.db.valuationRoom.findUnique({ where: { suiRoomId } });
+  async findBySuiRoomId(
+    suiRoomId: string,
+  ): Promise<ValuationRoomRecord | null> {
+    const row = await this.db.valuationRoom.findUnique({
+      where: { suiRoomId },
+    });
     return row ? this.toRecord(row) : null;
   }
 
-  async findPendingByCreator(creatorWallet: string): Promise<ValuationRoomRecord | null> {
+  async findPendingByCreator(
+    creatorWallet: string,
+  ): Promise<ValuationRoomRecord | null> {
     const row = await this.db.valuationRoom.findFirst({
       where: {
         creatorWallet,
@@ -289,13 +357,16 @@ class PrismaValuationRoomRepository implements ValuationRoomRepository {
       ) {
         return this.toRecord(exact);
       }
+      return null;
     }
 
     const row = await this.db.valuationRoom.findFirst({
       where: {
         joinerWallet: input.joinerWallet,
         status: { in: ["AWAITING_DEPOSIT", "ROOM_CREATED", "JOINED"] },
-        ...(input.suiRoomId ? { OR: [{ suiRoomId: input.suiRoomId }, { suiRoomId: null }] } : {}),
+        ...(input.suiRoomId
+          ? { OR: [{ suiRoomId: input.suiRoomId }, { suiRoomId: null }] }
+          : {}),
       },
       orderBy: { createdAt: "asc" },
     });
@@ -306,6 +377,30 @@ class PrismaValuationRoomRepository implements ValuationRoomRepository {
     challengeId: string;
     suiRoomId: string;
   }): Promise<ValuationRoomRecord> {
+    const current = await this.db.valuationRoom.findUnique({
+      where: { challengeId: input.challengeId },
+    });
+    if (!current) {
+      throw new Error("Valuation room not found");
+    }
+    if (
+      current.suiRoomId === input.suiRoomId &&
+      (current.status === "ROOM_CREATED" ||
+        current.status === "JOINED" ||
+        current.status === "PLAYING" ||
+        current.status === "FINALIZED" ||
+        current.status === "CANCELLED")
+    ) {
+      return this.toRecord(current);
+    }
+    if (
+      current.suiRoomId &&
+      current.suiRoomId !== input.suiRoomId &&
+      current.status !== "AWAITING_DEPOSIT"
+    ) {
+      return this.toRecord(current);
+    }
+
     const existing = await this.db.valuationRoom.findUnique({
       where: { suiRoomId: input.suiRoomId },
     });
@@ -348,6 +443,29 @@ class PrismaValuationRoomRepository implements ValuationRoomRepository {
     challengeId: string;
     suiRoomId: string;
   }): Promise<ValuationRoomRecord> {
+    const current = await this.db.valuationRoom.findUnique({
+      where: { challengeId: input.challengeId },
+    });
+    if (!current) {
+      throw new Error("Valuation room not found");
+    }
+    if (
+      current.suiRoomId === input.suiRoomId &&
+      (current.status === "JOINED" ||
+        current.status === "PLAYING" ||
+        current.status === "FINALIZED" ||
+        current.status === "CANCELLED")
+    ) {
+      return this.toRecord(current);
+    }
+    if (
+      current.suiRoomId &&
+      current.suiRoomId !== input.suiRoomId &&
+      current.status !== "AWAITING_DEPOSIT"
+    ) {
+      return this.toRecord(current);
+    }
+
     const existing = await this.db.valuationRoom.findUnique({
       where: { suiRoomId: input.suiRoomId },
     });
@@ -393,7 +511,9 @@ class PrismaValuationRoomRepository implements ValuationRoomRepository {
     return row ? this.toRecord(row) : null;
   }
 
-  async markFinalized(challengeId: string): Promise<ValuationRoomRecord | null> {
+  async markFinalized(
+    challengeId: string,
+  ): Promise<ValuationRoomRecord | null> {
     const row = await this.db.valuationRoom.update({
       where: { challengeId },
       data: { status: "FINALIZED" },
@@ -401,7 +521,9 @@ class PrismaValuationRoomRepository implements ValuationRoomRepository {
     return row ? this.toRecord(row) : null;
   }
 
-  async markCancelled(challengeId: string): Promise<ValuationRoomRecord | null> {
+  async markCancelled(
+    challengeId: string,
+  ): Promise<ValuationRoomRecord | null> {
     const row = await this.db.valuationRoom.update({
       where: { challengeId },
       data: { status: "CANCELLED" },

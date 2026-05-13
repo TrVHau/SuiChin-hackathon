@@ -107,6 +107,7 @@ export default function PvPScreen() {
     notifyRoomCreated,
     notifyRoomJoined,
     notifyRoomClosed,
+    refreshSettlementPayload,
     // legacy aliases still available on hook: joinQueue, leaveQueue
     submitShot,
     reportRound,
@@ -144,6 +145,7 @@ export default function PvPScreen() {
   const [escrowLocked, setEscrowLocked] = useState(false);
   const lastActiveSyncAtRef = useRef(0);
   const autoCancelRoomRef = useRef<string | null>(null);
+  const settlementWarnedDeadlineRef = useRef<number | null>(null);
 
   const handleBack = () => {
     void handleLeave();
@@ -978,11 +980,12 @@ export default function PvPScreen() {
     setEscrowSubmitting(false);
   };
 
-  const isMe = (address: string) =>
-    Boolean(account?.address && address === account.address);
+  const isMe = (address: string) => sameAddress(address, account?.address);
 
   const settleOnChain = async () => {
-    const payload = pvp.settlementPayload;
+    let payload =
+      pvp.settlementPayload ??
+      (await refreshSettlementPayload(createdRoomId ?? undefined));
     if (!payload) {
       toast.error("Backend chưa cung cấp settlement payload.");
       return;
@@ -991,12 +994,52 @@ export default function PvPScreen() {
       toast.error("Chỉ winner mới được settle on-chain.");
       return;
     }
+    if (!sameAddress(payload.winner, account?.address)) {
+      toast.error("Settlement payload hiện tại không dành cho ví của bạn.");
+      return;
+    }
+
+    const settleRoomId = payload.roomId || createdRoomId || joinRoomId.trim();
+    if (!settleRoomId) {
+      toast.error("Không xác định được room để settle.");
+      return;
+    }
+
+    const roomSnapshot = await readLobbyRoomSnapshot(settleRoomId).catch(
+      () => null,
+    );
+    applyLobbyRoomSnapshot(roomSnapshot);
+    if (!roomSnapshot) {
+      toast.error("Không đọc được trạng thái room on-chain để settle.");
+      return;
+    }
+    if (roomSnapshot.status !== 1) {
+      toast.error(
+        "Room không còn ở trạng thái ACTIVE. Hãy đồng bộ lại phòng trước khi settle.",
+      );
+      return;
+    }
+
+    if (payload.deadlineMs <= Date.now() + 15_000) {
+      const refreshed = await refreshSettlementPayload(settleRoomId);
+      if (!refreshed) {
+        toast.error(
+          "Settlement payload đã hết hạn, chưa thể làm mới. Hãy thử lại sau vài giây.",
+        );
+        return;
+      }
+      payload = refreshed;
+    }
+    if (payload.signature.length === 0 || payload.signerPubkey.length === 0) {
+      toast.error("Settlement payload không hợp lệ (thiếu signature/signer).");
+      return;
+    }
 
     setSettleSubmitting(true);
     toast.loading("Đang submit settle on-chain...", { id: "lobby-settle" });
 
     const tx = buildSettleValuationLobbyRoomTx({
-      roomId: payload.roomId,
+      roomId: settleRoomId,
       winner: payload.winner,
       loser: payload.loser,
       matchDigest: payload.matchDigest,
@@ -1015,8 +1058,17 @@ export default function PvPScreen() {
           setSettleSubmitting(false);
         },
         onError: (error) => {
+          const message = String(error?.message ?? error);
+          if (message.includes("711")) {
+            toast.error(
+              "Settle bị từ chối (711): room/payload không còn hợp lệ. Hãy đồng bộ lại phòng rồi settle lại, hoặc dùng Reclaim NFT nếu cần.",
+              { id: "lobby-settle" },
+            );
+            setSettleSubmitting(false);
+            return;
+          }
           toast.error(
-            `Settle on-chain thất bại: ${String(error?.message ?? error)}`,
+            `Settle on-chain thất bại: ${message}`,
             { id: "lobby-settle" },
           );
           setSettleSubmitting(false);
@@ -1097,6 +1149,21 @@ export default function PvPScreen() {
       setEscrowLocked(false);
     }
   }, [ESCROW_ROOM_STORAGE_KEY, roomStatus]);
+
+  useEffect(() => {
+    if (pvp.status !== "resolved") return;
+    const deadlineMs = pvp.settlementPayload?.deadlineMs;
+    if (!deadlineMs) return;
+    if (settlementWarnedDeadlineRef.current === deadlineMs) return;
+
+    const remainingMs = deadlineMs - Date.now();
+    if (remainingMs > 0 && remainingMs <= 5 * 60_000) {
+      settlementWarnedDeadlineRef.current = deadlineMs;
+      toast.info(
+        `Settlement payload sẽ hết hạn sau ${Math.ceil(remainingMs / 60_000)} phút.`,
+      );
+    }
+  }, [pvp.settlementPayload?.deadlineMs, pvp.status]);
 
   const emergencyRefundReadyAt =
     roomDeadlineMs && emergencyRefundDelayMs

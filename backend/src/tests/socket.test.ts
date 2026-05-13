@@ -51,25 +51,40 @@ describe("socket /multiplayer", () => {
   });
 
   it("matches tiered valuation clients after escrow notifications", async () => {
-    clientA = ioClient(baseUrl, { auth: { walletAddress: "wallet_A" }, reconnection: false });
-    clientB = ioClient(baseUrl, { auth: { walletAddress: "wallet_B" }, reconnection: false });
+    clientA = ioClient(baseUrl, {
+      auth: { walletAddress: "wallet_A" },
+      reconnection: false,
+    });
+    clientB = ioClient(baseUrl, {
+      auth: { walletAddress: "wallet_B" },
+      reconnection: false,
+    });
 
     await Promise.all([waitForConnect(clientA), waitForConnect(clientB)]);
 
-    const matchFoundA = new Promise<{ roomId: string; challengeId: string; creator: string; joiner: string }>(
+    const matchFoundA = new Promise<{
+      roomId: string;
+      challengeId: string;
+      creator: string;
+      joiner: string;
+    }>((resolve) => {
+      clientA!.once("match.found", (payload) => resolve(payload));
+    });
+    const matchFoundB = new Promise<{ roomId: string; challengeId: string }>(
       (resolve) => {
-        clientA!.once("match.found", (payload) => resolve(payload));
+        clientB!.once("match.found", (payload) => resolve(payload));
       },
     );
-    const matchFoundB = new Promise<{ roomId: string; challengeId: string }>((resolve) => {
-      clientB!.once("match.found", (payload) => resolve(payload));
-    });
 
-    const ackA = await new Promise<{ ok: boolean; result: { matched: boolean } }>((resolve) => {
+    const ackA = await new Promise<{
+      ok: boolean;
+      result: { matched: boolean };
+    }>((resolve) => {
       clientA!.emit(
         "queue.join",
         { tier: "0_5_SUI", nft: { id: "0xa1", name: "Bronze A", tier: 1 } },
-        (payload: { ok: boolean; result: { matched: boolean } }) => resolve(payload),
+        (payload: { ok: boolean; result: { matched: boolean } }) =>
+          resolve(payload),
       );
     });
     assert.equal(ackA.ok, true);
@@ -112,12 +127,16 @@ describe("socket /multiplayer", () => {
     });
     assert.equal((await readyForJoiner).suiRoomId, suiRoomId);
 
-    const matchStartA = new Promise<{ roomId: string; challengeId: string }>((resolve) => {
-      clientA!.once("match.start", (payload) => resolve(payload));
-    });
-    const matchStartB = new Promise<{ roomId: string; challengeId: string }>((resolve) => {
-      clientB!.once("match.start", (payload) => resolve(payload));
-    });
+    const matchStartA = new Promise<{ roomId: string; challengeId: string }>(
+      (resolve) => {
+        clientA!.once("match.start", (payload) => resolve(payload));
+      },
+    );
+    const matchStartB = new Promise<{ roomId: string; challengeId: string }>(
+      (resolve) => {
+        clientB!.once("match.start", (payload) => resolve(payload));
+      },
+    );
     valuationRoomEvents.emit("roomJoined", {
       roomId: suiRoomId,
       joiner: "wallet_B",
@@ -133,48 +152,96 @@ describe("socket /multiplayer", () => {
     assert.equal(startA.roomId, suiRoomId);
     assert.equal(startB.challengeId, ackB.result.challengeId);
 
-    const shotSeenByB = new Promise<{ byWallet: string; seq: number }>((resolve) => {
-      clientB!.once("match.shot.received", (payload) => resolve(payload));
+    const creatorReconnectAck = await new Promise<{
+      ok: boolean;
+      started?: boolean;
+    }>((resolve) => {
+      clientA!.emit(
+        "queue.roomJoined",
+        {
+          tempRoomId: foundA.roomId,
+          suiRoomId,
+          challengeId: ackB.result.challengeId,
+        },
+        (payload: { ok: boolean; started?: boolean }) => resolve(payload),
+      );
     });
-    const shotAck = await new Promise<{ ok: boolean; result?: { seq: number } }>(
+    assert.equal(creatorReconnectAck.ok, true);
+    assert.equal(Boolean(creatorReconnectAck.started), true);
+
+    const shotSeenByB = new Promise<{ byWallet: string; seq: number }>(
       (resolve) => {
-        clientA!.emit(
-          "match.shot.submit",
-          { challengeId: ackB.result.challengeId, x: 0.5, y: 0.4, force: 1200 },
-          (payload: { ok: boolean; result?: { seq: number } }) => resolve(payload),
-        );
+        clientB!.once("match.shot.received", (payload) => resolve(payload));
       },
     );
+    const shotAck = await new Promise<{
+      ok: boolean;
+      result?: { seq: number };
+    }>((resolve) => {
+      clientA!.emit(
+        "match.shot.submit",
+        { challengeId: ackB.result.challengeId, x: 0.5, y: 0.4, force: 1200 },
+        (payload: { ok: boolean; result?: { seq: number } }) =>
+          resolve(payload),
+      );
+    });
     assert.equal(shotAck.ok, true);
     assert.equal(shotAck.result?.seq, 1);
     assert.equal((await shotSeenByB).byWallet, "wallet_A");
 
-    const finalizedA = new Promise<{ winnerWallet: string | null }>((resolve) => {
-      clientA!.once("match.result.finalized", (payload) => resolve(payload));
-    });
-    const submitA = await new Promise<{ ok: boolean; result?: { totalSubmissions: number } }>(
+    const finalizedA = new Promise<{ winnerWallet: string | null }>(
       (resolve) => {
-        clientA!.emit(
-          "match.result.submit",
-          { challengeId: ackB.result.challengeId, result: "WIN" },
-          (payload: { ok: boolean; result?: { totalSubmissions: number } }) => resolve(payload),
-        );
+        clientA!.once("match.result.finalized", (payload) => resolve(payload));
       },
     );
+    const submitA = await new Promise<{
+      ok: boolean;
+      result?: { totalSubmissions: number };
+    }>((resolve) => {
+      clientA!.emit(
+        "match.result.submit",
+        { challengeId: ackB.result.challengeId, result: "WIN" },
+        (payload: { ok: boolean; result?: { totalSubmissions: number } }) =>
+          resolve(payload),
+      );
+    });
     assert.equal(submitA.ok, true);
     assert.equal(submitA.result?.totalSubmissions, 1);
 
-    const submitB = await new Promise<{ ok: boolean; finalized?: { winnerWallet: string | null } }>(
-      (resolve) => {
-        clientB!.emit(
-          "match.result.submit",
-          { challengeId: ackB.result.challengeId, result: "LOSE" },
-          (payload: { ok: boolean; finalized?: { winnerWallet: string | null } }) => resolve(payload),
-        );
-      },
-    );
+    const submitB = await new Promise<{
+      ok: boolean;
+      finalized?: { winnerWallet: string | null };
+    }>((resolve) => {
+      clientB!.emit(
+        "match.result.submit",
+        { challengeId: ackB.result.challengeId, result: "LOSE" },
+        (payload: {
+          ok: boolean;
+          finalized?: { winnerWallet: string | null };
+        }) => resolve(payload),
+      );
+    });
     assert.equal(submitB.ok, true);
     assert.equal(Boolean(submitB.finalized), true);
     assert.equal((await finalizedA).winnerWallet, "wallet_A");
+
+    const refreshAck = await new Promise<{
+      ok: boolean;
+      result?: { challengeId: string; roomId: string | null };
+    }>((resolve) => {
+      clientA!.emit(
+        "match.settlement.refresh",
+        {
+          challengeId: ackB.result.challengeId,
+          roomId: suiRoomId,
+        },
+        (payload: {
+          ok: boolean;
+          result?: { challengeId: string; roomId: string | null };
+        }) => resolve(payload),
+      );
+    });
+    assert.equal(refreshAck.ok, true);
+    assert.equal(refreshAck.result?.challengeId, ackB.result.challengeId);
   });
 });
