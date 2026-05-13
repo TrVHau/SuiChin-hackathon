@@ -73,8 +73,12 @@ export interface SettlementPayload {
   matchDigest: number[];
   nonce: number;
   deadlineMs: number;
+  chainId?: number;
+  packageId?: string;
   signature: number[];
   signerPubkey: number[];
+  debugMessageB64?: string;
+  debugSignatureB64?: string;
 }
 
 interface MatchTurnEvent {
@@ -409,7 +413,11 @@ export function usePvP(_profileId: string | undefined) {
           "match.settlement.refresh",
           {
             challengeId,
-            roomId: input?.roomId ?? current.roomId ?? current.tempRoomId ?? undefined,
+            roomId:
+              input?.roomId ??
+              current.roomId ??
+              current.tempRoomId ??
+              undefined,
           },
           (ack: SettlementRefreshAck) => {
             if (!ack?.ok) {

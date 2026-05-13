@@ -27,6 +27,8 @@ export interface SettlementPayload {
   matchDigest: number[];
   nonce: number;
   deadlineMs: number;
+  chainId?: number;
+  packageId?: string;
   signature: number[];
   signerPubkey: number[];
   debugMessageB64?: string;
@@ -229,6 +231,8 @@ export class SettlementPayloadService {
         deadlineMs,
         chainId: config.chainId,
         packageId: config.packageId,
+        messageLen: messageBytes.length,
+        signatureLen: signatureBytes.length,
         signerPubkeyB64: toBase64(new Uint8Array(signerPubkey)),
         messageB64: Buffer.from(messageBytes).toString("base64"),
         signatureB64: Buffer.from(signatureBytes).toString("base64"),
@@ -243,6 +247,8 @@ export class SettlementPayloadService {
       matchDigest: input.matchDigest,
       nonce: room.nonce,
       deadlineMs,
+      chainId: config.chainId,
+      packageId: config.packageId,
       signature: Array.from(signatureBytes),
       signerPubkey,
       debugMessageB64: Buffer.from(messageBytes).toString("base64"),

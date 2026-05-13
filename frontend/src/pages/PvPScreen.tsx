@@ -12,6 +12,8 @@ import {
   Wallet,
 } from "lucide-react";
 import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
+import { bcs } from "@mysten/sui/bcs";
+import { normalizeSuiAddress, toBase64 } from "@mysten/sui/utils";
 import PageHeader from "@/components/common/PageHeader";
 import { useGame } from "@/providers/GameContext";
 import { usePvP, type BettingTier, type ValuationNft } from "@/hooks/usePvP";
@@ -94,7 +96,40 @@ type LobbyRoomSnapshot = {
   status: number;
   deadlineMs: number;
   creator: string | null;
+  nonce: number;
+  signerPubkey: number[];
 };
+
+const SettlementMessageBcs = bcs.struct("SettlementMessage", {
+  intent_scope: bcs.u8(),
+  chain_id: bcs.u8(),
+  package_id: bcs.Address,
+  room_id: bcs.Address,
+  winner: bcs.Address,
+  loser: bcs.Address,
+  match_digest: bcs.vector(bcs.u8()),
+  nonce: bcs.u64(),
+  deadline_ms: bcs.u64(),
+});
+
+function collectByteVectors(value: unknown): number[][] {
+  if (Array.isArray(value)) {
+    if (value.length > 0 && value.every((item) => typeof item === "number")) {
+      return [value as number[]];
+    }
+    return value.flatMap((item) => collectByteVectors(item));
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if ("fields" in record) return collectByteVectors(record.fields);
+    if ("value" in record) return collectByteVectors(record.value);
+    if ("vec" in record) return collectByteVectors(record.vec);
+    return Object.values(record).flatMap((item) => collectByteVectors(item));
+  }
+
+  return [];
+}
 
 export default function PvPScreen() {
   const ESCROW_ROOM_STORAGE_KEY = "pvp:last-escrow-room-id";
@@ -260,6 +295,8 @@ export default function PvPScreen() {
       status: Number(fields.status ?? 0),
       deadlineMs: Number(fields.deadline_ms ?? 0),
       creator: typeof fields.creator === "string" ? fields.creator : null,
+      nonce: Number(fields.nonce ?? 0),
+      signerPubkey: collectByteVectors(fields.signer_pubkey)[0] ?? [],
     };
   };
 
@@ -1100,6 +1137,53 @@ export default function PvPScreen() {
       toast.error(
         "Room không còn ở trạng thái ACTIVE. Hãy đồng bộ lại phòng trước khi settle.",
       );
+      return;
+    }
+
+    if (roomSnapshot.signerPubkey.length > 0) {
+      const roomSignerB64 = toBase64(new Uint8Array(roomSnapshot.signerPubkey));
+      const payloadSignerB64 = toBase64(new Uint8Array(payload.signerPubkey));
+      if (roomSignerB64 !== payloadSignerB64) {
+        toast.error(
+          "Signer pubkey trong payload không khớp signer đang gắn với room on-chain.",
+        );
+        return;
+      }
+    }
+
+    if (payload.debugMessageB64 && payload.packageId && payload.chainId !== undefined) {
+      const localMessageBytes = SettlementMessageBcs.serialize({
+        intent_scope: 1,
+        chain_id: payload.chainId,
+        package_id: normalizeSuiAddress(payload.packageId),
+        room_id: normalizeSuiAddress(settleRoomId),
+        winner: normalizeSuiAddress(payload.winner),
+        loser: normalizeSuiAddress(payload.loser),
+        match_digest: payload.matchDigest,
+        nonce: String(payload.nonce),
+        deadline_ms: String(payload.deadlineMs),
+      }).toBytes();
+
+      const localMessageB64 = toBase64(localMessageBytes);
+      if (localMessageB64 !== payload.debugMessageB64) {
+        toast.error(
+          "Settlement payload mismatch trước khi submit (message bytes không trùng backend).",
+        );
+        console.error("Settlement preflight mismatch", {
+          roomId: settleRoomId,
+          backendMessageB64: payload.debugMessageB64,
+          localMessageB64,
+          chainId: payload.chainId,
+          packageId: payload.packageId,
+          nonce: payload.nonce,
+          deadlineMs: payload.deadlineMs,
+        });
+        return;
+      }
+    }
+
+    if (roomSnapshot.nonce !== payload.nonce) {
+      toast.error("Nonce payload không khớp nonce room on-chain. Hãy refresh payload rồi thử lại.");
       return;
     }
 
