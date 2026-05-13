@@ -681,10 +681,10 @@ export function usePvP(_profileId: string | undefined) {
   const notifyRoomJoined = useCallback(
     (suiRoomId: string) => {
       const socket = socketRef.current;
-      if (!socket || !pvp.tempRoomId) return;
+      if (!socket) return;
 
       socket.emit("queue.roomJoined", {
-        tempRoomId: pvp.tempRoomId,
+        tempRoomId: pvp.tempRoomId ?? suiRoomId,
         suiRoomId,
       });
     },

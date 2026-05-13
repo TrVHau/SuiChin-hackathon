@@ -84,6 +84,12 @@ function resolveNftImage(nft: {
   return `/nft/tier${tier}_v${variant}.png`;
 }
 
+function resolveValuationNftImage(nft?: ValuationNft | null) {
+  if (nft?.imageUrl) return nft.imageUrl;
+  const tier = Math.min(3, Math.max(1, Number(nft?.tier) || 1));
+  return `/nft/tier${tier}_v1.png`;
+}
+
 export default function PvPScreen() {
   const ESCROW_ROOM_STORAGE_KEY = "pvp:last-escrow-room-id";
   const navigate = useNavigate();
@@ -486,7 +492,8 @@ export default function PvPScreen() {
             typeof fields.creator === "string" ? fields.creator : null,
           );
           
-          // If backend missed a socket event, resync room state via role-specific notify.
+          // If backend/indexer missed RoomActivated, resync ACTIVE rooms through
+          // the join path because that path calls startValuationMatchFromRoom.
           if (
             pvp.status === "awaiting_deposit" &&
             Number(fields.status ?? 0) === 1 &&
@@ -495,11 +502,7 @@ export default function PvPScreen() {
             const now = Date.now();
             if (now - lastActiveSyncAtRef.current > 8_000) {
               lastActiveSyncAtRef.current = now;
-              if (pvp.role === "CREATOR") {
-                notifyRoomCreated(createdRoomId);
-              } else if (pvp.role === "JOINER") {
-                notifyRoomJoined(createdRoomId);
-              }
+              notifyRoomJoined(createdRoomId);
             }
           }
         }
@@ -1219,12 +1222,24 @@ export default function PvPScreen() {
                 <p className="text-xs font-black uppercase text-slate-400">
                   Doi thu
                 </p>
-                <p className="mt-1 text-2xl font-black text-slate-950">
-                  {pvp.opponentNft?.name ?? "Dang tai..."}
-                </p>
-                <p className="mt-1 text-xs font-semibold text-slate-500">
-                  {pvp.role === "CREATOR" ? "Joiner" : "Creator"}
-                </p>
+                <div className="mt-2 flex items-center gap-3">
+                  <img
+                    src={resolveValuationNftImage(pvp.opponentNft)}
+                    alt={pvp.opponentNft?.name ?? "NFT doi thu"}
+                    onError={(event) => {
+                      event.currentTarget.src = "/nft/tier1_v1.png";
+                    }}
+                    className="size-14 rounded-xl bg-white object-cover"
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-xl font-black text-slate-950">
+                      {pvp.opponentNft?.name ?? "Dang tai NFT..."}
+                    </p>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">
+                      {pvp.role === "CREATOR" ? "Joiner" : "Creator"}
+                    </p>
+                  </div>
+                </div>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs font-black uppercase text-slate-400">
@@ -1241,23 +1256,47 @@ export default function PvPScreen() {
                 <p className="text-xs font-black uppercase text-slate-400">
                   NFT cua ban
                 </p>
-                <p className="mt-2 font-black text-slate-950">
-                  {pvp.myNft?.name ?? "-"}
-                </p>
-                <p className="mt-1 break-all text-xs font-semibold text-slate-400">
-                  {pvp.myNft?.id}
-                </p>
+                <div className="mt-3 flex items-center gap-4">
+                  <img
+                    src={resolveValuationNftImage(pvp.myNft)}
+                    alt={pvp.myNft?.name ?? "NFT cua ban"}
+                    onError={(event) => {
+                      event.currentTarget.src = "/nft/tier1_v1.png";
+                    }}
+                    className="size-20 rounded-2xl bg-slate-100 object-cover"
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-lg font-black text-slate-950">
+                      {pvp.myNft?.name ?? "-"}
+                    </p>
+                    <p className="mt-1 text-xs font-black uppercase text-slate-400">
+                      Tier {pvp.myNft?.tier ?? "-"}
+                    </p>
+                  </div>
+                </div>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white p-4">
                 <p className="text-xs font-black uppercase text-slate-400">
                   NFT doi thu
                 </p>
-                <p className="mt-2 font-black text-slate-950">
-                  {pvp.opponentNft?.name ?? "-"}
-                </p>
-                <p className="mt-1 break-all text-xs font-semibold text-slate-400">
-                  {pvp.opponentNft?.id}
-                </p>
+                <div className="mt-3 flex items-center gap-4">
+                  <img
+                    src={resolveValuationNftImage(pvp.opponentNft)}
+                    alt={pvp.opponentNft?.name ?? "NFT doi thu"}
+                    onError={(event) => {
+                      event.currentTarget.src = "/nft/tier1_v1.png";
+                    }}
+                    className="size-20 rounded-2xl bg-slate-100 object-cover"
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-lg font-black text-slate-950">
+                      {pvp.opponentNft?.name ?? "-"}
+                    </p>
+                    <p className="mt-1 text-xs font-black uppercase text-slate-400">
+                      Tier {pvp.opponentNft?.tier ?? "-"}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 
