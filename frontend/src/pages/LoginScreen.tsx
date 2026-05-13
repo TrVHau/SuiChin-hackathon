@@ -176,10 +176,16 @@ export default function LoginScreen() {
     const completeCallback = async () => {
       try {
         await persistEnokiCallbackSession();
-        if (window.opener && !window.opener.closed) {
-          window.opener.location.reload();
+        try {
+          window.opener?.location.reload();
+        } catch {
+          // COOP can block opener access after social-login redirects.
         }
-        window.close();
+        try {
+          window.close();
+        } catch {
+          // Some browsers also block programmatic close across COOP boundaries.
+        }
       } catch (error) {
         if (!disposed) {
           setCallbackError(

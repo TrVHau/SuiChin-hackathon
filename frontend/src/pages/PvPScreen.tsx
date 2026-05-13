@@ -90,6 +90,12 @@ function resolveValuationNftImage(nft?: ValuationNft | null) {
   return `/nft/tier${tier}_v1.png`;
 }
 
+type LobbyRoomSnapshot = {
+  status: number;
+  deadlineMs: number;
+  creator: string | null;
+};
+
 export default function PvPScreen() {
   const ESCROW_ROOM_STORAGE_KEY = "pvp:last-escrow-room-id";
   const navigate = useNavigate();
@@ -192,7 +198,11 @@ export default function PvPScreen() {
     pvp.status === "cancelled" &&
     Boolean(pvp.cancelRoomId) &&
     Boolean(pvp.needsCreatorCancel) &&
-    sameAddress(pvp.canCancelWallet, account?.address);
+    sameAddress(pvp.canCancelWallet, account?.address) &&
+    roomStatus !== 1 &&
+    roomStatus !== 2 &&
+    roomStatus !== 3 &&
+    roomStatus !== 4;
 
   const shouldWarnUnsafeLeave = useMemo(() => {
     if (mustCancelOnChainBeforeLeaving) return true;
@@ -205,6 +215,76 @@ export default function PvPScreen() {
       pvp.status === "submitting"
     );
   }, [createdRoomId, mustCancelOnChainBeforeLeaving, pvp.status, roomStatus]);
+
+  const readLobbyRoomSnapshot = async (
+    roomId: string,
+  ): Promise<LobbyRoomSnapshot | null> => {
+    const roomObject = await suiClient.getObject({
+      id: roomId,
+      options: { showContent: true },
+    });
+    const fields = (
+      roomObject.data?.content as
+        | { fields?: Record<string, unknown> }
+        | undefined
+    )?.fields;
+    if (!fields) return null;
+    return {
+      status: Number(fields.status ?? 0),
+      deadlineMs: Number(fields.deadline_ms ?? 0),
+      creator: typeof fields.creator === "string" ? fields.creator : null,
+    };
+  };
+
+  const applyLobbyRoomSnapshot = (snapshot: LobbyRoomSnapshot | null) => {
+    if (!snapshot) {
+      setRoomStatus(null);
+      setRoomDeadlineMs(null);
+      setRoomCreator(null);
+      return;
+    }
+    setRoomStatus(snapshot.status);
+    setRoomDeadlineMs(snapshot.deadlineMs);
+    setRoomCreator(snapshot.creator);
+  };
+
+  const recoverCancelMismatch = async (roomId: string) => {
+    const snapshot = await readLobbyRoomSnapshot(roomId).catch(() => null);
+    applyLobbyRoomSnapshot(snapshot);
+
+    if (snapshot?.status === 1) {
+      setCreatedRoomId(roomId);
+      setJoinRoomId(roomId);
+      setEscrowLocked(true);
+      notifyRoomJoined(roomId);
+      toast.info("Room da ACTIVE. Khong the huy WAITING, dang dong bo vao tran.", {
+        id: "lobby-cancel",
+      });
+      return;
+    }
+
+    if (
+      snapshot?.status === 2 ||
+      snapshot?.status === 3 ||
+      snapshot?.status === 4
+    ) {
+      notifyRoomClosed(roomId);
+      window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
+      setCreatedRoomId(null);
+      setJoinRoomId("");
+      toast.info("Room da dong on-chain, da cap nhat lai trang thai.", {
+        id: "lobby-cancel",
+      });
+      return;
+    }
+
+    toast.error(
+      "Room khong con o trang thai WAITING nen khong the huy. Dang cap nhat lai trang thai room.",
+      {
+        id: "lobby-cancel",
+      },
+    );
+  };
 
   const cancelLobbyRoomTx = async (roomId: string): Promise<boolean> => {
     return new Promise((resolve) => {
@@ -222,15 +302,10 @@ export default function PvPScreen() {
             });
             resolve(true);
           },
-          onError: (error) => {
+          onError: async (error) => {
             const message = String(error?.message ?? error);
             if (message.includes("702")) {
-              toast.error(
-                "Room không còn ở trạng thái WAITING nên không thể hủy.",
-                {
-                  id: "lobby-cancel",
-                },
-              );
+              await recoverCancelMismatch(roomId);
               resolve(false);
               return;
             }
@@ -255,11 +330,26 @@ export default function PvPScreen() {
     if (pvp.status !== "cancelled") return;
     if (!pvp.needsCreatorCancel || !pvp.cancelRoomId) return;
     if (!sameAddress(pvp.canCancelWallet, account?.address)) return;
+    if (createdRoomId !== pvp.cancelRoomId) {
+      setCreatedRoomId(pvp.cancelRoomId);
+      setJoinRoomId(pvp.cancelRoomId);
+      return;
+    }
+    if (roomStatus == null) return;
+    if (roomStatus === 1) {
+      notifyRoomJoined(pvp.cancelRoomId);
+      toast.info("Room da ACTIVE. Dang dong bo de vao tran.", {
+        id: "lobby-cancel",
+      });
+      return;
+    }
+    if (roomStatus !== 0) {
+      notifyRoomClosed(pvp.cancelRoomId);
+      return;
+    }
     if (autoCancelRoomRef.current === pvp.cancelRoomId) return;
 
     autoCancelRoomRef.current = pvp.cancelRoomId;
-    setCreatedRoomId(pvp.cancelRoomId);
-    setJoinRoomId(pvp.cancelRoomId);
     setEscrowSubmitting(true);
     toast.loading("Doi thu da chay tron. Dang huy room de tra NFT...", {
       id: "lobby-cancel",
@@ -274,6 +364,10 @@ export default function PvPScreen() {
     pvp.cancelRoomId,
     pvp.needsCreatorCancel,
     pvp.status,
+    createdRoomId,
+    notifyRoomClosed,
+    notifyRoomJoined,
+    roomStatus,
   ]);
 
   const handleLeave = async () => {
@@ -508,29 +602,18 @@ export default function PvPScreen() {
 
     const loadRoom = async () => {
       try {
-        const roomObject = await suiClient.getObject({
-          id: createdRoomId,
-          options: { showContent: true },
-        });
+        const snapshot = await readLobbyRoomSnapshot(createdRoomId);
 
-        const fields = (
-          roomObject.data?.content as
-            | { fields?: Record<string, unknown> }
-            | undefined
-        )?.fields;
-
-        if (!disposed && fields) {
-          setRoomStatus(Number(fields.status ?? 0));
-          setRoomDeadlineMs(Number(fields.deadline_ms ?? 0));
-          setRoomCreator(
-            typeof fields.creator === "string" ? fields.creator : null,
-          );
+        if (!disposed && snapshot) {
+          applyLobbyRoomSnapshot(snapshot);
           
           // If backend/indexer missed RoomActivated, resync ACTIVE rooms through
           // the join path because that path calls startValuationMatchFromRoom.
           if (
-            pvp.status === "awaiting_deposit" &&
-            Number(fields.status ?? 0) === 1 &&
+            (pvp.status === "awaiting_deposit" ||
+              pvp.status === "matched" ||
+              pvp.status === "cancelled") &&
+            snapshot.status === 1 &&
             createdRoomId
           ) {
             const now = Date.now();
@@ -863,6 +946,23 @@ export default function PvPScreen() {
   };
 
   const cancelLobbyRoom = async () => {
+    if (createdRoomId && roomStatus === 1) {
+      notifyRoomJoined(createdRoomId);
+      toast.info("Room da ACTIVE nen khong the huy. Dang dong bo de vao tran.");
+      return;
+    }
+    if (
+      createdRoomId &&
+      (roomStatus === 2 || roomStatus === 3 || roomStatus === 4)
+    ) {
+      notifyRoomClosed(createdRoomId);
+      window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
+      setCreatedRoomId(null);
+      setJoinRoomId("");
+      toast.info("Room da dong on-chain, da cap nhat lai trang thai.");
+      return;
+    }
+
     if (!createdRoomId) {
       toast.error("Không có room on-chain để hủy.");
       return;
@@ -1016,7 +1116,12 @@ export default function PvPScreen() {
       const canCancelOnChain =
         Boolean(pvp.cancelRoomId) &&
         Boolean(pvp.needsCreatorCancel) &&
-        sameAddress(pvp.canCancelWallet, account?.address);
+        sameAddress(pvp.canCancelWallet, account?.address) &&
+        roomStatus === 0;
+      const lockedRoomIsActive =
+        Boolean(pvp.cancelRoomId) &&
+        Boolean(pvp.needsCreatorCancel) &&
+        roomStatus === 1;
 
       return (
         <div className="overflow-hidden rounded-[28px] border border-red-200 bg-white shadow-[0_18px_48px_rgba(15,23,42,0.12)]">
@@ -1060,6 +1165,20 @@ export default function PvPScreen() {
                   className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-black text-white disabled:opacity-60"
                 >
                   Huy room va lay lai NFT
+                </button>
+              )}
+              {lockedRoomIsActive && pvp.cancelRoomId && (
+                <button
+                  onClick={() => {
+                    if (!pvp.cancelRoomId) return;
+                    setCreatedRoomId(pvp.cancelRoomId);
+                    setJoinRoomId(pvp.cancelRoomId);
+                    notifyRoomJoined(pvp.cancelRoomId);
+                    toast.info("Room da ACTIVE. Dang dong bo de vao tran.");
+                  }}
+                  className="rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-black text-white"
+                >
+                  Dong bo vao tran
                 </button>
               )}
               <button
