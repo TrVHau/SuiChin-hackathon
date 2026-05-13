@@ -1743,18 +1743,35 @@ export function attachMultiplayerGateway(server: HttpServer) {
             parsed.result,
           );
 
-          if (submitResult.totalSubmissions < 2) {
-            ack?.({ ok: true, result: submitResult });
-            return;
-          }
-
           const roomId = roomByChallenge.get(parsed.challengeId);
-          const results = await challengeService.listResults(
-            parsed.challengeId,
-          );
-          let winnerWallet = resolveWinnerWallet(results);
+          const challenge =
+            submitResult.challenge ??
+            (await challengeService.getChallenge(parsed.challengeId));
+          if (!challenge) {
+            throw new Error("Challenge not found");
+          }
+          if (
+            !sameWallet(challenge.challengerWallet, walletAddress) &&
+            !sameWallet(challenge.opponentWallet ?? null, walletAddress)
+          ) {
+            throw new Error("Wallet does not belong to this challenge");
+          }
+          const otherWallet = sameWallet(challenge.challengerWallet, walletAddress)
+            ? challenge.opponentWallet
+            : challenge.challengerWallet;
+          let winnerWallet =
+            parsed.result === "WIN"
+              ? walletAddress
+              : parsed.result === "LOSE" || parsed.result === "FORFEIT"
+                ? otherWallet
+                : null;
           let txDigest: string | null = null;
-          let loserWallet: string | null = null;
+          let loserWallet =
+            winnerWallet && sameWallet(winnerWallet, walletAddress)
+              ? otherWallet
+              : winnerWallet
+                ? walletAddress
+                : null;
 
           try {
             const finalized = await challengeService.finalizeChallenge(

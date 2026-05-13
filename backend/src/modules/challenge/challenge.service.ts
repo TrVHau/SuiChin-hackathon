@@ -77,7 +77,7 @@ export class ChallengeService {
       challenge.status = "EXPIRED";
       await challengeRepository.update(challenge);
     }
-    if (!["ACTIVE", "SUBMITTED"].includes(challenge.status)) {
+    if (!["ACTIVE", "SUBMITTED", "EXPIRED"].includes(challenge.status)) {
       throw new AppError("INVALID_STATE", "Challenge must be ACTIVE or SUBMITTED");
     }
 
