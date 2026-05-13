@@ -36,9 +36,12 @@ const EnvSchema = z.object({
   PVP_QUEUE_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   PVP_LOCK_TIMEOUT_MS: z.coerce.number().int().positive().default(45_000),
   PVP_DISCONNECT_GRACE_MS: z.coerce.number().int().positive().default(15_000),
+  RAILWAY_GIT_COMMIT_SHA: z.string().optional(),
+  RAILWAY_DEPLOYMENT_ID: z.string().optional(),
 });
 
 export const env = EnvSchema.parse(process.env);
 export const corsOrigins = env.CORS_ORIGINS.split(",").map((item) =>
   item.trim(),
 );
+export const BUILD_MARKER = "pvp-realtime-finalize-v2";

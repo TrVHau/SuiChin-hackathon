@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { Router } from "express";
-import { env } from "../config/env.js";
+import { BUILD_MARKER, env } from "../config/env.js";
 import { getRuntimeDependencyReport } from "../infra/runtime/dependency-check.js";
 import { indexerRoutes } from "../modules/indexer/indexer.routes.js";
 import { challengeService } from "../modules/challenge/challenge.service.js";
@@ -23,6 +23,9 @@ export function registerRoutes(app: Express) {
       matchmakingBackend: env.MATCHMAKING_BACKEND,
       chainAdapter: env.CHAIN_ADAPTER,
       suiNetwork: env.SUI_NETWORK,
+      buildMarker: BUILD_MARKER,
+      gitCommitSha: env.RAILWAY_GIT_COMMIT_SHA ?? null,
+      railwayDeploymentId: env.RAILWAY_DEPLOYMENT_ID ?? null,
     });
   });
 
