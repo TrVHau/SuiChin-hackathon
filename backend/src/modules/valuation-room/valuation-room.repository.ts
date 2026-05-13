@@ -69,6 +69,20 @@ function cloneRecord(record: ValuationRoomRecord): ValuationRoomRecord {
   };
 }
 
+function isPrismaUniqueConstraintOn(error: unknown, field: string): boolean {
+  const candidate = error as {
+    code?: unknown;
+    meta?: { target?: unknown };
+  };
+  if (candidate?.code !== "P2002") return false;
+
+  const target = candidate.meta?.target;
+  if (Array.isArray(target)) {
+    return target.includes(field);
+  }
+  return typeof target === "string" && target.includes(field);
+}
+
 class InMemoryValuationRoomRepository implements ValuationRoomRepository {
   private readonly roomsByChallenge = new Map<string, ValuationRoomRecord>();
 
@@ -308,14 +322,26 @@ class PrismaValuationRoomRepository implements ValuationRoomRepository {
       return this.toRecord(existing);
     }
 
-    const row = await this.db.valuationRoom.update({
-      where: { challengeId: input.challengeId },
-      data: {
-        suiRoomId: input.suiRoomId,
-        status: "ROOM_CREATED",
-      },
-    });
-    return this.toRecord(row);
+    try {
+      const row = await this.db.valuationRoom.update({
+        where: { challengeId: input.challengeId },
+        data: {
+          suiRoomId: input.suiRoomId,
+          status: "ROOM_CREATED",
+        },
+      });
+      return this.toRecord(row);
+    } catch (error) {
+      if (isPrismaUniqueConstraintOn(error, "suiRoomId")) {
+        const conflicting = await this.db.valuationRoom.findUnique({
+          where: { suiRoomId: input.suiRoomId },
+        });
+        if (conflicting) {
+          return this.toRecord(conflicting);
+        }
+      }
+      throw error;
+    }
   }
 
   async markRoomJoined(input: {
@@ -337,14 +363,26 @@ class PrismaValuationRoomRepository implements ValuationRoomRepository {
       return this.toRecord(existing);
     }
 
-    const row = await this.db.valuationRoom.update({
-      where: { challengeId: input.challengeId },
-      data: {
-        suiRoomId: input.suiRoomId,
-        status: "JOINED",
-      },
-    });
-    return this.toRecord(row);
+    try {
+      const row = await this.db.valuationRoom.update({
+        where: { challengeId: input.challengeId },
+        data: {
+          suiRoomId: input.suiRoomId,
+          status: "JOINED",
+        },
+      });
+      return this.toRecord(row);
+    } catch (error) {
+      if (isPrismaUniqueConstraintOn(error, "suiRoomId")) {
+        const conflicting = await this.db.valuationRoom.findUnique({
+          where: { suiRoomId: input.suiRoomId },
+        });
+        if (conflicting) {
+          return this.toRecord(conflicting);
+        }
+      }
+      throw error;
+    }
   }
 
   async markPlaying(challengeId: string): Promise<ValuationRoomRecord | null> {
