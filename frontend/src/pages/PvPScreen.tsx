@@ -297,6 +297,8 @@ export default function PvPScreen() {
             window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
             setCreatedRoomId(null);
             setJoinRoomId("");
+            setSelectedLobbyNfts([]);
+            setEscrowLocked(false);
             toast.success("Đã hủy phòng escrow on-chain và hoàn tài sản.", {
               id: "lobby-cancel",
             });
@@ -475,6 +477,7 @@ export default function PvPScreen() {
       );
       if (savedRoomId) {
         restoredRoomRef.current = true;
+        setCreatedRoomId(savedRoomId);
         setJoinRoomId(savedRoomId);
         toast.info(
           `Da khoi phuc room escrow truoc do: ${savedRoomId.slice(0, 10)}...`,
@@ -1054,6 +1057,8 @@ export default function PvPScreen() {
           setEscrowSubmitting(false);
           setCreatedRoomId(null);
           setJoinRoomId("");
+          setSelectedLobbyNfts([]);
+          setEscrowLocked(false);
           setRoomStatus(null);
           setRoomDeadlineMs(null);
         },

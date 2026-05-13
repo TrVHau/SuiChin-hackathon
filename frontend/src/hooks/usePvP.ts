@@ -162,6 +162,12 @@ interface MatchRejoinAck {
   error?: string;
 }
 
+interface RoomSyncAck {
+  ok: boolean;
+  started?: boolean;
+  error?: string;
+}
+
 export type PvPStatus =
   | "idle"
   | "connecting"
@@ -685,16 +691,66 @@ export function usePvP(_profileId: string | undefined) {
 
   const notifyRoomJoined = useCallback(
     (suiRoomId: string) => {
-      const socket = socketRef.current;
-      if (!socket) return;
+      const emitRoomJoined = (socket: Socket) => {
+        const current = pvpRef.current;
+        socket.emit(
+          "queue.roomJoined",
+          {
+            tempRoomId: current.tempRoomId ?? suiRoomId,
+            suiRoomId,
+            challengeId: current.challengeId ?? undefined,
+          },
+          (ack: RoomSyncAck) => {
+            if (!ack?.ok) {
+              toast.error(ack?.error ?? "Khong the dong bo room ACTIVE");
+            }
+          },
+        );
+      };
 
-      socket.emit("queue.roomJoined", {
-        tempRoomId: pvp.tempRoomId ?? suiRoomId,
-        suiRoomId,
-        challengeId: pvp.challengeId ?? undefined,
+      let socket = socketRef.current;
+      if (socket?.connected) {
+        emitRoomJoined(socket);
+        return;
+      }
+
+      if (!account?.address) {
+        toast.error("Vui long ket noi vi de dong bo room ACTIVE.");
+        return;
+      }
+
+      socket?.removeAllListeners();
+      socket?.disconnect();
+      socket = io(BACKEND_WS_URL, {
+        auth: { walletAddress: account.address },
+        transports: ["websocket"],
+      });
+      socketRef.current = socket;
+
+      socket.on("connect", () => {
+        emitRoomJoined(socket);
+      });
+      socket.on("match.start", (event: MatchStartEvent) => {
+        setMatchedFromEvent(event);
+      });
+      socket.on("match.turn", (event: MatchTurnEvent) => {
+        setPvP((prev) => {
+          if (prev.challengeId !== event.challengeId) return prev;
+          return {
+            ...prev,
+            currentTurnWallet: event.currentTurnWallet,
+            myTurn:
+              Boolean(account.address) &&
+              event.currentTurnWallet.toLowerCase() ===
+                account.address.toLowerCase(),
+          };
+        });
+      });
+      socket.on("connect_error", () => {
+        toast.error("Khong ket noi duoc backend de dong bo room ACTIVE.");
       });
     },
-    [pvp.challengeId, pvp.tempRoomId],
+    [account?.address, setMatchedFromEvent],
   );
 
   const notifyRoomClosed = useCallback(

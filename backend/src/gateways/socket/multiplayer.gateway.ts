@@ -1304,7 +1304,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
             parsed.challengeId,
           );
           if (startedByValuationRoom) {
-            ack?.({ ok: true });
+            ack?.({ ok: true, started: true });
             return;
           }
 
@@ -1369,10 +1369,16 @@ export function attachMultiplayerGateway(server: HttpServer) {
                 }
               }
               await valuationRoomService.markPlaying(challenge.id);
+              ack?.({ ok: true, started: true, challengeId: challenge.id });
+              return;
             }
           }
 
-          ack?.({ ok: true });
+          ack?.({
+            ok: false,
+            error:
+              "Room da ACTIVE on-chain nhung backend khong tim thay challenge de start tran.",
+          });
         } catch (err) {
           ack?.({
             ok: false,
