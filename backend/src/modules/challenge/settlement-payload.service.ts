@@ -1,7 +1,7 @@
 import { bcs } from "@mysten/sui/bcs";
 import { decodeSuiPrivateKey } from "@mysten/sui/cryptography";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
-import { fromBase64, normalizeSuiAddress } from "@mysten/sui/utils";
+import { fromBase64, normalizeSuiAddress, toBase64 } from "@mysten/sui/utils";
 import { env } from "../../config/env.js";
 import { logger } from "../../shared/logger.js";
 import { suiClient } from "../../infra/chain/sui-client.js";
@@ -207,10 +207,34 @@ export class SettlementPayloadService {
       signerPubkey.length === room.signerPubkey.length &&
       signerPubkey.every((byte, index) => byte === room.signerPubkey[index]);
     if (!roomSignerMatches) {
+      logger.error(
+        {
+          roomId: input.roomId,
+          localSignerPubkeyB64: toBase64(new Uint8Array(signerPubkey)),
+          roomSignerPubkeyB64: toBase64(new Uint8Array(room.signerPubkey)),
+        },
+        "Settlement signer mismatch",
+      );
       throw new Error(
         "Backend signer public key does not match signer_pubkey configured for this room",
       );
     }
+
+    logger.info(
+      {
+        roomId: normalizeSuiAddress(input.roomId),
+        winner: normalizeSuiAddress(input.winner),
+        loser: normalizeSuiAddress(input.loser),
+        nonce: room.nonce,
+        deadlineMs,
+        chainId: config.chainId,
+        packageId: config.packageId,
+        signerPubkeyB64: toBase64(new Uint8Array(signerPubkey)),
+        messageB64: Buffer.from(messageBytes).toString("base64"),
+        signatureB64: Buffer.from(signatureBytes).toString("base64"),
+      },
+      "Built settlement payload",
+    );
 
     return {
       roomId: normalizeSuiAddress(input.roomId),
