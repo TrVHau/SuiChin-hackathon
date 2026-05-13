@@ -29,6 +29,8 @@ export interface SettlementPayload {
   deadlineMs: number;
   signature: number[];
   signerPubkey: number[];
+  debugMessageB64?: string;
+  debugSignatureB64?: string;
 }
 
 interface ParsedRoomData {
@@ -184,7 +186,7 @@ export class SettlementPayloadService {
 
     const nowMs = Date.now();
     const deadlineMs = nowMs + env.LOBBY_SETTLEMENT_TTL_MS;
-    const messageBytes = SettlementMessageBcs.serialize({
+    const serialized = SettlementMessageBcs.serialize({
       intent_scope: SETTLEMENT_INTENT_SCOPE,
       chain_id: config.chainId,
       package_id: config.packageId,
@@ -194,7 +196,9 @@ export class SettlementPayloadService {
       match_digest: input.matchDigest,
       nonce: String(room.nonce),
       deadline_ms: String(deadlineMs),
-    }).toBytes();
+    });
+
+    const messageBytes = serialized.toBytes();
 
     const signatureBytes = await this.keypair.sign(messageBytes);
     const signerPubkey = Array.from(this.keypair.getPublicKey().toRawBytes());
@@ -217,6 +221,8 @@ export class SettlementPayloadService {
       deadlineMs,
       signature: Array.from(signatureBytes),
       signerPubkey,
+      debugMessageB64: Buffer.from(messageBytes).toString("base64"),
+      debugSignatureB64: Buffer.from(signatureBytes).toString("base64"),
     };
   }
 }

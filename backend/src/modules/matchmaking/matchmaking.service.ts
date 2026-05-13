@@ -207,6 +207,8 @@ export class PvPStateService {
         loser,
         signature,
         signatureBytes: Buffer.from(signatureBytes).toString("base64"),
+        debugMessageB64: payload.debugMessageB64,
+        debugSignatureB64: payload.debugSignatureB64,
       });
 
       // Cleanup room state after grace period of settlement
