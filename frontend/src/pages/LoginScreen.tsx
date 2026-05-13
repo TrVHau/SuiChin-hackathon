@@ -40,6 +40,14 @@ function clearPendingEnokiCallback() {
   window.localStorage.removeItem(ENOKI_CALLBACK_PROVIDER_KEY);
 }
 
+function isPopupClosedError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("popup") &&
+    (normalized.includes("close") || normalized.includes("closed"))
+  );
+}
+
 function inferProviderFromCallback(): SocialProvider {
   const hash = new URLSearchParams(
     window.location.hash.startsWith("#")
@@ -159,6 +167,11 @@ export default function LoginScreen() {
             error instanceof Error
               ? error.message
               : "Không thể đăng nhập social";
+          if (isPopupClosedError(message)) {
+            clearPendingEnokiCallback();
+            toast.info("Bạn đã đóng cửa sổ đăng nhập. Bấm đăng nhập lại.");
+            return;
+          }
           toast.error(message);
         },
       },
@@ -234,11 +247,15 @@ export default function LoginScreen() {
         onError: (error) => {
           setSocialLoginPending(null);
           window.localStorage.removeItem(ENOKI_CALLBACK_PROVIDER_KEY);
-          toast.error(
+          const message =
             error instanceof Error
               ? error.message
-              : "Khong the hoan tat dang nhap Enoki",
-          );
+              : "Khong the hoan tat dang nhap Enoki";
+          if (isPopupClosedError(message)) {
+            toast.info("Bạn đã đóng cửa sổ đăng nhập. Bấm đăng nhập lại.");
+            return;
+          }
+          toast.error(message);
         },
       },
     );

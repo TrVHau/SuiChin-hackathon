@@ -1,9 +1,10 @@
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useGame } from "@/providers/GameContext";
 
 export function useLoginHandler() {
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     account,
     profile,
@@ -12,6 +13,11 @@ export function useLoginHandler() {
     createProfile,
     refreshProfile,
   } = useGame();
+  const nextParam = new URLSearchParams(location.search).get("next");
+  const targetPath =
+    typeof nextParam === "string" && nextParam.startsWith("/")
+      ? nextParam
+      : "/dashboard";
 
   const handleLogin = async () => {
     if (!account) {
@@ -26,7 +32,7 @@ export function useLoginHandler() {
 
     if (hasProfile && profile) {
       toast.success("Chao mung tro lai");
-      navigate("/dashboard", { replace: true });
+      navigate(targetPath, { replace: true });
       return;
     }
 
@@ -35,18 +41,18 @@ export function useLoginHandler() {
 
     if (syncedProfile) {
       toast.success("Chao mung tro lai", { id: "createProfile" });
-      navigate("/dashboard", { replace: true });
+      navigate(targetPath, { replace: true });
       return;
     }
 
     await createProfile(
       () => {
         toast.success("Dang nhap thanh cong", { id: "createProfile" });
-        navigate("/dashboard", { replace: true });
+        navigate(targetPath, { replace: true });
       },
       () => {
         toast.dismiss("createProfile");
-        navigate("/dashboard", { replace: true });
+        navigate(targetPath, { replace: true });
       },
     );
   };

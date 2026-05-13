@@ -4,8 +4,11 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import {
   useCurrentAccount,
+  useCurrentWallet,
+  useDisconnectWallet,
   useSignAndExecuteTransaction,
 } from "@mysten/dapp-kit";
+import { isEnokiWallet } from "@mysten/enoki";
 import { useMarketplace } from "@/hooks/useMarketplace";
 import { useOwnedNFTs } from "@/hooks/useOwnedNFTs";
 import type { CuonChunNFT } from "@/hooks/useOwnedNFTs";
@@ -29,6 +32,8 @@ export default function MarketplaceScreen() {
   const navigate = useNavigate();
   const handleBack = () => navigate("/dashboard");
   const account = useCurrentAccount();
+  const currentWallet = useCurrentWallet();
+  const { mutate: disconnectWallet } = useDisconnectWallet();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const {
     listings,
@@ -47,6 +52,31 @@ export default function MarketplaceScreen() {
   const [submitting, setSubmitting] = useState(false);
 
   const myListings = listings.filter((l) => l.seller === account?.address);
+
+  const isExpiredZkLoginSignature = (message: string) => {
+    const normalized = message.toLowerCase();
+    return (
+      (normalized.includes("invalid user signature") &&
+        (normalized.includes("zklogin") || normalized.includes("epoch"))) ||
+      normalized.includes("zklogin expired") ||
+      normalized.includes("jwk not found")
+    );
+  };
+
+  const handleTxAuthExpired = (actionLabel: string, rawMessage: string) => {
+    disconnectWallet();
+    const isEnoki = currentWallet ? isEnokiWallet(currentWallet) : false;
+    toast.error(
+      isEnoki
+        ? `${actionLabel} thất bại: phiên zkLogin đã hết hạn. Vui lòng đăng nhập social lại để ký giao dịch mới.`
+        : `${actionLabel} thất bại: chữ ký ví không hợp lệ. Vui lòng kết nối ví lại.`,
+      { duration: 8000 },
+    );
+    navigate(`/login?next=${encodeURIComponent("/marketplace")}`, {
+      replace: true,
+      state: { reason: "tx-auth-expired", message: rawMessage },
+    });
+  };
 
   /* ─── Buy NFT ─── */
   const handleBuy = (listing: ListingMeta) => {
@@ -73,7 +103,13 @@ export default function MarketplaceScreen() {
         },
         onError: (err) => {
           setSubmitting(false);
-          toast.error(`Mua thất bại: ${err.message}`, { id: "buy" });
+          const message = String(err?.message ?? err);
+          if (isExpiredZkLoginSignature(message)) {
+            toast.dismiss("buy");
+            handleTxAuthExpired("Mua", message);
+            return;
+          }
+          toast.error(`Mua thất bại: ${message}`, { id: "buy" });
         },
       },
     );
@@ -106,7 +142,13 @@ export default function MarketplaceScreen() {
         },
         onError: (err) => {
           setSubmitting(false);
-          toast.error(`List thất bại: ${err.message}`, { id: "list" });
+          const message = String(err?.message ?? err);
+          if (isExpiredZkLoginSignature(message)) {
+            toast.dismiss("list");
+            handleTxAuthExpired("List", message);
+            return;
+          }
+          toast.error(`List thất bại: ${message}`, { id: "list" });
         },
       },
     );
@@ -130,7 +172,13 @@ export default function MarketplaceScreen() {
         },
         onError: (err) => {
           setSubmitting(false);
-          toast.error(`Hủy thất bại: ${err.message}`, { id: "cancel" });
+          const message = String(err?.message ?? err);
+          if (isExpiredZkLoginSignature(message)) {
+            toast.dismiss("cancel");
+            handleTxAuthExpired("Hủy listing", message);
+            return;
+          }
+          toast.error(`Hủy thất bại: ${message}`, { id: "cancel" });
         },
       },
     );
