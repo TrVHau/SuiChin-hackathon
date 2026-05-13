@@ -100,6 +100,7 @@ export default function PvPScreen() {
     disconnectRoomSocket,
     notifyRoomCreated,
     notifyRoomJoined,
+    notifyRoomClosed,
     // legacy aliases still available on hook: joinQueue, leaveQueue
     submitShot,
     reportRound,
@@ -187,7 +188,14 @@ export default function PvPScreen() {
     return selectedLobbyNfts.filter((id) => ownedNftIdSet.has(id));
   };
 
+  const mustCancelOnChainBeforeLeaving =
+    pvp.status === "cancelled" &&
+    Boolean(pvp.cancelRoomId) &&
+    Boolean(pvp.needsCreatorCancel) &&
+    sameAddress(pvp.canCancelWallet, account?.address);
+
   const shouldWarnUnsafeLeave = useMemo(() => {
+    if (mustCancelOnChainBeforeLeaving) return true;
     if (!createdRoomId) return false;
     if (roomStatus === 0 || roomStatus === 1) return true;
     return (
@@ -196,7 +204,7 @@ export default function PvPScreen() {
       pvp.status === "playing" ||
       pvp.status === "submitting"
     );
-  }, [createdRoomId, pvp.status, roomStatus]);
+  }, [createdRoomId, mustCancelOnChainBeforeLeaving, pvp.status, roomStatus]);
 
   const cancelLobbyRoomTx = async (roomId: string): Promise<boolean> => {
     return new Promise((resolve) => {
@@ -205,6 +213,8 @@ export default function PvPScreen() {
         { transaction: tx },
         {
           onSuccess: () => {
+            notifyRoomClosed(roomId);
+            window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
             setCreatedRoomId(null);
             setJoinRoomId("");
             toast.success("Đã hủy phòng escrow on-chain và hoàn tài sản.", {
@@ -267,6 +277,30 @@ export default function PvPScreen() {
   ]);
 
   const handleLeave = async () => {
+    if (mustCancelOnChainBeforeLeaving && pvp.cancelRoomId) {
+      const leaveConfirmed = window.confirm(
+        "NFT dang nam trong room WAITING. Ban can huy room on-chain de lay lai NFT truoc khi thoat. Tiep tuc huy room?",
+      );
+      if (!leaveConfirmed) {
+        return;
+      }
+
+      setCreatedRoomId(pvp.cancelRoomId);
+      setJoinRoomId(pvp.cancelRoomId);
+      setEscrowSubmitting(true);
+      toast.loading("Dang huy room escrow de tra NFT...", {
+        id: "lobby-cancel",
+      });
+      const cancelled = await cancelLobbyRoomTx(pvp.cancelRoomId);
+      setEscrowSubmitting(false);
+      if (!cancelled) {
+        return;
+      }
+      disconnectRoomSocket();
+      navigate("/dashboard");
+      return;
+    }
+
     if (shouldWarnUnsafeLeave) {
       const leaveConfirmed = window.confirm(
         roomStatus === 0
@@ -912,6 +946,8 @@ export default function PvPScreen() {
       { transaction: tx },
       {
         onSuccess: () => {
+          notifyRoomClosed(createdRoomId);
+          window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
           toast.success("Emergency refund thành công. Tài sản đã hoàn về ví.", {
             id: "lobby-emergency-refund",
           });
@@ -1028,13 +1064,20 @@ export default function PvPScreen() {
               )}
               <button
                 onClick={() => {
+                  if (mustCancelOnChainBeforeLeaving) {
+                    toast.error("Hay huy room on-chain de lay lai NFT truoc.");
+                    return;
+                  }
                   disconnectRoomSocket();
                   setCreatedRoomId(null);
                   setJoinRoomId("");
                 }}
+                disabled={mustCancelOnChainBeforeLeaving || escrowSubmitting}
                 className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700"
               >
-                Tim tran moi
+                {mustCancelOnChainBeforeLeaving
+                  ? "Can huy room truoc"
+                  : "Tim tran moi"}
               </button>
             </div>
           </div>

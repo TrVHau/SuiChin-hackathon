@@ -120,7 +120,11 @@ interface MatchCancelledEvent {
   roomId: string;
   tempRoomId: string;
   suiRoomId: string | null;
-  reason: "PLAYER_LEFT" | "DISCONNECT" | "LOCK_TIMEOUT";
+  reason:
+    | "PLAYER_LEFT"
+    | "DISCONNECT"
+    | "LOCK_TIMEOUT"
+    | "CREATOR_LEFT_LOCKED";
   message?: string;
   leftWallet?: string;
   creatorWallet?: string;
@@ -693,6 +697,19 @@ export function usePvP(_profileId: string | undefined) {
     [pvp.challengeId, pvp.tempRoomId],
   );
 
+  const notifyRoomClosed = useCallback(
+    (suiRoomId: string) => {
+      const socket = socketRef.current;
+      if (!socket) return;
+
+      socket.emit("queue.roomClosed", {
+        roomId: suiRoomId,
+        challengeId: pvp.challengeId ?? undefined,
+      });
+    },
+    [pvp.challengeId],
+  );
+
   const reportRound = useCallback(
     (winnerId: string) => {
       const socket = socketRef.current;
@@ -823,6 +840,7 @@ export function usePvP(_profileId: string | undefined) {
     leaveQueue,
     notifyRoomCreated,
     notifyRoomJoined,
+    notifyRoomClosed,
     reportRound,
     submitShot,
     resolveLocalMatch,

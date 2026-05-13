@@ -51,6 +51,9 @@ type ValuationRuntimePhase =
   | "IN_GAME"
   | "FINISHED"
   | "CANCELLED";
+type ValuationEscrowState = "NONE" | "WAITING" | "ACTIVE" | "CLOSED";
+type PreGameExitReason = "PLAYER_LEFT" | "DISCONNECT" | "LOCK_TIMEOUT";
+type MatchCancelledReason = PreGameExitReason | "CREATOR_LEFT_LOCKED";
 
 interface ValuationMatchState {
   challengeId: string;
@@ -62,6 +65,7 @@ interface ValuationMatchState {
   nftsByWallet: Map<string, ValuationNft>;
   started: boolean;
   phase: ValuationRuntimePhase;
+  escrowState: ValuationEscrowState;
 }
 
 function getWalletFromSocket(socket: Socket): string {
@@ -82,6 +86,18 @@ function joinWalletSocketsToRoom(
       socket.join(roomId);
     }
   }
+}
+
+function hasWalletSocket(
+  namespace: ReturnType<Server["of"]>,
+  wallet: string,
+): boolean {
+  for (const socket of namespace.sockets.values()) {
+    if (sameWallet(String(socket.data.walletAddress ?? ""), wallet)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function resolveWinnerWallet(results: ChallengeResultRecord[]): string | null {
@@ -141,6 +157,11 @@ const RoomCreatedPayloadSchema = z.object({
 const RoomJoinedPayloadSchema = z.object({
   tempRoomId: z.string().trim().min(1),
   suiRoomId: z.string().trim().min(1),
+  challengeId: z.string().uuid().optional(),
+});
+
+const RoomClosedPayloadSchema = z.object({
+  roomId: z.string().trim().min(1),
   challengeId: z.string().uuid().optional(),
 });
 
@@ -218,6 +239,14 @@ export function attachMultiplayerGateway(server: HttpServer) {
               : record.status === "ROOM_CREATED" || record.status === "JOINED"
                 ? "LOCKING"
                 : "MATCHED",
+      escrowState:
+        record.status === "ROOM_CREATED"
+          ? "WAITING"
+          : record.status === "JOINED" || record.status === "PLAYING"
+            ? "ACTIVE"
+            : record.status === "FINALIZED" || record.status === "CANCELLED"
+              ? "CLOSED"
+              : "NONE",
     };
   }
 
@@ -287,6 +316,10 @@ export function attachMultiplayerGateway(server: HttpServer) {
 
   function matchRooms(match: ValuationMatchState): string[] {
     return [...new Set([match.tempRoomId, match.suiRoomId].filter(Boolean))] as string[];
+  }
+
+  function primaryRoomId(match: ValuationMatchState): string {
+    return match.suiRoomId ?? roomByChallenge.get(match.challengeId) ?? match.tempRoomId;
   }
 
   function cleanupValuationMatch(match: ValuationMatchState) {
@@ -365,21 +398,36 @@ export function attachMultiplayerGateway(server: HttpServer) {
     }
   }
 
-  async function handleExitPreGame(wallet: string, reason: "PLAYER_LEFT" | "DISCONNECT" | "LOCK_TIMEOUT") {
+  async function handleExitPreGame(wallet: string, reason: PreGameExitReason) {
     const match = findValuationMatchByWallet(wallet);
-    if (!match || match.started || match.phase === "IN_GAME") {
+    if (!match) {
       return false;
     }
 
-    match.phase = "CANCELLED";
+    if (match.started || match.phase === "IN_GAME" || match.escrowState === "ACTIVE") {
+      scheduleInGameDisconnect(match, wallet);
+      return true;
+    }
+
     const creatorWallet = match.players[0];
     const opponentWallet =
       match.players.find((player) => !sameWallet(player, wallet)) ?? null;
-    const needsCreatorCancel = Boolean(match.suiRoomId);
+    const needsCreatorCancel =
+      match.escrowState === "WAITING" && Boolean(match.suiRoomId);
+    const creatorLeftLocked =
+      needsCreatorCancel && sameWallet(wallet, creatorWallet);
+    const cancelledReason: MatchCancelledReason = creatorLeftLocked
+      ? "CREATOR_LEFT_LOCKED"
+      : reason;
     const message =
-      reason === "LOCK_TIMEOUT"
+      cancelledReason === "CREATOR_LEFT_LOCKED"
+        ? "Creator mat ket noi khi NFT dang o room WAITING. Creator can quay lai huy room de tra NFT."
+        : reason === "LOCK_TIMEOUT"
         ? "Doi thu khong chot tai san dung han."
         : "Doi thu da chay tron.";
+
+    match.phase = "CANCELLED";
+    clearPreGameTimeout(match.challengeId);
 
     for (const roomId of matchRooms(match)) {
       namespace.to(roomId).emit("match.cancelled", {
@@ -387,7 +435,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
         roomId,
         tempRoomId: match.tempRoomId,
         suiRoomId: match.suiRoomId,
-        reason,
+        reason: cancelledReason,
         phase: match.phase,
         message,
         leftWallet: wallet,
@@ -399,6 +447,11 @@ export function attachMultiplayerGateway(server: HttpServer) {
       });
     }
 
+    if (needsCreatorCancel) {
+      return true;
+    }
+
+    match.escrowState = "CLOSED";
     await valuationRoomService.markCancelled(match.challengeId);
     cleanupValuationMatch(match);
     valuationMatchByChallenge.delete(match.challengeId);
@@ -471,7 +524,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
       }
     }
 
-    const roomId = roomByChallenge.get(match.challengeId) ?? match.suiRoomId ?? match.tempRoomId;
+    const roomId = primaryRoomId(match);
     const settlementPayload = await buildSettlementPayloadForRoom({
       challengeId: match.challengeId,
       roomId,
@@ -489,6 +542,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
     });
 
     match.phase = "FINISHED";
+    match.escrowState = "CLOSED";
     await valuationRoomService.markFinalized(match.challengeId);
     cleanupValuationMatch(match);
     valuationMatchByChallenge.delete(match.challengeId);
@@ -507,7 +561,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
     }, env.PVP_DISCONNECT_GRACE_MS);
     disconnectTimeoutByChallengeWallet.set(key, timer);
 
-    const roomId = roomByChallenge.get(match.challengeId) ?? match.suiRoomId ?? match.tempRoomId;
+    const roomId = primaryRoomId(match);
     namespace.to(roomId).emit("match.playerDisconnected", {
       challengeId: match.challengeId,
       wallet,
@@ -578,6 +632,10 @@ export function attachMultiplayerGateway(server: HttpServer) {
 
     match.suiRoomId = input.roomId;
     match.phase = "LOCKING";
+    match.escrowState = "WAITING";
+    challengeByRoom.set(input.roomId, match.challengeId);
+    joinWalletSocketsToRoom(namespace, match.players[0], input.roomId);
+    joinWalletSocketsToRoom(namespace, match.players[1], input.roomId);
     schedulePreGameTimeout(match);
     await valuationRoomService.markRoomCreated({
       challengeId: match.challengeId,
@@ -613,6 +671,12 @@ export function attachMultiplayerGateway(server: HttpServer) {
 
     match.suiRoomId = input.roomId;
     match.phase = "LOCKING";
+    match.escrowState = "ACTIVE";
+    clearPreGameTimeout(match.challengeId);
+    challengeByRoom.set(input.roomId, match.challengeId);
+    roomByChallenge.set(match.challengeId, input.roomId);
+    joinWalletSocketsToRoom(namespace, match.players[0], input.roomId);
+    joinWalletSocketsToRoom(namespace, match.players[1], input.roomId);
     await valuationRoomService.markRoomJoined({
       challengeId: match.challengeId,
       suiRoomId: input.roomId,
@@ -659,6 +723,8 @@ export function attachMultiplayerGateway(server: HttpServer) {
         match.phase !== "FINISHED"
       ) {
         match.phase = "LOCKING";
+        match.escrowState = "ACTIVE";
+        clearPreGameTimeout(match.challengeId);
         await valuationRoomService.markRoomJoined({
           challengeId: match.challengeId,
           suiRoomId: input.roomId,
@@ -699,6 +765,11 @@ export function attachMultiplayerGateway(server: HttpServer) {
       challengeId: challenge.id,
       currentTurnWallet,
     });
+    for (const wallet of match.players) {
+      if (!hasWalletSocket(namespace, wallet)) {
+        scheduleInGameDisconnect(match, wallet);
+      }
+    }
     return true;
   }
 
@@ -729,6 +800,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
 
     match.started = true;
     match.phase = "IN_GAME";
+    match.escrowState = "ACTIVE";
     clearPreGameTimeout(match.challengeId);
     await valuationRoomService.markPlaying(match.challengeId);
     challengeByRoom.delete(match.tempRoomId);
@@ -737,6 +809,44 @@ export function attachMultiplayerGateway(server: HttpServer) {
     roomByChallenge.set(match.challengeId, roomId);
 
     return emitValuationMatchStart(roomId, match, challenge);
+  }
+
+  async function closeValuationRoomState(input: {
+    roomId: string;
+    challengeId?: string;
+  }) {
+    let match = findValuationMatchBySuiRoom(input.roomId);
+    if (!match && input.challengeId) {
+      match = valuationMatchByChallenge.get(input.challengeId) ?? null;
+    }
+    if (!match && input.challengeId) {
+      const persisted = await valuationRoomService.findByChallengeId(
+        input.challengeId,
+      );
+      if (persisted) {
+        match = rememberValuationMatch(
+          buildValuationMatchFromRecord(persisted),
+        );
+      }
+    }
+    if (!match) {
+      const persisted = await valuationRoomService.findBySuiRoomId(
+        input.roomId,
+      );
+      if (persisted) {
+        match = rememberValuationMatch(
+          buildValuationMatchFromRecord(persisted),
+        );
+      }
+    }
+    if (!match) return false;
+
+    match.phase = "CANCELLED";
+    match.escrowState = "CLOSED";
+    await valuationRoomService.markCancelled(match.challengeId);
+    cleanupValuationMatch(match);
+    valuationMatchByChallenge.delete(match.challengeId);
+    return true;
   }
 
   valuationRoomEvents.on("roomCreated", (event) => {
@@ -860,6 +970,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
               nftsByWallet,
               started: false,
               phase: "MATCHED",
+              escrowState: "NONE",
             });
             schedulePreGameTimeout(
               valuationMatchByChallenge.get(challenge.id)!,
@@ -1096,10 +1207,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
           }
 
           const reconnected = clearInGameDisconnect(match, walletAddress);
-          const roomId =
-            roomByChallenge.get(match.challengeId) ??
-            match.suiRoomId ??
-            match.tempRoomId;
+          const roomId = primaryRoomId(match);
           if (reconnected) {
             namespace.to(roomId).emit("match.playerReconnected", {
               challengeId: match.challengeId,
@@ -1161,6 +1269,26 @@ export function attachMultiplayerGateway(server: HttpServer) {
     );
 
     socket.on(
+      "queue.roomClosed",
+      async (payload: unknown, ack?: (payload: unknown) => void) => {
+        try {
+          const parsed = RoomClosedPayloadSchema.parse(payload);
+          const handled = await closeValuationRoomState({
+            roomId: parsed.roomId,
+            challengeId: parsed.challengeId,
+          });
+          ack?.({ ok: true, handled });
+        } catch (err) {
+          ack?.({
+            ok: false,
+            error:
+              err instanceof Error ? err.message : "queue.roomClosed failed",
+          });
+        }
+      },
+    );
+
+    socket.on(
       "queue.roomJoined",
       async (payload: unknown, ack?: (payload: unknown) => void) => {
         try {
@@ -1195,6 +1323,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
               valuationMatch.suiRoomId = parsed.suiRoomId;
               valuationMatch.started = true;
               valuationMatch.phase = "IN_GAME";
+              valuationMatch.escrowState = "ACTIVE";
               clearPreGameTimeout(challengeId);
             }
 
@@ -1232,6 +1361,13 @@ export function attachMultiplayerGateway(server: HttpServer) {
                 challengeId: challenge.id,
                 currentTurnWallet: firstTurnWallet,
               });
+              if (valuationMatch) {
+                for (const wallet of valuationMatch.players) {
+                  if (!hasWalletSocket(namespace, wallet)) {
+                    scheduleInGameDisconnect(valuationMatch, wallet);
+                  }
+                }
+              }
               await valuationRoomService.markPlaying(challenge.id);
             }
           }
@@ -1404,6 +1540,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
           );
           if (valuationMatch) {
             valuationMatch.phase = "FINISHED";
+            valuationMatch.escrowState = "CLOSED";
             cleanupValuationMatch(valuationMatch);
             valuationMatchByChallenge.delete(parsed.challengeId);
           } else {
