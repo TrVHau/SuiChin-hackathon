@@ -135,11 +135,13 @@ const MatchShotPayloadSchema = z.object({
 const RoomCreatedPayloadSchema = z.object({
   tempRoomId: z.string().trim().min(1),
   suiRoomId: z.string().trim().min(1),
+  challengeId: z.string().uuid().optional(),
 });
 
 const RoomJoinedPayloadSchema = z.object({
   tempRoomId: z.string().trim().min(1),
   suiRoomId: z.string().trim().min(1),
+  challengeId: z.string().uuid().optional(),
 });
 
 const MatchRejoinPayloadSchema = z.object({
@@ -618,38 +620,60 @@ export function attachMultiplayerGateway(server: HttpServer) {
     return true;
   }
 
-  async function startValuationMatchFromRoom(roomId: string) {
-    let match = findValuationMatchBySuiRoom(roomId);
-    if (!match) {
-      const persisted = await valuationRoomService.findBySuiRoomId(roomId);
+  async function findValuationMatchForStart(input: {
+    roomId: string;
+    challengeId?: string;
+  }) {
+    let match = findValuationMatchBySuiRoom(input.roomId);
+    if (!match && input.challengeId) {
+      match = valuationMatchByChallenge.get(input.challengeId) ?? null;
+    }
+    if (!match && input.challengeId) {
+      const persisted = await valuationRoomService.findByChallengeId(
+        input.challengeId,
+      );
       if (persisted) {
         match = rememberValuationMatch(
           buildValuationMatchFromRecord(persisted),
         );
       }
     }
-    if (!match || match.started || match.phase === "CANCELLED" || match.phase === "FINISHED") {
-      return false;
-    }
-
-    const challenge = await challengeService.getChallenge(match.challengeId);
-    if (!challenge) {
-      logger.warn(
-        { roomId, challengeId: match.challengeId },
-        "RoomActivated event has no challenge",
+    if (!match) {
+      const persisted = await valuationRoomService.findBySuiRoomId(
+        input.roomId,
       );
-      return false;
+      if (persisted) {
+        match = rememberValuationMatch(
+          buildValuationMatchFromRecord(persisted),
+        );
+      }
     }
 
-    match.started = true;
-    match.phase = "IN_GAME";
-    clearPreGameTimeout(match.challengeId);
-    await valuationRoomService.markPlaying(match.challengeId);
-    challengeByRoom.delete(match.tempRoomId);
-    roomByChallenge.delete(match.challengeId);
-    challengeByRoom.set(roomId, match.challengeId);
-    roomByChallenge.set(match.challengeId, roomId);
+    if (match && match.suiRoomId !== input.roomId) {
+      match.suiRoomId = input.roomId;
+      challengeByRoom.set(input.roomId, match.challengeId);
+      roomByChallenge.set(match.challengeId, input.roomId);
+      if (
+        !match.started &&
+        match.phase !== "CANCELLED" &&
+        match.phase !== "FINISHED"
+      ) {
+        match.phase = "LOCKING";
+        await valuationRoomService.markRoomJoined({
+          challengeId: match.challengeId,
+          suiRoomId: input.roomId,
+        });
+      }
+    }
 
+    return match;
+  }
+
+  async function emitValuationMatchStart(
+    roomId: string,
+    match: ValuationMatchState,
+    challenge: NonNullable<Awaited<ReturnType<typeof challengeService.getChallenge>>>,
+  ) {
     joinWalletSocketsToRoom(namespace, challenge.challengerWallet, roomId);
     if (challenge.opponentWallet) {
       joinWalletSocketsToRoom(namespace, challenge.opponentWallet, roomId);
@@ -665,14 +689,54 @@ export function attachMultiplayerGateway(server: HttpServer) {
       nfts: Object.fromEntries(match.nftsByWallet.entries()),
     });
 
-    const firstTurnWallet = challenge.challengerWallet;
-    currentTurnByChallenge.set(challenge.id, firstTurnWallet);
-    shotSequenceByChallenge.set(challenge.id, 0);
+    const currentTurnWallet =
+      currentTurnByChallenge.get(challenge.id) ?? challenge.challengerWallet;
+    currentTurnByChallenge.set(challenge.id, currentTurnWallet);
+    if (!shotSequenceByChallenge.has(challenge.id)) {
+      shotSequenceByChallenge.set(challenge.id, 0);
+    }
     namespace.to(roomId).emit("match.turn", {
       challengeId: challenge.id,
-      currentTurnWallet: firstTurnWallet,
+      currentTurnWallet,
     });
     return true;
+  }
+
+  async function startValuationMatchFromRoom(
+    roomId: string,
+    challengeIdHint?: string,
+  ) {
+    const match = await findValuationMatchForStart({
+      roomId,
+      challengeId: challengeIdHint,
+    });
+    if (!match || match.phase === "CANCELLED" || match.phase === "FINISHED") {
+      return false;
+    }
+
+    const challenge = await challengeService.getChallenge(match.challengeId);
+    if (!challenge) {
+      logger.warn(
+        { roomId, challengeId: match.challengeId },
+        "RoomActivated event has no challenge",
+      );
+      return false;
+    }
+
+    if (match.started || match.phase === "IN_GAME") {
+      return emitValuationMatchStart(roomId, match, challenge);
+    }
+
+    match.started = true;
+    match.phase = "IN_GAME";
+    clearPreGameTimeout(match.challengeId);
+    await valuationRoomService.markPlaying(match.challengeId);
+    challengeByRoom.delete(match.tempRoomId);
+    roomByChallenge.delete(match.challengeId);
+    challengeByRoom.set(roomId, match.challengeId);
+    roomByChallenge.set(match.challengeId, roomId);
+
+    return emitValuationMatchStart(roomId, match, challenge);
   }
 
   valuationRoomEvents.on("roomCreated", (event) => {
@@ -1109,6 +1173,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
 
           const startedByValuationRoom = await startValuationMatchFromRoom(
             parsed.suiRoomId,
+            parsed.challengeId,
           );
           if (startedByValuationRoom) {
             ack?.({ ok: true });
@@ -1117,7 +1182,8 @@ export function attachMultiplayerGateway(server: HttpServer) {
 
           // Emits match.start to all users in temp room
           // and swaps mappings so challenge points to suiRoomId
-          const challengeId = challengeByRoom.get(parsed.tempRoomId);
+          const challengeId =
+            parsed.challengeId ?? challengeByRoom.get(parsed.tempRoomId);
           if (challengeId) {
             challengeByRoom.delete(parsed.tempRoomId);
             roomByChallenge.delete(challengeId);

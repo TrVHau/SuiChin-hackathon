@@ -673,9 +673,10 @@ export function usePvP(_profileId: string | undefined) {
       socket.emit("queue.roomCreated", {
         tempRoomId: pvp.tempRoomId,
         suiRoomId,
+        challengeId: pvp.challengeId ?? undefined,
       });
     },
-    [pvp.tempRoomId],
+    [pvp.challengeId, pvp.tempRoomId],
   );
 
   const notifyRoomJoined = useCallback(
@@ -686,9 +687,10 @@ export function usePvP(_profileId: string | undefined) {
       socket.emit("queue.roomJoined", {
         tempRoomId: pvp.tempRoomId ?? suiRoomId,
         suiRoomId,
+        challengeId: pvp.challengeId ?? undefined,
       });
     },
-    [pvp.tempRoomId],
+    [pvp.challengeId, pvp.tempRoomId],
   );
 
   const reportRound = useCallback(
