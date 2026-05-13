@@ -1220,6 +1220,22 @@ export default function PvPScreen() {
     };
 
     const executeSettle = (currentPayload: typeof payload, retried = false) => {
+      const settleDebug = {
+        retried,
+        roomId: settleRoomId,
+        winner: currentPayload.winner,
+        loser: currentPayload.loser,
+        nonce: currentPayload.nonce,
+        deadlineMs: currentPayload.deadlineMs,
+        signerPubkeyB64: toBase64(new Uint8Array(currentPayload.signerPubkey)),
+        matchDigestB64: toBase64(new Uint8Array(currentPayload.matchDigest)),
+        signatureB64: toBase64(new Uint8Array(currentPayload.signature)),
+        backendDebugMessageB64: currentPayload.debugMessageB64,
+        backendDebugSignatureB64: currentPayload.debugSignatureB64,
+      };
+
+      console.info("Settle submit payload", settleDebug);
+
       const tx = buildSettleValuationLobbyRoomTx({
         roomId: settleRoomId,
         winner: currentPayload.winner,
@@ -1239,6 +1255,11 @@ export default function PvPScreen() {
           },
           onError: async (error) => {
             const message = String(error?.message ?? error);
+            console.error("Settle on-chain error", {
+              message,
+              error,
+              ...settleDebug,
+            });
             if (message.includes("711") && !retried) {
               const refreshed = await refreshSettlementPayload(settleRoomId);
               if (refreshed) {
