@@ -1737,16 +1737,14 @@ export function attachMultiplayerGateway(server: HttpServer) {
             return;
           }
 
-          const submitResult = await challengeService.submitResult(
+          const finalizedRealtime = await challengeService.finalizeRealtimeResult(
             parsed.challengeId,
             walletAddress,
             parsed.result,
           );
 
           const roomId = roomByChallenge.get(parsed.challengeId);
-          const challenge =
-            submitResult.challenge ??
-            (await challengeService.getChallenge(parsed.challengeId));
+          const challenge = finalizedRealtime.challenge;
           if (!challenge) {
             throw new Error("Challenge not found");
           }
@@ -1760,46 +1758,24 @@ export function attachMultiplayerGateway(server: HttpServer) {
             ? challenge.opponentWallet
             : challenge.challengerWallet;
           let winnerWallet =
-            parsed.result === "WIN"
+            finalizedRealtime.challenge.winnerWallet ??
+            (parsed.result === "WIN"
               ? walletAddress
               : parsed.result === "LOSE" || parsed.result === "FORFEIT"
                 ? otherWallet
-                : null;
-          let txDigest: string | null = null;
+                : null);
+          const txDigest: string | null =
+            finalizedRealtime.chainResult?.digest ?? null;
           let loserWallet =
             winnerWallet && sameWallet(winnerWallet, walletAddress)
               ? otherWallet
               : winnerWallet
                 ? walletAddress
                 : null;
-
-          try {
-            const finalized = await challengeService.finalizeChallenge(
-              parsed.challengeId,
-              winnerWallet,
-            );
-            winnerWallet = finalized.challenge.winnerWallet;
-            if (winnerWallet && finalized.challenge.opponentWallet) {
-              loserWallet =
-                winnerWallet === finalized.challenge.challengerWallet
-                  ? finalized.challenge.opponentWallet
-                  : finalized.challenge.challengerWallet;
-            }
-            txDigest = finalized.chainResult.digest;
-          } catch (err) {
-            const existing = await challengeService.getChallenge(
-              parsed.challengeId,
-            );
-            if (!existing || existing.status !== "FINALIZED") {
-              throw err;
-            }
-            winnerWallet = existing.winnerWallet;
-            if (winnerWallet && existing.opponentWallet) {
-              loserWallet =
-                winnerWallet === existing.challengerWallet
-                  ? existing.opponentWallet
-                  : existing.challengerWallet;
-            }
+          if (winnerWallet && challenge.opponentWallet) {
+            loserWallet = sameWallet(winnerWallet, challenge.challengerWallet)
+              ? challenge.opponentWallet
+              : challenge.challengerWallet;
           }
 
           const settlementPayload = await buildSettlementPayloadForRoom({
@@ -1838,7 +1814,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
 
           ack?.({
             ok: true,
-            result: submitResult,
+            result: { totalSubmissions: finalizedRealtime.totalSubmissions },
             finalized: {
               winnerWallet,
               txDigest,

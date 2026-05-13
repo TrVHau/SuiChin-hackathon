@@ -78,7 +78,10 @@ export class ChallengeService {
       await challengeRepository.update(challenge);
     }
     if (!["ACTIVE", "SUBMITTED", "EXPIRED"].includes(challenge.status)) {
-      throw new AppError("INVALID_STATE", "Challenge must be ACTIVE or SUBMITTED");
+      throw new AppError(
+        "INVALID_STATE",
+        "Challenge must be ACTIVE, SUBMITTED, or EXPIRED",
+      );
     }
 
     validateParticipant(challenge, walletAddress);
@@ -93,6 +96,70 @@ export class ChallengeService {
       challenge: await challengeRepository.getById(challengeId),
       saved,
       totalSubmissions: results.length,
+    };
+  }
+
+  async finalizeRealtimeResult(
+    challengeId: string,
+    walletAddress: string,
+    result: MatchResult,
+  ) {
+    const challenge = await challengeRepository.getById(challengeId);
+    if (!challenge) throw new AppError("NOT_FOUND", "Challenge not found", 404);
+    validateParticipant(challenge, walletAddress);
+
+    if (challenge.status === "FINALIZED") {
+      return {
+        challenge,
+        totalSubmissions: (await challengeRepository.listResults(challengeId))
+          .length,
+        chainResult: null,
+      };
+    }
+
+    try {
+      await challengeRepository.saveResult({
+        challengeId,
+        walletAddress,
+        result,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes("Result already submitted")) {
+        throw error;
+      }
+    }
+
+    const results = await challengeRepository.listResults(challengeId);
+    const otherWallet =
+      challenge.challengerWallet === walletAddress
+        ? challenge.opponentWallet
+        : challenge.challengerWallet;
+    const winnerWallet =
+      result === "WIN"
+        ? walletAddress
+        : result === "LOSE" || result === "FORFEIT"
+          ? otherWallet
+          : null;
+
+    challenge.status = "SUBMITTED";
+    await challengeRepository.update(challenge);
+
+    const chainResult = await this.chainAdapter.finalizeChallenge({
+      challengeId,
+      winnerWallet,
+      challengerWallet: challenge.challengerWallet,
+      opponentWallet: challenge.opponentWallet,
+    });
+
+    challenge.status = "FINALIZED";
+    challenge.winnerWallet = winnerWallet;
+    await challengeRepository.update(challenge);
+
+    return {
+      challenge,
+      totalSubmissions: results.length,
+      chainResult,
     };
   }
 
