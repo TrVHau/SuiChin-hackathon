@@ -1,4 +1,5 @@
 import { cryptoService } from "./crypto.service.js";
+import { getSettlementPayloadService } from "../challenge/settlement-payload.service.js";
 import { logger } from "../../shared/logger.js";
 
 export enum RoomState {
@@ -191,13 +192,14 @@ export class PvPStateService {
     emitToRoom: (roomId: string, event: string, payload: any) => void,
   ) {
     try {
-      const { signature, signatureBytes } =
-        await cryptoService.generateMatchSignature(
-          room.id,
-          winner,
-          loser,
-          room.nonce,
-        );
+      const payload = await getSettlementPayloadService().buildPayload({
+        roomId: room.id,
+        winner,
+        loser,
+        matchDigest: [],
+      });
+      const signature = payload.signature;
+      const signatureBytes = payload.signature;
       room.state = RoomState.SETTLED;
 
       emitToRoom(room.id, "match_settled", {
