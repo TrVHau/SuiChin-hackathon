@@ -9,6 +9,7 @@ import type { ChallengeResultRecord } from "../../modules/challenge/challenge.ty
 import { matchmakingService } from "../../modules/matchmaking/matchmaking.service.js";
 import { valuationRoomService } from "../../modules/valuation-room/valuation-room.service.js";
 import type { ValuationRoomRecord } from "../../modules/valuation-room/valuation-room.repository.js";
+import { normalizeSuiAddress } from "@mysten/sui/utils";
 import { logger } from "../../shared/logger.js";
 import { valuationRoomEvents } from "./valuation-room-events.js";
 
@@ -418,7 +419,11 @@ export function attachMultiplayerGateway(server: HttpServer) {
 
     try {
       const digestSource = input.roomId ?? input.challengeId;
-      const digestBytes = Array.from(new TextEncoder().encode(digestSource));
+      const digestBytes = isLikelySuiObjectId(digestSource)
+        ? Array.from(
+            Buffer.from(normalizeSuiAddress(digestSource).slice(2), "hex"),
+          )
+        : Array.from(new TextEncoder().encode(digestSource));
       return await getSettlementPayloadService().buildPayload({
         roomId: input.roomId,
         winner: input.winnerWallet,
