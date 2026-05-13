@@ -1778,7 +1778,12 @@ export function attachMultiplayerGateway(server: HttpServer) {
             parsed.result,
           );
 
-          const roomId = roomByChallenge.get(parsed.challengeId);
+          const valuationMatch = valuationMatchByChallenge.get(
+            parsed.challengeId,
+          );
+          const roomId =
+            (valuationMatch ? primaryRoomId(valuationMatch) : null) ??
+            roomByChallenge.get(parsed.challengeId);
           const challenge = finalizedRealtime.challenge;
           if (!challenge) {
             throw new Error("Challenge not found");
@@ -1820,18 +1825,22 @@ export function attachMultiplayerGateway(server: HttpServer) {
             loserWallet,
           });
 
-          if (roomId) {
-            namespace.to(roomId).emit("match.result.finalized", {
-              challengeId: parsed.challengeId,
-              winnerWallet,
-              txDigest,
-              settlementPayload,
-            });
+          const finalizedEvent = {
+            challengeId: parsed.challengeId,
+            winnerWallet,
+            txDigest,
+            settlementPayload,
+          };
+          if (valuationMatch) {
+            for (const targetRoomId of matchRooms(valuationMatch)) {
+              namespace
+                .to(targetRoomId)
+                .emit("match.result.finalized", finalizedEvent);
+            }
+          } else if (roomId) {
+            namespace.to(roomId).emit("match.result.finalized", finalizedEvent);
           }
 
-          const valuationMatch = valuationMatchByChallenge.get(
-            parsed.challengeId,
-          );
           if (valuationMatch) {
             valuationMatch.phase = "FINISHED";
             valuationMatch.escrowState = "CLOSED";

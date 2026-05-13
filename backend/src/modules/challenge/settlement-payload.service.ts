@@ -136,7 +136,7 @@ async function getLobbyConfig(): Promise<ParsedLobbyConfig> {
   const chainId = Number(fields.chain_id ?? 0);
   const packageFromType = content?.type?.split("::")?.[0] ?? "";
   const packageFromEnv = env.LOBBY_PACKAGE_ID || env.SUI_PACKAGE_ID || "";
-  const packageId = normalizeSuiAddress(packageFromEnv || packageFromType);
+  const packageId = normalizeSuiAddress(packageFromType || packageFromEnv);
 
   if (!Number.isFinite(chainId)) {
     throw new Error("Invalid LobbyConfig chain_id");
@@ -156,7 +156,7 @@ async function getLobbyConfig(): Promise<ParsedLobbyConfig> {
         envPackageId: packageFromEnv,
         onChainPackageId: normalizeSuiAddress(packageFromType),
       },
-      "Lobby package ID drift detected; using env package ID for settlement signing",
+      "Lobby package ID drift detected; using on-chain config package ID for settlement signing",
     );
   }
 

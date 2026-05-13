@@ -411,6 +411,22 @@ export default function PvPScreen() {
         if (!leaveConfirmed) {
           return;
         }
+
+        const unresolvedRoomId =
+          pvp.settlementPayload?.roomId ||
+          pvp.roomId ||
+          createdRoomId ||
+          joinRoomId.trim();
+        if (unresolvedRoomId) {
+          window.sessionStorage.setItem(
+            ESCROW_ROOM_STORAGE_KEY,
+            unresolvedRoomId,
+          );
+          setSavedEscrowRoomId(unresolvedRoomId);
+        }
+        disconnectRoomSocket();
+        navigate("/dashboard");
+        return;
       }
 
       window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
@@ -1105,51 +1121,67 @@ export default function PvPScreen() {
     setSettleSubmitting(true);
     toast.loading("Đang submit settle on-chain...", { id: "lobby-settle" });
 
-    const tx = buildSettleValuationLobbyRoomTx({
-      roomId: settleRoomId,
-      winner: payload.winner,
-      loser: payload.loser,
-      matchDigest: payload.matchDigest,
-      nonce: payload.nonce,
-      deadlineMs: payload.deadlineMs,
-      signature: payload.signature,
-      signerPubkey: payload.signerPubkey,
-    });
+    const handleSettleSuccess = (digest: string) => {
+      setSettleTx(digest);
+      window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
+      setSavedEscrowRoomId(null);
+      setCreatedRoomId(null);
+      setJoinRoomId("");
+      setEscrowLocked(false);
+      setRoomStatus(2);
+      setRoomDeadlineMs(null);
+      toast.success("Settle on-chain thành công.", { id: "lobby-settle" });
+      setSettleSubmitting(false);
+    };
 
-    signAndExecute(
-      { transaction: tx },
-      {
-        onSuccess: (result) => {
-          setSettleTx(result.digest);
-          window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
-          setSavedEscrowRoomId(null);
-          setCreatedRoomId(null);
-          setJoinRoomId("");
-          setEscrowLocked(false);
-          setRoomStatus(2);
-          setRoomDeadlineMs(null);
-          toast.success("Settle on-chain thành công.", { id: "lobby-settle" });
-          setSettleSubmitting(false);
-        },
-        onError: (error) => {
-          const message = String(error?.message ?? error);
-          if (message.includes("711")) {
-            void refreshSettlementPayload(settleRoomId);
-            toast.error(
-              "Settle bị từ chối (711): chữ ký không khớp on-chain. Đã thử làm mới payload, bấm settle lại nếu room vẫn ACTIVE.",
-              { id: "lobby-settle" },
-            );
+    const executeSettle = (currentPayload: typeof payload, retried = false) => {
+      const tx = buildSettleValuationLobbyRoomTx({
+        roomId: settleRoomId,
+        winner: currentPayload.winner,
+        loser: currentPayload.loser,
+        matchDigest: currentPayload.matchDigest,
+        nonce: currentPayload.nonce,
+        deadlineMs: currentPayload.deadlineMs,
+        signature: currentPayload.signature,
+        signerPubkey: currentPayload.signerPubkey,
+      });
+
+      signAndExecute(
+        { transaction: tx },
+        {
+          onSuccess: (result) => {
+            handleSettleSuccess(result.digest);
+          },
+          onError: async (error) => {
+            const message = String(error?.message ?? error);
+            if (message.includes("711") && !retried) {
+              const refreshed = await refreshSettlementPayload(settleRoomId);
+              if (refreshed) {
+                toast.loading("Payload settle đã làm mới, đang thử lại...", {
+                  id: "lobby-settle",
+                });
+                executeSettle(refreshed, true);
+                return;
+              }
+            }
+            if (message.includes("711")) {
+              toast.error(
+                "Settle bị từ chối (711): chữ ký không khớp on-chain. Room vẫn ACTIVE thì cần kiểm tra signer/package env backend.",
+                { id: "lobby-settle" },
+              );
+              setSettleSubmitting(false);
+              return;
+            }
+            toast.error(`Settle on-chain thất bại: ${message}`, {
+              id: "lobby-settle",
+            });
             setSettleSubmitting(false);
-            return;
-          }
-          toast.error(
-            `Settle on-chain thất bại: ${message}`,
-            { id: "lobby-settle" },
-          );
-          setSettleSubmitting(false);
+          },
         },
-      },
-    );
+      );
+    };
+
+    executeSettle(payload);
   };
 
   const emergencyRefundOnChain = async () => {
