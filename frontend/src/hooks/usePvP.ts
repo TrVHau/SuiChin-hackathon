@@ -45,6 +45,11 @@ interface SubmitShotAck {
   error?: string;
 }
 
+interface ForfeitAck {
+  ok: boolean;
+  error?: string;
+}
+
 interface MatchStartEvent {
   roomId: string;
   players: string[];
@@ -958,6 +963,28 @@ export function usePvP(_profileId: string | undefined) {
     [account, pvp.challengeId, pvp.myTurn, pvp.paused, pvp.status],
   );
 
+  const forfeitMatch = useCallback(
+    () =>
+      new Promise<boolean>((resolve) => {
+        const socket = socketRef.current;
+        const challengeId = pvpRef.current.challengeId;
+        if (!socket || !socket.connected || !challengeId) {
+          resolve(false);
+          return;
+        }
+
+        socket.emit("match.forfeit", { challengeId }, (ack: ForfeitAck) => {
+          if (!ack?.ok) {
+            toast.error(ack?.error ?? "Khong the xu thua tran dau");
+            resolve(false);
+            return;
+          }
+          resolve(true);
+        });
+      }),
+    [],
+  );
+
   const resolveLocalMatch = useCallback((winnerWallet: string | null) => {
     setPvP((prev) => {
       if (prev.status !== "playing") return prev;
@@ -997,6 +1024,7 @@ export function usePvP(_profileId: string | undefined) {
     refreshSettlementPayload,
     reportRound,
     submitShot,
+    forfeitMatch,
     resolveLocalMatch,
     setSettleTx,
   };

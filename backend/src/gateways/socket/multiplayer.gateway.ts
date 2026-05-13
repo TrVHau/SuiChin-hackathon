@@ -180,6 +180,10 @@ const MatchHeartbeatPayloadSchema = z.object({
   roomId: z.string().trim().min(1).optional(),
 });
 
+const MatchForfeitPayloadSchema = z.object({
+  challengeId: z.string().uuid(),
+});
+
 function timerWithUnref(callback: () => void, delayMs: number): NodeJS.Timeout {
   const timer = setTimeout(callback, delayMs);
   timer.unref?.();
@@ -1629,6 +1633,50 @@ export function attachMultiplayerGateway(server: HttpServer) {
             ok: false,
             error:
               err instanceof Error ? err.message : "match.shot.submit failed",
+          });
+        }
+      },
+    );
+
+    socket.on(
+      "match.forfeit",
+      async (payload: unknown, ack?: (payload: unknown) => void) => {
+        try {
+          const walletAddress = getWalletFromSocket(socket);
+          const parsed = MatchForfeitPayloadSchema.parse(payload);
+          let match = valuationMatchByChallenge.get(parsed.challengeId) ?? null;
+          if (!match) {
+            const persisted = await valuationRoomService.findByChallengeId(
+              parsed.challengeId,
+            );
+            if (persisted) {
+              match = rememberValuationMatch(
+                buildValuationMatchFromRecord(persisted),
+              );
+            }
+          }
+          if (!match) {
+            throw new Error("Match not found");
+          }
+          if (
+            !match.players.some((player) => sameWallet(player, walletAddress))
+          ) {
+            throw new Error("Wallet does not belong to this match");
+          }
+          if (
+            match.phase === "MATCHED" ||
+            match.phase === "LOCKING" ||
+            match.escrowState !== "ACTIVE"
+          ) {
+            throw new Error("Match has not started");
+          }
+
+          await finalizeDisconnectedPlayer(match, walletAddress);
+          ack?.({ ok: true });
+        } catch (err) {
+          ack?.({
+            ok: false,
+            error: err instanceof Error ? err.message : "match.forfeit failed",
           });
         }
       },

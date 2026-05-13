@@ -111,6 +111,7 @@ export default function PvPScreen() {
     // legacy aliases still available on hook: joinQueue, leaveQueue
     submitShot,
     reportRound,
+    forfeitMatch,
     setSettleTx,
   } = usePvP(profile?.objectId);
 
@@ -207,8 +208,15 @@ export default function PvPScreen() {
     roomStatus !== 2 &&
     roomStatus !== 3 &&
     roomStatus !== 4;
+  const matchAlreadyStarted =
+    pvp.status === "matched" ||
+    pvp.status === "playing" ||
+    pvp.status === "submitting";
+  const hideEmergencyRefundForStartedMatch =
+    matchAlreadyStarted || pvp.status === "resolved";
 
   const shouldWarnUnsafeLeave = useMemo(() => {
+    if (matchAlreadyStarted) return true;
     if (mustCancelOnChainBeforeLeaving) return true;
     if (!createdRoomId) return false;
     if (roomStatus === 0 || roomStatus === 1) return true;
@@ -218,7 +226,13 @@ export default function PvPScreen() {
       pvp.status === "playing" ||
       pvp.status === "submitting"
     );
-  }, [createdRoomId, mustCancelOnChainBeforeLeaving, pvp.status, roomStatus]);
+  }, [
+    createdRoomId,
+    matchAlreadyStarted,
+    mustCancelOnChainBeforeLeaving,
+    pvp.status,
+    roomStatus,
+  ]);
 
   const readLobbyRoomSnapshot = async (
     roomId: string,
@@ -380,6 +394,21 @@ export default function PvPScreen() {
   ]);
 
   const handleLeave = async () => {
+    if (matchAlreadyStarted) {
+      const leaveConfirmed = window.confirm(
+        "Tran da bat dau va NFT dang la tien cuoc. Neu thoat luc nay, ban se bi xu thua va doi thu co quyen settle NFT. Ban van muon thoat?",
+      );
+      if (!leaveConfirmed) {
+        return;
+      }
+
+      await forfeitMatch();
+      window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
+      disconnectRoomSocket();
+      navigate("/dashboard");
+      return;
+    }
+
     if (mustCancelOnChainBeforeLeaving && pvp.cancelRoomId) {
       const leaveConfirmed = window.confirm(
         "NFT dang nam trong room WAITING. Ban can huy room on-chain de lay lai NFT truoc khi thoat. Tiep tuc huy room?",
@@ -1061,7 +1090,7 @@ export default function PvPScreen() {
           const message = String(error?.message ?? error);
           if (message.includes("711")) {
             toast.error(
-              "Settle bị từ chối (711): room/payload không còn hợp lệ. Hãy đồng bộ lại phòng rồi settle lại, hoặc dùng Reclaim NFT nếu cần.",
+              "Settle bị từ chối (711): room/payload không còn hợp lệ. Hãy đồng bộ lại phòng rồi settle lại.",
               { id: "lobby-settle" },
             );
             setSettleSubmitting(false);
@@ -1725,24 +1754,25 @@ export default function PvPScreen() {
                           Huy phong
                         </button>
                       )}
-                    {roomStatus === 1 && (
-                      <button
-                        onClick={emergencyRefundOnChain}
-                        disabled={
-                          escrowSubmitting ||
-                          Boolean(
-                            emergencyRefundReadyAt &&
-                            emergencyRefundRemainingMs > 0,
-                          )
-                        }
-                        className="rounded-full border-2 border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-800 disabled:opacity-60"
-                      >
-                        {emergencyRefundReadyAt &&
-                        emergencyRefundRemainingMs > 0
-                          ? `Reclaim NFT sau ${emergencyRefundRemainingMin} phut`
-                          : "Reclaim NFT"}
-                      </button>
-                    )}
+                    {roomStatus === 1 &&
+                      !hideEmergencyRefundForStartedMatch && (
+                        <button
+                          onClick={emergencyRefundOnChain}
+                          disabled={
+                            escrowSubmitting ||
+                            Boolean(
+                              emergencyRefundReadyAt &&
+                                emergencyRefundRemainingMs > 0,
+                            )
+                          }
+                          className="rounded-full border-2 border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-800 disabled:opacity-60"
+                        >
+                          {emergencyRefundReadyAt &&
+                          emergencyRefundRemainingMs > 0
+                            ? `Reclaim NFT sau ${emergencyRefundRemainingMin} phut`
+                            : "Reclaim NFT"}
+                        </button>
+                      )}
                   </div>
                 </div>
               )}
@@ -1888,23 +1918,25 @@ export default function PvPScreen() {
                       Huy phong
                     </button>
                   )}
-                {createdRoomId && roomStatus === 1 && (
-                  <button
-                    onClick={emergencyRefundOnChain}
-                    disabled={
-                      escrowSubmitting ||
-                      Boolean(
-                        emergencyRefundReadyAt &&
-                        emergencyRefundRemainingMs > 0,
-                      )
-                    }
-                    className="mt-3 rounded-full border-2 border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-800 disabled:opacity-60"
-                  >
-                    {emergencyRefundReadyAt && emergencyRefundRemainingMs > 0
-                      ? `Reclaim NFT sau ${emergencyRefundRemainingMin} phut`
-                      : "Reclaim NFT"}
-                  </button>
-                )}
+                {createdRoomId &&
+                  roomStatus === 1 &&
+                  !hideEmergencyRefundForStartedMatch && (
+                    <button
+                      onClick={emergencyRefundOnChain}
+                      disabled={
+                        escrowSubmitting ||
+                        Boolean(
+                          emergencyRefundReadyAt &&
+                            emergencyRefundRemainingMs > 0,
+                        )
+                      }
+                      className="mt-3 rounded-full border-2 border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-800 disabled:opacity-60"
+                    >
+                      {emergencyRefundReadyAt && emergencyRefundRemainingMs > 0
+                        ? `Reclaim NFT sau ${emergencyRefundRemainingMin} phut`
+                        : "Reclaim NFT"}
+                    </button>
+                  )}
               </div>
             </div>
 

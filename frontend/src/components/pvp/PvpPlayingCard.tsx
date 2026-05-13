@@ -30,6 +30,10 @@ function oppositeSide(side: Turn): Turn {
   return side === "player" ? "bot" : "player";
 }
 
+function sameWallet(a?: string | null, b?: string | null) {
+  return Boolean(a && b && a.toLowerCase() === b.toLowerCase());
+}
+
 export default function PvpPlayingCard({
   pvp,
   myAddress,
@@ -39,7 +43,7 @@ export default function PvpPlayingCard({
   const localSide: Turn = pvp.role === "JOINER" ? "bot" : "player";
   const opponentSide = oppositeSide(localSide);
   const currentTurnSide: Turn | undefined = pvp.currentTurnWallet
-    ? pvp.currentTurnWallet === myAddress
+    ? sameWallet(pvp.currentTurnWallet, myAddress)
       ? localSide
       : opponentSide
     : undefined;
@@ -48,7 +52,9 @@ export default function PvpPlayingCard({
     : pvp.opponentNft?.name ?? shortWallet(pvp.currentTurnWallet);
 
   const remoteShot = useMemo<PvPRemoteShot | null>(() => {
-    if (!pvp.lastShot || pvp.lastShot.byWallet === myAddress) return null;
+    if (!pvp.lastShot || sameWallet(pvp.lastShot.byWallet, myAddress)) {
+      return null;
+    }
     return {
       id: `${pvp.lastShot.byWallet}:${pvp.lastShot.seq}:${pvp.lastShot.atMs}`,
       side: opponentSide,

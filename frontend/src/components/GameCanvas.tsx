@@ -164,6 +164,10 @@ function drawChun(
   ctx.restore();
 }
 
+function oppositeSide(side: Turn): Turn {
+  return side === "player" ? "bot" : "player";
+}
+
 export default function GameCanvas({
   onWin,
   onLose,
@@ -304,7 +308,10 @@ export default function GameCanvas({
   const switchTurn = useCallback(() => {
     if (mode === "pvp") {
       currentTurnRef.current =
-        currentTurnRef.current === "player" ? "bot" : "player";
+        currentTurnSide ??
+        (lastAttackerRef.current
+          ? oppositeSide(lastAttackerRef.current)
+          : currentTurnRef.current);
       phaseRef.current = "idle";
       return;
     }
@@ -316,7 +323,7 @@ export default function GameCanvas({
       currentTurnRef.current = "player";
       phaseRef.current = "idle";
     }
-  }, [mode, triggerBotTurn]);
+  }, [currentTurnSide, mode, triggerBotTurn]);
 
   const updatePhysics = useCallback(() => {
     const player = playerRef.current;
