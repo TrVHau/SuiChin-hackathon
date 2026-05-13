@@ -212,10 +212,18 @@ export default function PvPScreen() {
     pvp.status === "matched" ||
     pvp.status === "playing" ||
     pvp.status === "submitting";
+  const matchResolved = pvp.status === "resolved";
+  const resolvedWinnerCanSettle =
+    matchResolved &&
+    Boolean(pvp.winner) &&
+    sameAddress(pvp.winner, account?.address) &&
+    !pvp.settleTx &&
+    roomStatus === 1;
   const hideEmergencyRefundForStartedMatch =
-    matchAlreadyStarted || pvp.status === "resolved";
+    matchAlreadyStarted || matchResolved;
 
   const shouldWarnUnsafeLeave = useMemo(() => {
+    if (matchResolved) return false;
     if (matchAlreadyStarted) return true;
     if (mustCancelOnChainBeforeLeaving) return true;
     if (!createdRoomId) return false;
@@ -229,6 +237,7 @@ export default function PvPScreen() {
   }, [
     createdRoomId,
     matchAlreadyStarted,
+    matchResolved,
     mustCancelOnChainBeforeLeaving,
     pvp.status,
     roomStatus,
@@ -394,6 +403,23 @@ export default function PvPScreen() {
   ]);
 
   const handleLeave = async () => {
+    if (matchResolved) {
+      if (resolvedWinnerCanSettle) {
+        const leaveConfirmed = window.confirm(
+          "Ban da thang nhung chua settle on-chain. Neu thoat, NFT van con trong escrow cho den khi ban quay lai settle. Ban van muon thoat?",
+        );
+        if (!leaveConfirmed) {
+          return;
+        }
+      }
+
+      window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
+      setSavedEscrowRoomId(null);
+      disconnectRoomSocket();
+      navigate("/dashboard");
+      return;
+    }
+
     if (matchAlreadyStarted) {
       const leaveConfirmed = window.confirm(
         "Tran da bat dau va NFT dang la tien cuoc. Neu thoat luc nay, ban se bi xu thua va doi thu co quyen settle NFT. Ban van muon thoat?",
@@ -1012,15 +1038,27 @@ export default function PvPScreen() {
   const isMe = (address: string) => sameAddress(address, account?.address);
 
   const settleOnChain = async () => {
-    let payload =
-      pvp.settlementPayload ??
-      (await refreshSettlementPayload(createdRoomId ?? undefined));
-    if (!payload) {
-      toast.error("Backend chưa cung cấp settlement payload.");
-      return;
-    }
     if (!pvp.winner || !isMe(pvp.winner)) {
       toast.error("Chỉ winner mới được settle on-chain.");
+      return;
+    }
+
+    const requestedRoomId =
+      pvp.settlementPayload?.roomId ||
+      pvp.roomId ||
+      createdRoomId ||
+      joinRoomId.trim();
+    if (!requestedRoomId) {
+      toast.error("Không xác định được room để settle.");
+      return;
+    }
+
+    let payload = await refreshSettlementPayload(requestedRoomId);
+    if (!payload) {
+      payload = pvp.settlementPayload;
+    }
+    if (!payload) {
+      toast.error("Backend chưa cung cấp settlement payload.");
       return;
     }
     if (!sameAddress(payload.winner, account?.address)) {
@@ -1028,7 +1066,7 @@ export default function PvPScreen() {
       return;
     }
 
-    const settleRoomId = payload.roomId || createdRoomId || joinRoomId.trim();
+    const settleRoomId = payload.roomId || requestedRoomId;
     if (!settleRoomId) {
       toast.error("Không xác định được room để settle.");
       return;
@@ -1083,14 +1121,22 @@ export default function PvPScreen() {
       {
         onSuccess: (result) => {
           setSettleTx(result.digest);
+          window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
+          setSavedEscrowRoomId(null);
+          setCreatedRoomId(null);
+          setJoinRoomId("");
+          setEscrowLocked(false);
+          setRoomStatus(2);
+          setRoomDeadlineMs(null);
           toast.success("Settle on-chain thành công.", { id: "lobby-settle" });
           setSettleSubmitting(false);
         },
         onError: (error) => {
           const message = String(error?.message ?? error);
           if (message.includes("711")) {
+            void refreshSettlementPayload(settleRoomId);
             toast.error(
-              "Settle bị từ chối (711): room/payload không còn hợp lệ. Hãy đồng bộ lại phòng rồi settle lại.",
+              "Settle bị từ chối (711): chữ ký không khớp on-chain. Đã thử làm mới payload, bấm settle lại nếu room vẫn ACTIVE.",
               { id: "lobby-settle" },
             );
             setSettleSubmitting(false);
