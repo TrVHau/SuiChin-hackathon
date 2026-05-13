@@ -34,8 +34,6 @@ model Challenge {
   status          ChallengeStatus
   challengerWallet String
   opponentWallet  String?
-  stakeEnabled    Boolean         @default(false)
-  stakeAmount     Int             @default(0)
   winnerWallet    String?
   createdAt       DateTime        @default(now())
   expiresAt       DateTime
@@ -76,8 +74,6 @@ model ValuationRoom {
   tempRoomId     String   @unique
   suiRoomId      String?  @unique
   tier           String
-  wagerSui       Float
-  wagerMist      Int
   creatorWallet  String
   joinerWallet   String
   creatorNftJson Json

@@ -3,8 +3,6 @@ export interface FinalizeChallengePayload {
   winnerWallet: string | null;
   challengerWallet: string;
   opponentWallet: string | null;
-  stakeEnabled: boolean;
-  stakeAmount: number;
 }
 
 export interface FinalizeChallengeResult {

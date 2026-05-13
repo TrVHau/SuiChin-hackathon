@@ -204,7 +204,6 @@ module suichin::craft_actions {
         transfer::public_transfer(s, sender);
     }
 
-    #[allow(lint(self_transfer))]
     public fun craft_chun(
         profile: &mut PlayerProfile,
         treasury: &mut Treasury,
@@ -244,7 +243,6 @@ module suichin::craft_actions {
         };
     }
 
-    #[allow(lint(public_random), lint(self_transfer))]
     public fun craft_chun_with_randomness(
         profile: &mut PlayerProfile,
         treasury: &mut Treasury,
@@ -533,7 +531,6 @@ module suichin::craft_actions {
         });
     }
 
-    #[allow(lint(self_transfer))]
     public fun fuse_scraps_for_bronze(
         config: &SystemConfig,
         scraps: vector<scrap::Scrap>,
@@ -576,7 +573,6 @@ module suichin::craft_actions {
         });
     }
 
-    #[allow(lint(public_random), lint(self_transfer))]
     public fun fuse_scraps_for_bronze_with_randomness(
         config: &SystemConfig,
         scraps: vector<scrap::Scrap>,

@@ -247,7 +247,6 @@ module suichin::craft_treasury {
         if (tier_pool_balance(treasury, tier) >= payout) payout else 0
     }
 
-    #[allow(lint(self_transfer))]
     public fun redeem_chun(
         treasury: &mut Treasury,
         nft: CuonChunNFT,

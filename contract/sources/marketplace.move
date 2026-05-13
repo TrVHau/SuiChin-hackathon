@@ -88,7 +88,6 @@ module suichin::marketplace {
         event::emit(Listed { listing_id: nft_id, seller, tier, price });
     }
 
-    #[allow(lint(self_transfer))]
     public fun buy(
         market: &mut Market,
         listing_id: ID,
@@ -120,7 +119,6 @@ module suichin::marketplace {
         });
     }
 
-    #[allow(lint(self_transfer))]
     public fun cancel(
         market: &mut Market,
         listing_id: ID,

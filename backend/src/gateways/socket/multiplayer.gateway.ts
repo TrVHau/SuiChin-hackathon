@@ -763,8 +763,6 @@ export function attachMultiplayerGateway(server: HttpServer) {
               {
                 mode: "REALTIME",
                 opponentWallet: walletAddress,
-                stakeEnabled: false,
-                stakeAmount: 0,
               },
             );
             await challengeService.acceptChallenge(challenge.id, walletAddress);
@@ -806,9 +804,6 @@ export function attachMultiplayerGateway(server: HttpServer) {
               challengeId: challenge.id,
               tempRoomId,
               tier,
-              // Prisma schema still has these historical columns; NFT-only PvP stores zero.
-              wagerSui: 0,
-              wagerMist: 0,
               creatorWallet: opponent.walletAddress,
               joinerWallet: walletAddress,
               creatorNft: opponent.nft,
@@ -870,8 +865,6 @@ export function attachMultiplayerGateway(server: HttpServer) {
               {
                 mode: "REALTIME",
                 opponentWallet: walletAddress,
-                stakeEnabled: false,
-                stakeAmount: 0,
               },
             );
             await challengeService.acceptChallenge(challenge.id, walletAddress);
@@ -917,8 +910,6 @@ export function attachMultiplayerGateway(server: HttpServer) {
               {
                 mode: "REALTIME",
                 opponentWallet: walletAddress,
-                stakeEnabled: false,
-                stakeAmount: 0,
               },
             );
             await challengeService.acceptChallenge(challenge.id, walletAddress);

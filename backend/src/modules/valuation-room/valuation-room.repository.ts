@@ -21,8 +21,6 @@ export interface ValuationRoomRecord {
   tempRoomId: string;
   suiRoomId: string | null;
   tier: string;
-  wagerSui: number;
-  wagerMist: number;
   creatorWallet: string;
   joinerWallet: string;
   creatorNft: ValuationRoomNft;
@@ -34,8 +32,6 @@ export interface CreateValuationRoomInput {
   challengeId: string;
   tempRoomId: string;
   tier: string;
-  wagerSui: number;
-  wagerMist: number;
   creatorWallet: string;
   joinerWallet: string;
   creatorNft: ValuationRoomNft;
@@ -193,8 +189,6 @@ class PrismaValuationRoomRepository implements ValuationRoomRepository {
         challengeId: input.challengeId,
         tempRoomId: input.tempRoomId,
         tier: input.tier,
-        wagerSui: input.wagerSui,
-        wagerMist: input.wagerMist,
         creatorWallet: input.creatorWallet,
         joinerWallet: input.joinerWallet,
         creatorNftJson: input.creatorNft,
@@ -304,8 +298,6 @@ class PrismaValuationRoomRepository implements ValuationRoomRepository {
       tempRoomId: row.tempRoomId,
       suiRoomId: row.suiRoomId ?? null,
       tier: row.tier,
-      wagerSui: Number(row.wagerSui),
-      wagerMist: Number(row.wagerMist),
       creatorWallet: row.creatorWallet,
       joinerWallet: row.joinerWallet,
       creatorNft: row.creatorNftJson,

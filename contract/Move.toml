@@ -2,9 +2,10 @@
 name = "suichin"
 version = "0.1.0"
 edition = "2024.beta"
+published-at = "0xb40ef16e8d1dd5a885ac25436bcf14b19a956fb05c575863b5cc21bfa2230525"
 
 [addresses]
-suichin = "0x0"
+suichin = "0xb40ef16e8d1dd5a885ac25436bcf14b19a956fb05c575863b5cc21bfa2230525"
 
 [environments]
 devnet = "8e04f6e7"

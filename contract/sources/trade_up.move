@@ -56,7 +56,6 @@ module suichin::trade_up {
         vector::destroy_empty(nfts);
     }
 
-    #[allow(lint(self_transfer))]
     fun mint_trade_up_reward(
         sender: address,
         success_rate: u64,
@@ -76,7 +75,6 @@ module suichin::trade_up {
         }
     }
 
-    #[allow(lint(self_transfer))]
     fun execute_trade_up(
         nfts: vector<CuonChunNFT>,
         required_inputs: u64,
@@ -104,7 +102,6 @@ module suichin::trade_up {
     }
 
 
-    #[allow(lint(self_transfer))]
     public fun trade_up_bronze_to_silver(
         nfts: vector<CuonChunNFT>,
         clock: &Clock,
@@ -113,7 +110,6 @@ module suichin::trade_up {
         execute_trade_up(nfts, BRONZE_INPUT, 1, 2, BRONZE_TO_SILVER_RATE, clock, ctx);
     }
 
-    #[allow(lint(self_transfer))]
     public fun trade_up_silver_to_gold(
         nfts: vector<CuonChunNFT>,
         clock: &Clock,

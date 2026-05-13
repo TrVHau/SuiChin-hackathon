@@ -25,16 +25,11 @@ export class ChallengeService {
 
   async createChallenge(challengerWallet: string, rawInput: CreateChallengeInput): Promise<Challenge> {
     const input = normalizeCreateInput(rawInput);
-    if (input.stakeEnabled && input.stakeAmount <= 0) {
-      throw new AppError("INVALID_STAKE", "Stake amount must be greater than zero");
-    }
 
     return await challengeRepository.create({
       challengerWallet,
       mode: input.mode,
       opponentWallet: input.opponentWallet || undefined,
-      stakeEnabled: input.stakeEnabled,
-      stakeAmount: input.stakeAmount,
       expiresInSeconds: input.expiresInSeconds,
     });
   }
@@ -122,8 +117,6 @@ export class ChallengeService {
       winnerWallet,
       challengerWallet: challenge.challengerWallet,
       opponentWallet: challenge.opponentWallet,
-      stakeEnabled: challenge.stakeEnabled,
-      stakeAmount: challenge.stakeAmount,
     });
 
     challenge.status = "FINALIZED";
