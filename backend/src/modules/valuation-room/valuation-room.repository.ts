@@ -115,6 +115,18 @@ class InMemoryValuationRoomRepository implements ValuationRoomRepository {
     joinerWallet: string;
     suiRoomId?: string;
   }): Promise<ValuationRoomRecord | null> {
+    if (input.suiRoomId) {
+      for (const record of this.roomsByChallenge.values()) {
+        if (
+          record.joinerWallet === input.joinerWallet &&
+          record.suiRoomId === input.suiRoomId &&
+          record.status !== "FINALIZED"
+        ) {
+          return cloneRecord(record);
+        }
+      }
+    }
+
     for (const record of this.roomsByChallenge.values()) {
       if (record.joinerWallet !== input.joinerWallet) continue;
       if (record.status === "FINALIZED" || record.status === "PLAYING") continue;
@@ -130,6 +142,20 @@ class InMemoryValuationRoomRepository implements ValuationRoomRepository {
     challengeId: string;
     suiRoomId: string;
   }): Promise<ValuationRoomRecord> {
+    const existing = await this.findBySuiRoomId(input.suiRoomId);
+    if (existing && existing.challengeId !== input.challengeId) {
+      return existing;
+    }
+    if (
+      existing &&
+      (existing.status === "JOINED" ||
+        existing.status === "PLAYING" ||
+        existing.status === "FINALIZED" ||
+        existing.status === "CANCELLED")
+    ) {
+      return existing;
+    }
+
     const record = this.requireRoom(input.challengeId);
     record.suiRoomId = input.suiRoomId;
     record.status = "ROOM_CREATED";
@@ -140,6 +166,19 @@ class InMemoryValuationRoomRepository implements ValuationRoomRepository {
     challengeId: string;
     suiRoomId: string;
   }): Promise<ValuationRoomRecord> {
+    const existing = await this.findBySuiRoomId(input.suiRoomId);
+    if (existing && existing.challengeId !== input.challengeId) {
+      return existing;
+    }
+    if (
+      existing &&
+      (existing.status === "PLAYING" ||
+        existing.status === "FINALIZED" ||
+        existing.status === "CANCELLED")
+    ) {
+      return existing;
+    }
+
     const record = this.requireRoom(input.challengeId);
     record.suiRoomId = input.suiRoomId;
     record.status = "JOINED";
@@ -225,6 +264,19 @@ class PrismaValuationRoomRepository implements ValuationRoomRepository {
     joinerWallet: string;
     suiRoomId?: string;
   }): Promise<ValuationRoomRecord | null> {
+    if (input.suiRoomId) {
+      const exact = await this.db.valuationRoom.findUnique({
+        where: { suiRoomId: input.suiRoomId },
+      });
+      if (
+        exact &&
+        exact.joinerWallet === input.joinerWallet &&
+        exact.status !== "FINALIZED"
+      ) {
+        return this.toRecord(exact);
+      }
+    }
+
     const row = await this.db.valuationRoom.findFirst({
       where: {
         joinerWallet: input.joinerWallet,
@@ -240,6 +292,22 @@ class PrismaValuationRoomRepository implements ValuationRoomRepository {
     challengeId: string;
     suiRoomId: string;
   }): Promise<ValuationRoomRecord> {
+    const existing = await this.db.valuationRoom.findUnique({
+      where: { suiRoomId: input.suiRoomId },
+    });
+    if (existing && existing.challengeId !== input.challengeId) {
+      return this.toRecord(existing);
+    }
+    if (
+      existing &&
+      (existing.status === "JOINED" ||
+        existing.status === "PLAYING" ||
+        existing.status === "FINALIZED" ||
+        existing.status === "CANCELLED")
+    ) {
+      return this.toRecord(existing);
+    }
+
     const row = await this.db.valuationRoom.update({
       where: { challengeId: input.challengeId },
       data: {
@@ -254,6 +322,21 @@ class PrismaValuationRoomRepository implements ValuationRoomRepository {
     challengeId: string;
     suiRoomId: string;
   }): Promise<ValuationRoomRecord> {
+    const existing = await this.db.valuationRoom.findUnique({
+      where: { suiRoomId: input.suiRoomId },
+    });
+    if (existing && existing.challengeId !== input.challengeId) {
+      return this.toRecord(existing);
+    }
+    if (
+      existing &&
+      (existing.status === "PLAYING" ||
+        existing.status === "FINALIZED" ||
+        existing.status === "CANCELLED")
+    ) {
+      return this.toRecord(existing);
+    }
+
     const row = await this.db.valuationRoom.update({
       where: { challengeId: input.challengeId },
       data: {
