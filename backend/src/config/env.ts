@@ -27,7 +27,7 @@ const EnvSchema = z.object({
   LOBBY_PACKAGE_ID: z.string().optional(),
   LOBBY_CONFIG_OBJECT_ID: z.string().optional(),
   LOBBY_SIGNER_SECRET_KEY: z.string().optional(),
-  LOBBY_SETTLEMENT_TTL_MS: z.coerce.number().int().positive().default(120_000),
+  LOBBY_SETTLEMENT_TTL_MS: z.coerce.number().int().positive().default(600_000),
 });
 
 export const env = EnvSchema.parse(process.env);
