@@ -1,8 +1,7 @@
 import { bcs } from "@mysten/sui/bcs";
 import { decodeSuiPrivateKey } from "@mysten/sui/cryptography";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
-import { Transaction } from "@mysten/sui/transactions";
-import { fromBase64, normalizeSuiAddress, toBase64 } from "@mysten/sui/utils";
+import { fromBase64, normalizeSuiAddress } from "@mysten/sui/utils";
 import { env } from "../../config/env.js";
 import { logger } from "../../shared/logger.js";
 import { suiClient } from "../../infra/chain/sui-client.js";
@@ -28,22 +27,27 @@ export interface SettlementPayload {
   matchDigest: number[];
   nonce: number;
   deadlineMs: number;
-  chainId?: number;
-  packageId?: string;
   signature: number[];
   signerPubkey: number[];
-  debugMessageB64?: string;
-  debugSignatureB64?: string;
 }
 
 interface ParsedRoomData {
   nonce: number;
   signerPubkey: number[];
+  packageId: string;
 }
 
 interface ParsedLobbyConfig {
   chainId: number;
-  packageId: string;
+}
+
+function tryNormalizeAddress(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    return normalizeSuiAddress(value);
+  } catch {
+    return null;
+  }
 }
 
 function collectByteVectors(value: unknown): number[][] {
@@ -101,23 +105,42 @@ async function getRoomData(roomId: string): Promise<ParsedRoomData> {
     options: { showContent: true },
   });
 
-  const fields = (
-    roomObject.data?.content as { fields?: Record<string, unknown> } | undefined
-  )?.fields;
+  const content = roomObject.data?.content as
+    | { type?: string; fields?: Record<string, unknown> }
+    | undefined;
+  const fields = content?.fields;
   if (!fields) {
     throw new Error("Room fields not found");
   }
 
   const nonce = Number(fields.nonce ?? 0);
   const signerPubkey = collectByteVectors(fields.signer_pubkey)[0] ?? [];
+  const roomPackageFromType = tryNormalizeAddress(
+    content?.type?.split("::")?.[0] ?? null,
+  );
+  const envPackageId = tryNormalizeAddress(env.LOBBY_PACKAGE_ID);
+  const packageId = roomPackageFromType ?? envPackageId;
   if (!Number.isFinite(nonce)) {
     throw new Error("Invalid room nonce");
   }
   if (signerPubkey.length === 0) {
     throw new Error("Room signer pubkey not found");
   }
+  if (!packageId) {
+    throw new Error("Room package id not found");
+  }
+  if (envPackageId && packageId !== envPackageId) {
+    logger.warn(
+      {
+        roomId,
+        envPackageId,
+        roomPackageId: packageId,
+      },
+      "Room package differs from env package; signing with room package id",
+    );
+  }
 
-  return { nonce, signerPubkey };
+  return { nonce, signerPubkey, packageId };
 }
 
 async function getLobbyConfig(): Promise<ParsedLobbyConfig> {
@@ -131,7 +154,7 @@ async function getLobbyConfig(): Promise<ParsedLobbyConfig> {
   });
 
   const content = configObject.data?.content as
-    | { type?: string; fields?: Record<string, unknown> }
+    | { fields?: Record<string, unknown> }
     | undefined;
   const fields = content?.fields;
   if (!fields) {
@@ -139,33 +162,12 @@ async function getLobbyConfig(): Promise<ParsedLobbyConfig> {
   }
 
   const chainId = Number(fields.chain_id ?? 0);
-  const packageFromType = content?.type?.split("::")?.[0] ?? "";
-  const packageFromEnv = env.LOBBY_PACKAGE_ID || env.SUI_PACKAGE_ID || "";
-  const packageId = normalizeSuiAddress(packageFromType || packageFromEnv);
 
   if (!Number.isFinite(chainId)) {
     throw new Error("Invalid LobbyConfig chain_id");
   }
-  if (!packageId) {
-    throw new Error("Missing package id for settlement message");
-  }
 
-  if (
-    packageFromEnv &&
-    packageFromType &&
-    normalizeSuiAddress(packageFromEnv) !== normalizeSuiAddress(packageFromType)
-  ) {
-    logger.warn(
-      {
-        configObjectId: env.LOBBY_CONFIG_OBJECT_ID,
-        envPackageId: packageFromEnv,
-        onChainPackageId: normalizeSuiAddress(packageFromType),
-      },
-      "Lobby package ID drift detected; using on-chain config package ID for settlement signing",
-    );
-  }
-
-  return { chainId, packageId };
+  return { chainId };
 }
 
 export class SettlementPayloadService {
@@ -189,109 +191,29 @@ export class SettlementPayloadService {
 
     const nowMs = Date.now();
     const deadlineMs = nowMs + env.LOBBY_SETTLEMENT_TTL_MS;
-    const serialized = SettlementMessageBcs.serialize({
+    const messageBytes = SettlementMessageBcs.serialize({
       intent_scope: SETTLEMENT_INTENT_SCOPE,
       chain_id: config.chainId,
-      package_id: config.packageId,
+      package_id: room.packageId,
       room_id: normalizeSuiAddress(input.roomId),
       winner: normalizeSuiAddress(input.winner),
       loser: normalizeSuiAddress(input.loser),
       match_digest: input.matchDigest,
       nonce: String(room.nonce),
       deadline_ms: String(deadlineMs),
-    });
-
-    const messageBytes = serialized.toBytes();
+    }).toBytes();
 
     const signatureBytes = await this.keypair.sign(messageBytes);
     const signerPubkey = Array.from(this.keypair.getPublicKey().toRawBytes());
-
-    const simulateSettlement = async () => {
-      if (!env.LOBBY_CONFIG_OBJECT_ID) {
-        return { status: "skipped", error: "Missing LOBBY_CONFIG_OBJECT_ID" };
-      }
-
-      try {
-        const tx = new Transaction();
-        tx.setSender(normalizeSuiAddress(input.winner));
-        tx.moveCall({
-          target: `${config.packageId}::nft_valuation_lobby::settle_room_with_signature`,
-          arguments: [
-            tx.object(env.LOBBY_CONFIG_OBJECT_ID),
-            tx.object(normalizeSuiAddress(input.roomId)),
-            tx.pure.address(normalizeSuiAddress(input.winner)),
-            tx.pure.address(normalizeSuiAddress(input.loser)),
-            tx.pure.vector("u8", input.matchDigest),
-            tx.pure.u64(String(room.nonce)),
-            tx.pure.u64(String(deadlineMs)),
-            tx.pure.vector("u8", Array.from(signatureBytes)),
-            tx.pure.vector("u8", signerPubkey),
-            tx.object("0x6"),
-          ],
-        });
-
-        const kindBytes = await tx.build({
-          client: suiClient,
-          onlyTransactionKind: true,
-        });
-        const inspect = await suiClient.devInspectTransactionBlock({
-          sender: normalizeSuiAddress(input.winner),
-          transactionBlock: kindBytes,
-        });
-
-        return {
-          status: inspect.effects?.status?.status ?? "unknown",
-          error:
-            inspect.effects?.status?.status === "failure"
-              ? inspect.effects?.status?.error
-              : undefined,
-        };
-      } catch (error) {
-        return {
-          status: "error",
-          error: error instanceof Error ? error.message : String(error),
-        };
-      }
-    };
-
-    const simulation = await simulateSettlement();
 
     const roomSignerMatches =
       signerPubkey.length === room.signerPubkey.length &&
       signerPubkey.every((byte, index) => byte === room.signerPubkey[index]);
     if (!roomSignerMatches) {
-      logger.error(
-        {
-          roomId: input.roomId,
-          localSignerPubkeyB64: toBase64(new Uint8Array(signerPubkey)),
-          roomSignerPubkeyB64: toBase64(new Uint8Array(room.signerPubkey)),
-        },
-        "Settlement signer mismatch",
-      );
       throw new Error(
         "Backend signer public key does not match signer_pubkey configured for this room",
       );
     }
-
-    logger.info(
-      {
-        roomId: normalizeSuiAddress(input.roomId),
-        winner: normalizeSuiAddress(input.winner),
-        loser: normalizeSuiAddress(input.loser),
-        nonce: room.nonce,
-        deadlineMs,
-        chainId: config.chainId,
-        packageId: config.packageId,
-        messageLen: messageBytes.length,
-        signatureLen: signatureBytes.length,
-        signerPubkeyB64: toBase64(new Uint8Array(signerPubkey)),
-        messageB64: Buffer.from(messageBytes).toString("base64"),
-        signatureB64: Buffer.from(signatureBytes).toString("base64"),
-        devInspectStatus: simulation.status,
-        devInspectError: simulation.error,
-      },
-      "Built settlement payload",
-    );
 
     return {
       roomId: normalizeSuiAddress(input.roomId),
@@ -300,12 +222,8 @@ export class SettlementPayloadService {
       matchDigest: input.matchDigest,
       nonce: room.nonce,
       deadlineMs,
-      chainId: config.chainId,
-      packageId: config.packageId,
       signature: Array.from(signatureBytes),
       signerPubkey,
-      debugMessageB64: Buffer.from(messageBytes).toString("base64"),
-      debugSignatureB64: Buffer.from(signatureBytes).toString("base64"),
     };
   }
 }

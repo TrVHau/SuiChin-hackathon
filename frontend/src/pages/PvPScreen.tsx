@@ -12,8 +12,6 @@ import {
   Wallet,
 } from "lucide-react";
 import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
-import { bcs } from "@mysten/sui/bcs";
-import { normalizeSuiAddress, toBase64 } from "@mysten/sui/utils";
 import PageHeader from "@/components/common/PageHeader";
 import { useGame } from "@/providers/GameContext";
 import { usePvP, type BettingTier, type ValuationNft } from "@/hooks/usePvP";
@@ -96,40 +94,7 @@ type LobbyRoomSnapshot = {
   status: number;
   deadlineMs: number;
   creator: string | null;
-  nonce: number;
-  signerPubkey: number[];
 };
-
-const SettlementMessageBcs = bcs.struct("SettlementMessage", {
-  intent_scope: bcs.u8(),
-  chain_id: bcs.u8(),
-  package_id: bcs.Address,
-  room_id: bcs.Address,
-  winner: bcs.Address,
-  loser: bcs.Address,
-  match_digest: bcs.vector(bcs.u8()),
-  nonce: bcs.u64(),
-  deadline_ms: bcs.u64(),
-});
-
-function collectByteVectors(value: unknown): number[][] {
-  if (Array.isArray(value)) {
-    if (value.length > 0 && value.every((item) => typeof item === "number")) {
-      return [value as number[]];
-    }
-    return value.flatMap((item) => collectByteVectors(item));
-  }
-
-  if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    if ("fields" in record) return collectByteVectors(record.fields);
-    if ("value" in record) return collectByteVectors(record.value);
-    if ("vec" in record) return collectByteVectors(record.vec);
-    return Object.values(record).flatMap((item) => collectByteVectors(item));
-  }
-
-  return [];
-}
 
 export default function PvPScreen() {
   const ESCROW_ROOM_STORAGE_KEY = "pvp:last-escrow-room-id";
@@ -146,7 +111,6 @@ export default function PvPScreen() {
     // legacy aliases still available on hook: joinQueue, leaveQueue
     submitShot,
     reportRound,
-    forfeitMatch,
     setSettleTx,
   } = usePvP(profile?.objectId);
 
@@ -243,23 +207,8 @@ export default function PvPScreen() {
     roomStatus !== 2 &&
     roomStatus !== 3 &&
     roomStatus !== 4;
-  const matchAlreadyStarted =
-    pvp.status === "matched" ||
-    pvp.status === "playing" ||
-    pvp.status === "submitting";
-  const matchResolved = pvp.status === "resolved";
-  const resolvedWinnerCanSettle =
-    matchResolved &&
-    Boolean(pvp.winner) &&
-    sameAddress(pvp.winner, account?.address) &&
-    !pvp.settleTx &&
-    roomStatus === 1;
-  const hideEmergencyRefundForStartedMatch =
-    matchAlreadyStarted || matchResolved;
 
   const shouldWarnUnsafeLeave = useMemo(() => {
-    if (matchResolved) return false;
-    if (matchAlreadyStarted) return true;
     if (mustCancelOnChainBeforeLeaving) return true;
     if (!createdRoomId) return false;
     if (roomStatus === 0 || roomStatus === 1) return true;
@@ -269,14 +218,7 @@ export default function PvPScreen() {
       pvp.status === "playing" ||
       pvp.status === "submitting"
     );
-  }, [
-    createdRoomId,
-    matchAlreadyStarted,
-    matchResolved,
-    mustCancelOnChainBeforeLeaving,
-    pvp.status,
-    roomStatus,
-  ]);
+  }, [createdRoomId, mustCancelOnChainBeforeLeaving, pvp.status, roomStatus]);
 
   const readLobbyRoomSnapshot = async (
     roomId: string,
@@ -295,8 +237,6 @@ export default function PvPScreen() {
       status: Number(fields.status ?? 0),
       deadlineMs: Number(fields.deadline_ms ?? 0),
       creator: typeof fields.creator === "string" ? fields.creator : null,
-      nonce: Number(fields.nonce ?? 0),
-      signerPubkey: collectByteVectors(fields.signer_pubkey)[0] ?? [],
     };
   };
 
@@ -440,54 +380,6 @@ export default function PvPScreen() {
   ]);
 
   const handleLeave = async () => {
-    if (matchResolved) {
-      if (resolvedWinnerCanSettle) {
-        const leaveConfirmed = window.confirm(
-          "Ban da thang nhung chua settle on-chain. Neu thoat, NFT van con trong escrow cho den khi ban quay lai settle. Ban van muon thoat?",
-        );
-        if (!leaveConfirmed) {
-          return;
-        }
-
-        const unresolvedRoomId =
-          pvp.settlementPayload?.roomId ||
-          pvp.roomId ||
-          createdRoomId ||
-          joinRoomId.trim();
-        if (unresolvedRoomId) {
-          window.sessionStorage.setItem(
-            ESCROW_ROOM_STORAGE_KEY,
-            unresolvedRoomId,
-          );
-          setSavedEscrowRoomId(unresolvedRoomId);
-        }
-        disconnectRoomSocket();
-        navigate("/dashboard");
-        return;
-      }
-
-      window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
-      setSavedEscrowRoomId(null);
-      disconnectRoomSocket();
-      navigate("/dashboard");
-      return;
-    }
-
-    if (matchAlreadyStarted) {
-      const leaveConfirmed = window.confirm(
-        "Tran da bat dau va NFT dang la tien cuoc. Neu thoat luc nay, ban se bi xu thua va doi thu co quyen settle NFT. Ban van muon thoat?",
-      );
-      if (!leaveConfirmed) {
-        return;
-      }
-
-      await forfeitMatch();
-      window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
-      disconnectRoomSocket();
-      navigate("/dashboard");
-      return;
-    }
-
     if (mustCancelOnChainBeforeLeaving && pvp.cancelRoomId) {
       const leaveConfirmed = window.confirm(
         "NFT dang nam trong room WAITING. Ban can huy room on-chain de lay lai NFT truoc khi thoat. Tiep tuc huy room?",
@@ -1091,28 +983,15 @@ export default function PvPScreen() {
   const isMe = (address: string) => sameAddress(address, account?.address);
 
   const settleOnChain = async () => {
-    if (!pvp.winner || !isMe(pvp.winner)) {
-      toast.error("Chỉ winner mới được settle on-chain.");
-      return;
-    }
-
-    const requestedRoomId =
-      pvp.settlementPayload?.roomId ||
-      pvp.roomId ||
-      createdRoomId ||
-      joinRoomId.trim();
-    if (!requestedRoomId) {
-      toast.error("Không xác định được room để settle.");
-      return;
-    }
-
-    const cachedPayload = pvp.settlementPayload;
-    let payload = cachedPayload;
-    if (!payload) {
-      payload = await refreshSettlementPayload(requestedRoomId);
-    }
+    let payload =
+      (await refreshSettlementPayload(createdRoomId ?? undefined)) ??
+      pvp.settlementPayload;
     if (!payload) {
       toast.error("Backend chưa cung cấp settlement payload.");
+      return;
+    }
+    if (!pvp.winner || !isMe(pvp.winner)) {
+      toast.error("Chỉ winner mới được settle on-chain.");
       return;
     }
     if (!sameAddress(payload.winner, account?.address)) {
@@ -1120,7 +999,7 @@ export default function PvPScreen() {
       return;
     }
 
-    const settleRoomId = payload.roomId || requestedRoomId;
+    const settleRoomId = payload.roomId || createdRoomId || joinRoomId.trim();
     if (!settleRoomId) {
       toast.error("Không xác định được room để settle.");
       return;
@@ -1138,53 +1017,6 @@ export default function PvPScreen() {
       toast.error(
         "Room không còn ở trạng thái ACTIVE. Hãy đồng bộ lại phòng trước khi settle.",
       );
-      return;
-    }
-
-    if (roomSnapshot.signerPubkey.length > 0) {
-      const roomSignerB64 = toBase64(new Uint8Array(roomSnapshot.signerPubkey));
-      const payloadSignerB64 = toBase64(new Uint8Array(payload.signerPubkey));
-      if (roomSignerB64 !== payloadSignerB64) {
-        toast.error(
-          "Signer pubkey trong payload không khớp signer đang gắn với room on-chain.",
-        );
-        return;
-      }
-    }
-
-    if (payload.debugMessageB64 && payload.packageId && payload.chainId !== undefined) {
-      const localMessageBytes = SettlementMessageBcs.serialize({
-        intent_scope: 1,
-        chain_id: payload.chainId,
-        package_id: normalizeSuiAddress(payload.packageId),
-        room_id: normalizeSuiAddress(settleRoomId),
-        winner: normalizeSuiAddress(payload.winner),
-        loser: normalizeSuiAddress(payload.loser),
-        match_digest: payload.matchDigest,
-        nonce: String(payload.nonce),
-        deadline_ms: String(payload.deadlineMs),
-      }).toBytes();
-
-      const localMessageB64 = toBase64(localMessageBytes);
-      if (localMessageB64 !== payload.debugMessageB64) {
-        toast.error(
-          "Settlement payload mismatch trước khi submit (message bytes không trùng backend).",
-        );
-        console.error("Settlement preflight mismatch", {
-          roomId: settleRoomId,
-          backendMessageB64: payload.debugMessageB64,
-          localMessageB64,
-          chainId: payload.chainId,
-          packageId: payload.packageId,
-          nonce: payload.nonce,
-          deadlineMs: payload.deadlineMs,
-        });
-        return;
-      }
-    }
-
-    if (roomSnapshot.nonce !== payload.nonce) {
-      toast.error("Nonce payload không khớp nonce room on-chain. Hãy refresh payload rồi thử lại.");
       return;
     }
 
@@ -1206,88 +1038,43 @@ export default function PvPScreen() {
     setSettleSubmitting(true);
     toast.loading("Đang submit settle on-chain...", { id: "lobby-settle" });
 
-    const handleSettleSuccess = (digest: string) => {
-      setSettleTx(digest);
-      window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
-      setSavedEscrowRoomId(null);
-      setCreatedRoomId(null);
-      setJoinRoomId("");
-      setEscrowLocked(false);
-      setRoomStatus(2);
-      setRoomDeadlineMs(null);
-      toast.success("Settle on-chain thành công.", { id: "lobby-settle" });
-      setSettleSubmitting(false);
-    };
+    const tx = buildSettleValuationLobbyRoomTx({
+      roomId: settleRoomId,
+      winner: payload.winner,
+      loser: payload.loser,
+      matchDigest: payload.matchDigest,
+      nonce: payload.nonce,
+      deadlineMs: payload.deadlineMs,
+      signature: payload.signature,
+      signerPubkey: payload.signerPubkey,
+    });
 
-    const executeSettle = (currentPayload: typeof payload, retried = false) => {
-      const settleDebug = {
-        retried,
-        roomId: settleRoomId,
-        winner: currentPayload.winner,
-        loser: currentPayload.loser,
-        nonce: currentPayload.nonce,
-        deadlineMs: currentPayload.deadlineMs,
-        signerPubkeyB64: toBase64(new Uint8Array(currentPayload.signerPubkey)),
-        matchDigestB64: toBase64(new Uint8Array(currentPayload.matchDigest)),
-        signatureB64: toBase64(new Uint8Array(currentPayload.signature)),
-        backendDebugMessageB64: currentPayload.debugMessageB64,
-        backendDebugSignatureB64: currentPayload.debugSignatureB64,
-      };
-
-      console.info("Settle submit payload", settleDebug);
-
-      const tx = buildSettleValuationLobbyRoomTx({
-        roomId: settleRoomId,
-        winner: currentPayload.winner,
-        loser: currentPayload.loser,
-        matchDigest: currentPayload.matchDigest,
-        nonce: currentPayload.nonce,
-        deadlineMs: currentPayload.deadlineMs,
-        signature: currentPayload.signature,
-        signerPubkey: currentPayload.signerPubkey,
-      });
-
-      signAndExecute(
-        { transaction: tx },
-        {
-          onSuccess: (result) => {
-            handleSettleSuccess(result.digest);
-          },
-          onError: async (error) => {
-            const message = String(error?.message ?? error);
-            console.error("Settle on-chain error", {
-              message,
-              error,
-              ...settleDebug,
-            });
-            if (message.includes("711") && !retried) {
-              const refreshed = await refreshSettlementPayload(settleRoomId);
-              if (refreshed) {
-                toast.loading("Payload settle đã làm mới, đang thử lại...", {
-                  id: "lobby-settle",
-                });
-                executeSettle(refreshed, true);
-                return;
-              }
-            }
-            if (message.includes("711")) {
-              toast.error(
-                "Settle bị từ chối (711): chữ ký không khớp on-chain. Room vẫn ACTIVE thì cần kiểm tra signer/package env backend.",
-                { id: "lobby-settle" },
-              );
-              setSettleSubmitting(false);
-              return;
-            }
-            toast.error(`Settle on-chain thất bại: ${message}`, {
-              id: "lobby-settle",
-            });
-            setSettleSubmitting(false);
-          },
+    signAndExecute(
+      { transaction: tx },
+      {
+        onSuccess: (result) => {
+          setSettleTx(result.digest);
+          toast.success("Settle on-chain thành công.", { id: "lobby-settle" });
+          setSettleSubmitting(false);
         },
-      );
-    };
-
-    executeSettle(payload);
+        onError: (error) => {
+          const message = String(error?.message ?? error);
+          if (message.includes("711")) {
+            toast.error(
+              "Settle bị từ chối (711): room/payload không còn hợp lệ. Hãy đồng bộ lại phòng rồi settle lại, hoặc dùng Reclaim NFT nếu cần.",
+              { id: "lobby-settle" },
+            );
+            setSettleSubmitting(false);
+            return;
+          }
+          toast.error(
+            `Settle on-chain thất bại: ${message}`,
+            { id: "lobby-settle" },
+          );
+          setSettleSubmitting(false);
+        },
+      },
+    );
   };
 
   const emergencyRefundOnChain = async () => {
@@ -1938,25 +1725,24 @@ export default function PvPScreen() {
                           Huy phong
                         </button>
                       )}
-                    {roomStatus === 1 &&
-                      !hideEmergencyRefundForStartedMatch && (
-                        <button
-                          onClick={emergencyRefundOnChain}
-                          disabled={
-                            escrowSubmitting ||
-                            Boolean(
-                              emergencyRefundReadyAt &&
-                                emergencyRefundRemainingMs > 0,
-                            )
-                          }
-                          className="rounded-full border-2 border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-800 disabled:opacity-60"
-                        >
-                          {emergencyRefundReadyAt &&
-                          emergencyRefundRemainingMs > 0
-                            ? `Reclaim NFT sau ${emergencyRefundRemainingMin} phut`
-                            : "Reclaim NFT"}
-                        </button>
-                      )}
+                    {roomStatus === 1 && (
+                      <button
+                        onClick={emergencyRefundOnChain}
+                        disabled={
+                          escrowSubmitting ||
+                          Boolean(
+                            emergencyRefundReadyAt &&
+                            emergencyRefundRemainingMs > 0,
+                          )
+                        }
+                        className="rounded-full border-2 border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-800 disabled:opacity-60"
+                      >
+                        {emergencyRefundReadyAt &&
+                        emergencyRefundRemainingMs > 0
+                          ? `Reclaim NFT sau ${emergencyRefundRemainingMin} phut`
+                          : "Reclaim NFT"}
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -2102,25 +1888,23 @@ export default function PvPScreen() {
                       Huy phong
                     </button>
                   )}
-                {createdRoomId &&
-                  roomStatus === 1 &&
-                  !hideEmergencyRefundForStartedMatch && (
-                    <button
-                      onClick={emergencyRefundOnChain}
-                      disabled={
-                        escrowSubmitting ||
-                        Boolean(
-                          emergencyRefundReadyAt &&
-                            emergencyRefundRemainingMs > 0,
-                        )
-                      }
-                      className="mt-3 rounded-full border-2 border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-800 disabled:opacity-60"
-                    >
-                      {emergencyRefundReadyAt && emergencyRefundRemainingMs > 0
-                        ? `Reclaim NFT sau ${emergencyRefundRemainingMin} phut`
-                        : "Reclaim NFT"}
-                    </button>
-                  )}
+                {createdRoomId && roomStatus === 1 && (
+                  <button
+                    onClick={emergencyRefundOnChain}
+                    disabled={
+                      escrowSubmitting ||
+                      Boolean(
+                        emergencyRefundReadyAt &&
+                        emergencyRefundRemainingMs > 0,
+                      )
+                    }
+                    className="mt-3 rounded-full border-2 border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-800 disabled:opacity-60"
+                  >
+                    {emergencyRefundReadyAt && emergencyRefundRemainingMs > 0
+                      ? `Reclaim NFT sau ${emergencyRefundRemainingMin} phut`
+                      : "Reclaim NFT"}
+                  </button>
+                )}
               </div>
             </div>
 
