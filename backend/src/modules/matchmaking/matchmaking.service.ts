@@ -192,11 +192,12 @@ export class PvPStateService {
     emitToRoom: (roomId: string, event: string, payload: any) => void,
   ) {
     try {
+      const matchDigest = Array.from(new TextEncoder().encode(room.id));
       const payload = await getSettlementPayloadService().buildPayload({
         roomId: room.id,
         winner,
         loser,
-        matchDigest: [],
+        matchDigest,
       });
       const signature = payload.signature;
       const signatureBytes = payload.signature;

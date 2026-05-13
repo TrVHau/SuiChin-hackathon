@@ -1106,10 +1106,7 @@ export default function PvPScreen() {
       return;
     }
 
-    let payload = await refreshSettlementPayload(requestedRoomId);
-    if (!payload) {
-      payload = pvp.settlementPayload;
-    }
+    const payload = await refreshSettlementPayload(requestedRoomId);
     if (!payload) {
       toast.error("Backend chưa cung cấp settlement payload.");
       return;

@@ -417,9 +417,8 @@ export function attachMultiplayerGateway(server: HttpServer) {
     }
 
     try {
-      const digestBytes = Array.from(
-        new TextEncoder().encode(input.challengeId),
-      );
+      const digestSource = input.roomId ?? input.challengeId;
+      const digestBytes = Array.from(new TextEncoder().encode(digestSource));
       return await getSettlementPayloadService().buildPayload({
         roomId: input.roomId,
         winner: input.winnerWallet,
@@ -616,21 +615,24 @@ export function attachMultiplayerGateway(server: HttpServer) {
     }, env.PVP_DISCONNECT_GRACE_MS);
     disconnectTimeoutByChallengeWallet.set(key, timer);
 
-    timerWithUnref(() => {
-      if (!disconnectTimeoutByChallengeWallet.has(key)) return;
-      if (hasWalletSocket(namespace, wallet)) {
-        clearInGameDisconnect(match, wallet);
-        return;
-      }
-      const roomId = primaryRoomId(match);
-      namespace.to(roomId).emit("match.playerDisconnected", {
-        challengeId: match.challengeId,
-        wallet,
-        deadlineMs,
-        graceMs: env.PVP_DISCONNECT_GRACE_MS,
-        message: "Doi thu mat ket noi. Tran tam dung de cho reconnect.",
-      });
-    }, Math.min(DISCONNECT_PAUSE_NOTICE_DELAY_MS, env.PVP_DISCONNECT_GRACE_MS));
+    timerWithUnref(
+      () => {
+        if (!disconnectTimeoutByChallengeWallet.has(key)) return;
+        if (hasWalletSocket(namespace, wallet)) {
+          clearInGameDisconnect(match, wallet);
+          return;
+        }
+        const roomId = primaryRoomId(match);
+        namespace.to(roomId).emit("match.playerDisconnected", {
+          challengeId: match.challengeId,
+          wallet,
+          deadlineMs,
+          graceMs: env.PVP_DISCONNECT_GRACE_MS,
+          message: "Doi thu mat ket noi. Tran tam dung de cho reconnect.",
+        });
+      },
+      Math.min(DISCONNECT_PAUSE_NOTICE_DELAY_MS, env.PVP_DISCONNECT_GRACE_MS),
+    );
   }
 
   function clearInGameDisconnect(match: ValuationMatchState, wallet: string) {
@@ -1384,7 +1386,9 @@ export function attachMultiplayerGateway(server: HttpServer) {
         try {
           const walletAddress = getWalletFromSocket(socket);
           const parsed = MatchSettlementRefreshPayloadSchema.parse(payload);
-          const challenge = await challengeService.getChallenge(parsed.challengeId);
+          const challenge = await challengeService.getChallenge(
+            parsed.challengeId,
+          );
           if (!challenge || challenge.status !== "FINALIZED") {
             throw new Error("Challenge is not finalized yet");
           }
@@ -1772,11 +1776,12 @@ export function attachMultiplayerGateway(server: HttpServer) {
             return;
           }
 
-          const finalizedRealtime = await challengeService.finalizeRealtimeResult(
-            parsed.challengeId,
-            walletAddress,
-            parsed.result,
-          );
+          const finalizedRealtime =
+            await challengeService.finalizeRealtimeResult(
+              parsed.challengeId,
+              walletAddress,
+              parsed.result,
+            );
 
           const valuationMatch = valuationMatchByChallenge.get(
             parsed.challengeId,
@@ -1794,7 +1799,10 @@ export function attachMultiplayerGateway(server: HttpServer) {
           ) {
             throw new Error("Wallet does not belong to this challenge");
           }
-          const otherWallet = sameWallet(challenge.challengerWallet, walletAddress)
+          const otherWallet = sameWallet(
+            challenge.challengerWallet,
+            walletAddress,
+          )
             ? challenge.opponentWallet
             : challenge.challengerWallet;
           let winnerWallet =
