@@ -35,6 +35,10 @@ model Challenge {
   challengerWallet String
   opponentWallet  String?
   winnerWallet    String?
+  // Legacy SUI stake fields kept to avoid dropping production data during db push.
+  // Current PvP flow is NFT-only and application code no longer reads these.
+  stakeEnabled    Boolean         @default(false)
+  stakeAmount     Int             @default(0)
   createdAt       DateTime        @default(now())
   expiresAt       DateTime
 
@@ -74,6 +78,10 @@ model ValuationRoom {
   tempRoomId     String   @unique
   suiRoomId      String?  @unique
   tier           String
+  // Legacy SUI wager fields kept to avoid dropping production data during db push.
+  // Current PvP flow is NFT-only and application code no longer reads these.
+  wagerSui       Float    @default(0)
+  wagerMist      Int      @default(0)
   creatorWallet  String
   joinerWallet   String
   creatorNftJson Json
