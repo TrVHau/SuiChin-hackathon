@@ -116,6 +116,7 @@ export interface PvPState {
   roomId: string | null;
   challengeId: string | null;
   opponent: string | null;
+  role: "CREATOR" | "JOINER" | null;
   round: number;
   scores: [number, number];
   resultTx: string | null;
@@ -141,6 +142,7 @@ const INITIAL_STATE: PvPState = {
   roomId: null,
   challengeId: null,
   opponent: null,
+  role: null,
   round: 1,
   scores: [0, 0],
   resultTx: null,
@@ -206,6 +208,7 @@ export function usePvP(_profileId: string | undefined) {
       const myWallet = account?.address ?? "";
       const opponentWallet =
         event.players.find((wallet) => !sameWallet(wallet, myWallet)) ?? null;
+      const role = sameWallet(event.players[1], myWallet) ? "JOINER" : "CREATOR";
 
       setPvP((prev) => ({
         ...prev,
@@ -213,6 +216,7 @@ export function usePvP(_profileId: string | undefined) {
         roomId: event.roomId,
         challengeId: event.challengeId,
         opponent: opponentWallet,
+        role,
         scores: [0, 0],
         currentTurnWallet: null,
         myTurn: false,

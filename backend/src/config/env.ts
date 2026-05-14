@@ -23,7 +23,6 @@ const EnvSchema = z.object({
   SUI_CLI_CONFIG_PATH: z.string().optional(),
   SUI_CLI_GAS_BUDGET: z.coerce.number().int().positive().default(100_000_000),
   SUI_ORACLE_SENDER: z.string().optional(),
-  ADMIN_SECRET_KEY: z.string().default(""),
   PVP_QUEUE_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   PVP_DISCONNECT_GRACE_MS: z.coerce.number().int().positive().default(15_000),
   RAILWAY_GIT_COMMIT_SHA: z.string().optional(),

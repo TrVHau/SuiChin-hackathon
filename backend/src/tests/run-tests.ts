@@ -31,7 +31,6 @@ async function loadAppFactory(): Promise<AppFactory> {
   process.env.MATCHMAKING_BACKEND = "memory";
   process.env.CHAIN_ADAPTER = "mock";
   process.env.NODE_ENV = "test";
-  process.env.ADMIN_SECRET_KEY = "";
 
   const [
     { createApp },

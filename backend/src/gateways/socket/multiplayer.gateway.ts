@@ -238,7 +238,7 @@ export function attachMultiplayerGateway(server: HttpServer) {
     await saveResult(winnerWallet, "WIN");
 
     const results = await challengeService.listResults(match.challengeId);
-    let resolvedWinner = resolveWinnerWallet(results) ?? winnerWallet;
+    let resolvedWinner: string | null = resolveWinnerWallet(results) ?? winnerWallet;
     let txDigest: string | null = null;
 
     try {

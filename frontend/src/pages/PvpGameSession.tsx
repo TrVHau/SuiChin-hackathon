@@ -144,7 +144,7 @@ export default function PvpGameSession() {
           </div>
           <div className="grid gap-2 text-right text-xs font-bold text-white/80">
             <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
-              Escrow: NFT
+              Realtime
             </span>
             <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
               Luot: {pvp.myTurn ? "Cua ban" : shortWallet(pvp.currentTurnWallet)}
