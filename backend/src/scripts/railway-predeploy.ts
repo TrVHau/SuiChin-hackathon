@@ -9,7 +9,7 @@ function wait(ms: number) {
 
 function runPrismaPush() {
   return new Promise<number>((resolve) => {
-    const child = spawn("npx", ["prisma", "db", "push"], {
+    const child = spawn("npx", ["prisma", "db", "push", "--accept-data-loss"], {
       stdio: "inherit",
       shell: process.platform === "win32",
     });
