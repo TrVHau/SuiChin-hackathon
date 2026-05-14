@@ -71,14 +71,25 @@ export interface SettlementPayload {
   winner: string;
   loser: string;
   matchDigest: number[];
-  nonce: number;
-  deadlineMs: number;
+  nonce: string;
+  deadlineMs: string;
   chainId?: number;
   packageId?: string;
   signature: number[];
   signerPubkey: number[];
   debugMessageB64?: string;
   debugSignatureB64?: string;
+  debugMessage?: {
+    intent_scope: number;
+    chain_id: number;
+    package_id: string;
+    room_id: string;
+    winner: string;
+    loser: string;
+    match_digest_hex: string;
+    nonce: string;
+    deadline_ms: string;
+  };
   fallbackPayloads?: SettlementPayload[];
 }
 

@@ -199,17 +199,35 @@ export class PvPStateService {
         loser,
         matchDigest,
       });
-      const signature = payload.signature;
-      const signatureBytes = payload.signature;
       room.state = RoomState.SETTLED;
 
+      logger.info(
+        {
+          roomId: room.id,
+          winner,
+          loser,
+          nonce: payload.nonce,
+          deadlineMs: payload.deadlineMs,
+          packageId: payload.packageId,
+        },
+        "Settlement payload ready, emitting to room",
+      );
+
+      // Emit complete payload with all required fields for frontend settlement
       emitToRoom(room.id, "match_settled", {
-        winner,
-        loser,
-        signature,
-        signatureBytes: Buffer.from(signatureBytes).toString("base64"),
+        roomId: payload.roomId,
+        winner: payload.winner,
+        loser: payload.loser,
+        matchDigest: payload.matchDigest,
+        nonce: payload.nonce,
+        deadlineMs: payload.deadlineMs,
+        signature: payload.signature,
+        signerPubkey: payload.signerPubkey,
+        packageId: payload.packageId,
         debugMessageB64: payload.debugMessageB64,
         debugSignatureB64: payload.debugSignatureB64,
+        debugMessage: payload.debugMessage,
+        fallbackPayloads: payload.fallbackPayloads,
       });
 
       // Cleanup room state after grace period of settlement
@@ -217,7 +235,10 @@ export class PvPStateService {
         this.activeRooms.delete(room.id);
       }, 5000);
     } catch (e: any) {
-      logger.error(`Error settling match ${room.id}: ${e.message}`);
+      logger.error(
+        { roomId: room.id, winner, loser, error: e.message },
+        `Error settling match`,
+      );
     }
   }
 }

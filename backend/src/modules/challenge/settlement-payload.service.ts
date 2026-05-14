@@ -29,17 +29,29 @@ export interface SettlementPayload {
   winner: string;
   loser: string;
   matchDigest: number[];
-  nonce: number;
-  deadlineMs: number;
+  nonce: string;
+  deadlineMs: string;
   signature: number[];
   signerPubkey: number[];
+  packageId: string;
   debugMessageB64?: string;
   debugSignatureB64?: string;
+  debugMessage?: {
+    intent_scope: number;
+    chain_id: number;
+    package_id: string;
+    room_id: string;
+    winner: string;
+    loser: string;
+    match_digest_hex: string;
+    nonce: string;
+    deadline_ms: string;
+  };
   fallbackPayloads?: SettlementPayload[];
 }
 
 interface ParsedRoomData {
-  nonce: number;
+  nonce: string;
   signerPubkey: number[];
   packageId: string;
 }
@@ -79,8 +91,13 @@ function collectByteVectors(value: unknown): number[][] {
 
 function parseEd25519Keypair(secretKeyValue: string): Ed25519Keypair {
   if (!secretKeyValue) {
+    if (env.NODE_ENV === "production") {
+      throw new Error(
+        "LOBBY_SIGNER_SECRET_KEY/ADMIN_SECRET_KEY is required in production but missing or empty",
+      );
+    }
     logger.warn(
-      "Missing LOBBY_SIGNER_SECRET_KEY/ADMIN_SECRET_KEY. Using ephemeral settlement keypair.",
+      "Missing LOBBY_SIGNER_SECRET_KEY/ADMIN_SECRET_KEY in development. Using ephemeral settlement keypair.",
     );
     return new Ed25519Keypair();
   }
@@ -100,8 +117,13 @@ function parseEd25519Keypair(secretKeyValue: string): Ed25519Keypair {
     return Ed25519Keypair.fromSecretKey(normalized);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    if (env.NODE_ENV === "production") {
+      throw new Error(
+        `Failed to initialize settlement keypair from configured secret. Reason: ${message}`,
+      );
+    }
     logger.warn(
-      `Failed to initialize settlement keypair from configured secret. Using ephemeral keypair instead. Reason: ${message}`,
+      `Failed to initialize settlement keypair from configured secret in development. Using ephemeral keypair instead. Reason: ${message}`,
     );
     return new Ed25519Keypair();
   }
@@ -121,16 +143,18 @@ async function getRoomData(roomId: string): Promise<ParsedRoomData> {
     throw new Error("Room fields not found");
   }
 
-  const nonce = Number(fields.nonce ?? 0);
+  const nonceValue = fields.nonce;
+  const nonce = String(nonceValue ?? "0");
+  if (!/^\d+$/.test(nonce)) {
+    throw new Error("Invalid room nonce: must be numeric string");
+  }
+
   const signerPubkey = collectByteVectors(fields.signer_pubkey)[0] ?? [];
   const roomPackageFromType = tryNormalizeAddress(
     content?.type?.split("::")?.[0] ?? null,
   );
   const envPackageId = tryNormalizeAddress(env.LOBBY_PACKAGE_ID);
   const packageId = roomPackageFromType ?? envPackageId;
-  if (!Number.isFinite(nonce)) {
-    throw new Error("Invalid room nonce");
-  }
   if (signerPubkey.length === 0) {
     throw new Error("Room signer pubkey not found");
   }
@@ -205,12 +229,22 @@ export class SettlementPayloadService {
     ]);
 
     const nowMs = Date.now();
-    const deadlineMs = nowMs + env.LOBBY_SETTLEMENT_TTL_MS;
+    const deadlineMs = String(nowMs + env.LOBBY_SETTLEMENT_TTL_MS);
     const signerPubkey = Array.from(this.keypair.getPublicKey().toRawBytes());
     const roomSignerMatches =
       signerPubkey.length === room.signerPubkey.length &&
       signerPubkey.every((byte, index) => byte === room.signerPubkey[index]);
     if (!roomSignerMatches) {
+      const signerPubkeyHex = Buffer.from(signerPubkey).toString("hex");
+      const roomSignerHex = Buffer.from(room.signerPubkey).toString("hex");
+      logger.error(
+        {
+          roomId: input.roomId,
+          signerPubkeyHex,
+          roomSignerHex,
+        },
+        "Backend signer public key does not match signer_pubkey configured for this room",
+      );
       throw new Error(
         "Backend signer public key does not match signer_pubkey configured for this room",
       );
@@ -219,14 +253,13 @@ export class SettlementPayloadService {
     const roomId = normalizeSuiAddress(input.roomId);
     const winner = normalizeSuiAddress(input.winner);
     const loser = normalizeSuiAddress(input.loser);
-    const envPackageId = tryNormalizeAddress(
-      env.LOBBY_PACKAGE_ID || env.SUI_PACKAGE_ID,
+    
+    // Use the package ID that Move contract uses for verification (@suichin)
+    // This MUST match the hardcoded @suichin in build_settlement_message()
+    const movePackageId = normalizeSuiAddress(
+      "0xb40ef16e8d1dd5a885ac25436bcf14b19a956fb05c575863b5cc21bfa2230525",
     );
-    const packageIds = uniquePackageIds([
-      room.packageId,
-      config.packageId,
-      envPackageId,
-    ]);
+
     const buildForPackage = async (packageId: string): Promise<SettlementPayload> => {
       const messageBytes = SettlementMessageBcs.serialize({
         intent_scope: SETTLEMENT_INTENT_SCOPE,
@@ -236,10 +269,40 @@ export class SettlementPayloadService {
         winner,
         loser,
         match_digest: input.matchDigest,
-        nonce: String(room.nonce),
-        deadline_ms: String(deadlineMs),
+        nonce: room.nonce,
+        deadline_ms: deadlineMs,
       }).toBytes();
       const signatureBytes = await this.keypair.sign(messageBytes);
+
+      const debugMessage = {
+        intent_scope: SETTLEMENT_INTENT_SCOPE,
+        chain_id: config.chainId,
+        package_id: packageId,
+        room_id: roomId,
+        winner,
+        loser,
+        match_digest_hex: Buffer.from(input.matchDigest).toString("hex"),
+        nonce: room.nonce,
+        deadline_ms: deadlineMs,
+      };
+
+      logger.info(
+        {
+          roomId: input.roomId,
+          winner,
+          loser,
+          packageId,
+          chainId: config.chainId,
+          nonce: room.nonce,
+          deadlineMs,
+          matchDigestHex: Buffer.from(input.matchDigest).toString("hex"),
+          signerPubkeyHex: Buffer.from(signerPubkey).toString("hex"),
+          messageHex: Buffer.from(messageBytes).toString("hex"),
+          signatureHex: Buffer.from(signatureBytes).toString("hex"),
+        },
+        "Settlement payload signing complete",
+      );
+
       return {
         roomId,
         winner,
@@ -249,22 +312,37 @@ export class SettlementPayloadService {
         deadlineMs,
         signature: Array.from(signatureBytes),
         signerPubkey,
+        packageId,
         debugMessageB64: Buffer.from(messageBytes).toString("base64"),
         debugSignatureB64: Buffer.from(signatureBytes).toString("base64"),
+        debugMessage,
       };
     };
 
-    const [primaryPackageId, ...fallbackPackageIds] = packageIds;
-    if (!primaryPackageId) {
-      throw new Error("No package id candidates for settlement signing");
-    }
-    const primaryPayload = await buildForPackage(primaryPackageId);
+    // Always use the Move contract's hardcoded package ID for signing
+    const primaryPayload = await buildForPackage(movePackageId);
+    
+    // Create fallback payloads with other package IDs only if they differ from primary
+    const fallbackPackageIds = uniquePackageIds([
+      room.packageId,
+      config.packageId,
+    ]).filter(pid => pid !== movePackageId);
+    
     const fallbackPayloads = await Promise.all(
       fallbackPackageIds.map((packageId) => buildForPackage(packageId)),
     );
+
+    logger.info(
+      {
+        primaryPackageId: movePackageId,
+        fallbackCount: fallbackPackageIds.length,
+      },
+      "Settlement payload with fallbacks built",
+    );
+
     return {
       ...primaryPayload,
-      fallbackPayloads,
+      fallbackPayloads: fallbackPayloads.length > 0 ? fallbackPayloads : undefined,
     };
   }
 }

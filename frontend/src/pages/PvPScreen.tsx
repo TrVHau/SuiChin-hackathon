@@ -1026,7 +1026,7 @@ export default function PvPScreen() {
       return;
     }
 
-    if (payload.deadlineMs <= Date.now() + 15_000) {
+    if (payload.deadlineMs && Number(payload.deadlineMs) <= Date.now() + 15_000) {
       const refreshed = await refreshSettlementPayload(settleRoomId);
       if (!refreshed) {
         toast.error(
@@ -1059,13 +1059,20 @@ export default function PvPScreen() {
     const candidatePayloads = [payload, ...(payload.fallbackPayloads ?? [])];
     const executeSettle = (candidateIndex: number) => {
       const currentPayload = candidatePayloads[candidateIndex];
+      const nonce = typeof currentPayload.nonce === "string" 
+        ? BigInt(currentPayload.nonce) 
+        : BigInt(currentPayload.nonce);
+      const deadlineMs = typeof currentPayload.deadlineMs === "string"
+        ? BigInt(currentPayload.deadlineMs)
+        : BigInt(currentPayload.deadlineMs);
+
       const tx = buildSettleValuationLobbyRoomTx({
         roomId: currentPayload.roomId || settleRoomId,
         winner: currentPayload.winner,
         loser: currentPayload.loser,
         matchDigest: currentPayload.matchDigest,
-        nonce: currentPayload.nonce,
-        deadlineMs: currentPayload.deadlineMs,
+        nonce,
+        deadlineMs,
         signature: currentPayload.signature,
         signerPubkey: currentPayload.signerPubkey,
       });
@@ -1174,7 +1181,7 @@ export default function PvPScreen() {
     if (!deadlineMs) return;
     if (settlementWarnedDeadlineRef.current === deadlineMs) return;
 
-    const remainingMs = deadlineMs - Date.now();
+    const remainingMs = Number(deadlineMs) - Date.now();
     if (remainingMs > 0 && remainingMs <= 5 * 60_000) {
       settlementWarnedDeadlineRef.current = deadlineMs;
       toast.info(
