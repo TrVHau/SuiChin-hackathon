@@ -1,5 +1,4 @@
 import { env } from "../../config/env.js";
-import { getRedisClient } from "../cache/redis.js";
 import { getPrismaClient } from "../db/prisma.js";
 
 type DependencyStatus = "ready" | "disabled" | "failed";
@@ -39,22 +38,18 @@ async function checkRedis(): Promise<{ status: DependencyStatus; detail?: string
     return { status: "disabled" };
   }
 
-  try {
-    const redis = getRedisClient();
-    if (redis.status !== "ready") {
-      await redis.connect();
-    }
-    const pong = await redis.ping();
-    if (pong !== "PONG") {
-      return { status: "failed", detail: `Unexpected redis ping response: ${pong}` };
-    }
-    return { status: "ready" };
-  } catch (err) {
+  if (!env.REDIS_URL) {
     return {
       status: "failed",
-      detail: err instanceof Error ? err.message : "Redis connection failed",
+      detail: "REDIS_URL is required when MATCHMAKING_BACKEND=redis",
     };
   }
+
+  // Do not open a Redis connection during startup. ioredis can reject pending
+  // connect promises after the dependency check has already returned, which
+  // is fatal on Node 22. Matchmaking commands connect lazily and fall back to
+  // in-memory queues if Redis is unavailable.
+  return { status: "ready", detail: "lazy connection" };
 }
 
 export async function getRuntimeDependencyReport(): Promise<RuntimeDependencyReport> {

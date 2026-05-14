@@ -306,12 +306,18 @@ class InMemoryMatchmakingService implements MatchmakingService {
 class RedisMatchmakingService implements MatchmakingService {
   private readonly queuePrefix = "mm:realtime:wager";
   private readonly walletWagerKey = "mm:realtime:wager-by-wallet";
+  private readonly fallback = new InMemoryMatchmakingService();
+  private redisDisabled = false;
 
   private queueKey(wager: number): string {
     return `${this.queuePrefix}:${wager}`;
   }
 
   private async ensureConnected() {
+    if (this.redisDisabled) {
+      throw new Error("Redis matchmaking fallback is active");
+    }
+
     const redis = getRedisClient();
     if (redis.status !== "ready") {
       await redis.connect();
@@ -319,54 +325,88 @@ class RedisMatchmakingService implements MatchmakingService {
     return redis;
   }
 
+  private disableRedis(error: unknown) {
+    if (!this.redisDisabled) {
+      const detail = error instanceof Error ? error.message : String(error);
+      logger.warn(
+        { err: detail },
+        "Redis matchmaking unavailable; falling back to in-memory matchmaking",
+      );
+      this.redisDisabled = true;
+    }
+  }
+
   async joinQueue(walletAddress: string, wager: number): Promise<MatchResult> {
     const normalizedWager = Math.max(0, Number(wager));
     if (!walletAddress) return { matched: false, wager: normalizedWager };
 
-    const redis = await this.ensureConnected();
-    const queuedWager = await redis.hget(this.walletWagerKey, walletAddress);
-    if (queuedWager !== null) {
+    try {
+      const redis = await this.ensureConnected();
+      const queuedWager = await redis.hget(this.walletWagerKey, walletAddress);
+      if (queuedWager !== null) {
+        return { matched: false, wager: normalizedWager };
+      }
+
+      const queueKey = this.queueKey(normalizedWager);
+      const opponentWallet = await redis.lpop(queueKey);
+      if (opponentWallet && opponentWallet !== walletAddress) {
+        await redis.hdel(this.walletWagerKey, opponentWallet);
+        return {
+          matched: true,
+          opponentWallet,
+          roomId: buildRoomId(walletAddress, opponentWallet),
+          wager: normalizedWager,
+        };
+      }
+
+      await redis.rpush(queueKey, walletAddress);
+      await redis.hset(
+        this.walletWagerKey,
+        walletAddress,
+        String(normalizedWager),
+      );
       return { matched: false, wager: normalizedWager };
+    } catch (error) {
+      this.disableRedis(error);
+      return this.fallback.joinQueue(walletAddress, normalizedWager);
     }
-
-    const queueKey = this.queueKey(normalizedWager);
-    const opponentWallet = await redis.lpop(queueKey);
-    if (opponentWallet && opponentWallet !== walletAddress) {
-      await redis.hdel(this.walletWagerKey, opponentWallet);
-      return {
-        matched: true,
-        opponentWallet,
-        roomId: buildRoomId(walletAddress, opponentWallet),
-        wager: normalizedWager,
-      };
-    }
-
-    await redis.rpush(queueKey, walletAddress);
-    await redis.hset(
-      this.walletWagerKey,
-      walletAddress,
-      String(normalizedWager),
-    );
-    return { matched: false, wager: normalizedWager };
   }
 
   async leaveQueue(walletAddress: string): Promise<{ ok: boolean }> {
-    const redis = await this.ensureConnected();
-    const queuedWager = await redis.hget(this.walletWagerKey, walletAddress);
-    if (queuedWager !== null) {
-      await redis.lrem(this.queueKey(Number(queuedWager)), 0, walletAddress);
-      await redis.hdel(this.walletWagerKey, walletAddress);
+    if (this.redisDisabled) {
+      return this.fallback.leaveQueue(walletAddress);
     }
-    return { ok: true };
+
+    try {
+      const redis = await this.ensureConnected();
+      const queuedWager = await redis.hget(this.walletWagerKey, walletAddress);
+      if (queuedWager !== null) {
+        await redis.lrem(this.queueKey(Number(queuedWager)), 0, walletAddress);
+        await redis.hdel(this.walletWagerKey, walletAddress);
+      }
+      return { ok: true };
+    } catch (error) {
+      this.disableRedis(error);
+      return this.fallback.leaveQueue(walletAddress);
+    }
   }
 
   async reset(): Promise<void> {
-    const redis = await this.ensureConnected();
-    const keys = await redis.keys(`${this.queuePrefix}:*`);
-    if (keys.length > 0) {
-      await redis.del(...keys);
+    await this.fallback.reset();
+    if (this.redisDisabled) {
+      return;
     }
-    await redis.del(this.walletWagerKey);
+
+    try {
+      const redis = await this.ensureConnected();
+      const keys = await redis.keys(`${this.queuePrefix}:*`);
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+      await redis.del(this.walletWagerKey);
+    } catch (error) {
+      this.disableRedis(error);
+    }
   }
 }
 

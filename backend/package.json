@@ -13,6 +13,7 @@
     "railway:predeploy": "tsx src/scripts/railway-predeploy.ts",
     "test": "tsx src/tests/run-tests.ts",
     "test:build": "npm run build && tsx src/tests/run-tests.ts",
+    "admin:check-pvp-env": "tsx src/scripts/check-pvp-env.ts",
     "admin:add-lobby-signer": "tsx src/scripts/add-lobby-signer.ts",
     "admin:set-lobby-emergency-delay": "tsx src/scripts/set-lobby-emergency-delay.ts",
     "infra:up": "docker compose up -d",
