@@ -19,7 +19,6 @@ import { useOwnedNFTs } from "@/hooks/useOwnedNFTs";
 import {
   buildCancelValuationLobbyRoomTx,
   buildCreateValuationLobbyRoomTx,
-  buildEmergencyRefundValuationLobbyRoomTx,
   buildJoinValuationLobbyRoomTx,
   buildSettleValuationLobbyRoomTx,
 } from "@/lib/sui-client";
@@ -134,8 +133,6 @@ export default function PvPScreen() {
   const [savedEscrowRoomId, setSavedEscrowRoomId] = useState<string | null>(
     null,
   );
-  const [emergencyRefundDelayMs, setEmergencyRefundDelayMs] = useState(0);
-  const [nowMs, setNowMs] = useState(() => Date.now());
   const [activeLobbySigner, setActiveLobbySigner] = useState<number[] | null>(
     null,
   );
@@ -218,8 +215,6 @@ export default function PvPScreen() {
     sameAddress(pvp.winner, account?.address) &&
     !pvp.settleTx &&
     roomStatus === 1;
-  const hideEmergencyRefundForStartedMatch =
-    matchAlreadyStarted || matchResolved;
 
   const shouldWarnUnsafeLeave = useMemo(() => {
     if (matchResolved) return false;
@@ -461,7 +456,7 @@ export default function PvPScreen() {
       const leaveConfirmed = window.confirm(
         roomStatus === 0
           ? "Ban dang co room escrow WAITING. Neu thoat, he thong se thu huy room de tra NFT ve vi. Ban chac chan muon thoat?"
-          : 'Room dang ACTIVE, NFT dang khoa trong escrow. Neu thoat/reload luc nay, ban can quay lai room hoac doi "Reclaim NFT". Ban van muon thoat?',
+          : "Room dang ACTIVE, NFT dang khoa trong escrow. Sau khi da vao tran, thoat se bi xu thua/mat NFT theo ket qua. Ban van muon thoat?",
       );
       if (!leaveConfirmed) {
         return;
@@ -571,14 +566,6 @@ export default function PvPScreen() {
   ]);
 
   useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setNowMs(Date.now());
-    }, 1000);
-
-    return () => window.clearInterval(intervalId);
-  }, []);
-
-  useEffect(() => {
     let cancelled = false;
 
     const loadSigner = async () => {
@@ -619,9 +606,6 @@ export default function PvPScreen() {
         const signers = collectByteVectors(fields?.active_signer_pubkeys);
         if (!cancelled) {
           setActiveLobbySigner(signers[0] ?? null);
-          setEmergencyRefundDelayMs(
-            Number(fields?.emergency_refund_delay_ms ?? 0),
-          );
           setSignerState(signers.length > 0 ? "ready" : "missing");
         }
       } catch (error) {
@@ -1158,7 +1142,7 @@ export default function PvPScreen() {
             }
             if (message.includes("711")) {
               toast.error(
-                "Settle bị từ chối (711): chữ ký không khớp on-chain. Không dùng Reclaim sau khi đã có thắng/thua.",
+                "Settle bị từ chối (711): chữ ký không khớp on-chain. NFT vẫn nằm trong escrow, cần settle lại bằng payload đúng.",
                 { id: "lobby-settle" },
               );
               setSettleSubmitting(false);
@@ -1174,58 +1158,6 @@ export default function PvPScreen() {
     };
 
     executeSettle(0);
-  };
-
-  const emergencyRefundOnChain = async () => {
-    if (!createdRoomId) {
-      toast.error("Không có room on-chain để emergency refund.");
-      return;
-    }
-
-    setEscrowSubmitting(true);
-    toast.loading("Đang gọi emergency refund on-chain...", {
-      id: "lobby-emergency-refund",
-    });
-
-    const tx = buildEmergencyRefundValuationLobbyRoomTx(createdRoomId);
-    signAndExecute(
-      { transaction: tx },
-      {
-        onSuccess: () => {
-          notifyRoomClosed(createdRoomId);
-          window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
-          toast.success("Emergency refund thành công. Tài sản đã hoàn về ví.", {
-            id: "lobby-emergency-refund",
-          });
-          setEscrowSubmitting(false);
-          setCreatedRoomId(null);
-          setJoinRoomId("");
-          setSelectedLobbyNfts([]);
-          setEscrowLocked(false);
-          setRoomStatus(null);
-          setRoomDeadlineMs(null);
-        },
-        onError: (error) => {
-          const message = String(error?.message ?? error);
-          if (message.includes("714")) {
-            toast.error(
-              "Chưa đến thời điểm emergency refund theo config on-chain.",
-              { id: "lobby-emergency-refund" },
-            );
-          } else if (message.includes("702")) {
-            toast.error(
-              "Room không ở trạng thái ACTIVE nên không thể emergency refund.",
-              { id: "lobby-emergency-refund" },
-            );
-          } else {
-            toast.error(`Emergency refund thất bại: ${message}`, {
-              id: "lobby-emergency-refund",
-            });
-          }
-          setEscrowSubmitting(false);
-        },
-      },
-    );
   };
 
   const roomStatusLabel =
@@ -1264,16 +1196,6 @@ export default function PvPScreen() {
     }
   }, [pvp.settlementPayload?.deadlineMs, pvp.status]);
 
-  const emergencyRefundReadyAt =
-    roomDeadlineMs && emergencyRefundDelayMs
-      ? roomDeadlineMs + emergencyRefundDelayMs
-      : null;
-  const emergencyRefundRemainingMs = emergencyRefundReadyAt
-    ? Math.max(0, emergencyRefundReadyAt - nowMs)
-    : 0;
-  const emergencyRefundRemainingMin = Math.ceil(
-    emergencyRefundRemainingMs / 60_000,
-  );
   const reconnectEscrowRoomId = createdRoomId ?? savedEscrowRoomId;
 
   const reconnectSavedRoom = () => {
@@ -1804,7 +1726,7 @@ export default function PvPScreen() {
 
               {renderContent()}
 
-              {createdRoomId && (
+              {createdRoomId && pvp.status !== "resolved" && (
                 <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -1824,25 +1746,6 @@ export default function PvPScreen() {
                           Huy phong
                         </button>
                       )}
-                    {roomStatus === 1 &&
-                      !hideEmergencyRefundForStartedMatch && (
-                      <button
-                        onClick={emergencyRefundOnChain}
-                        disabled={
-                          escrowSubmitting ||
-                          Boolean(
-                            emergencyRefundReadyAt &&
-                            emergencyRefundRemainingMs > 0,
-                          )
-                        }
-                        className="rounded-full border-2 border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-800 disabled:opacity-60"
-                      >
-                        {emergencyRefundReadyAt &&
-                        emergencyRefundRemainingMs > 0
-                          ? `Reclaim NFT sau ${emergencyRefundRemainingMin} phut`
-                          : "Reclaim NFT"}
-                      </button>
-                    )}
                   </div>
                 </div>
               )}
@@ -1988,25 +1891,6 @@ export default function PvPScreen() {
                       Huy phong
                     </button>
                   )}
-                {createdRoomId &&
-                  roomStatus === 1 &&
-                  !hideEmergencyRefundForStartedMatch && (
-                  <button
-                    onClick={emergencyRefundOnChain}
-                    disabled={
-                      escrowSubmitting ||
-                      Boolean(
-                        emergencyRefundReadyAt &&
-                        emergencyRefundRemainingMs > 0,
-                      )
-                    }
-                    className="mt-3 rounded-full border-2 border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-800 disabled:opacity-60"
-                  >
-                    {emergencyRefundReadyAt && emergencyRefundRemainingMs > 0
-                      ? `Reclaim NFT sau ${emergencyRefundRemainingMin} phut`
-                      : "Reclaim NFT"}
-                  </button>
-                )}
               </div>
             </div>
 

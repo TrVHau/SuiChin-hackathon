@@ -8,11 +8,15 @@ import { suiClient } from "../../infra/chain/sui-client.js";
 
 const SETTLEMENT_INTENT_SCOPE = 1;
 
+const ObjectIdBcs = bcs.struct("ID", {
+  bytes: bcs.Address,
+});
+
 const SettlementMessageBcs = bcs.struct("SettlementMessage", {
   intent_scope: bcs.u8(),
   chain_id: bcs.u8(),
   package_id: bcs.Address,
-  room_id: bcs.Address,
+  room_id: ObjectIdBcs,
   winner: bcs.Address,
   loser: bcs.Address,
   match_digest: bcs.vector(bcs.u8()),
@@ -228,7 +232,7 @@ export class SettlementPayloadService {
         intent_scope: SETTLEMENT_INTENT_SCOPE,
         chain_id: config.chainId,
         package_id: packageId,
-        room_id: roomId,
+        room_id: { bytes: roomId },
         winner,
         loser,
         match_digest: input.matchDigest,
