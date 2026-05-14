@@ -477,6 +477,10 @@ export default function PvPScreen() {
   }, [ownedNftIdSet]);
 
   useEffect(() => {
+    window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
+  }, [ESCROW_ROOM_STORAGE_KEY]);
+
+  useEffect(() => {
     setSelectedLobbyNfts([]);
   }, [account?.address]);
 
@@ -1104,6 +1108,46 @@ export default function PvPScreen() {
     executeSettle(0);
   };
 
+  useEffect(() => {
+    if (pvp.status !== "resolved") return;
+    if (!pvp.winner || !sameAddress(pvp.winner, account?.address)) return;
+    if (pvp.settleTx || settleSubmitting) return;
+
+    const roomId =
+      pvp.roomId ||
+      createdRoomId ||
+      joinRoomId.trim() ||
+      pvp.settlementPayload?.roomId ||
+      null;
+    if (!roomId) return;
+
+    const settleKey = [
+      pvp.challengeId ?? "",
+      roomId,
+      pvp.winner,
+      pvp.settlementPayload?.deadlineMs ?? "",
+    ].join(":");
+    if (autoSettleKeyRef.current === settleKey) return;
+    autoSettleKeyRef.current = settleKey;
+
+    toast.loading("Tu dong settle on-chain cho winner...", {
+      id: "lobby-settle",
+    });
+    void settleOnChain();
+  }, [
+    account?.address,
+    createdRoomId,
+    joinRoomId,
+    pvp.challengeId,
+    pvp.roomId,
+    pvp.settlementPayload?.deadlineMs,
+    pvp.settlementPayload?.roomId,
+    pvp.settleTx,
+    pvp.status,
+    pvp.winner,
+    settleSubmitting,
+  ]);
+
   const roomStatusLabel =
     roomStatus === 0
       ? "WAITING"
@@ -1261,9 +1305,6 @@ export default function PvPScreen() {
           </div>
 
           <div className="p-6 md:p-8">
-                      Phòng escrow đang chờ
-                    </p>
-                    Quay lại
             <div className="grid gap-3 md:grid-cols-3">
               {BETTING_LOBBIES.map((lobby) => {
                 const active = selectedBetTier === lobby.id;
