@@ -1415,9 +1415,9 @@ export function attachMultiplayerGateway(server: HttpServer) {
             parsed.challengeId,
           );
           const roomId =
-            parsed.roomId ??
-            roomByChallenge.get(parsed.challengeId) ??
             persistedRoom?.suiRoomId ??
+            roomByChallenge.get(parsed.challengeId) ??
+            parsed.roomId ??
             null;
           const settlementPayload = await buildSettlementPayloadForRoom({
             challengeId: parsed.challengeId,
@@ -1747,9 +1747,9 @@ export function attachMultiplayerGateway(server: HttpServer) {
             }
 
             const roomId =
-              roomByChallenge.get(parsed.challengeId) ??
               (await valuationRoomService.findByChallengeId(parsed.challengeId))
                 ?.suiRoomId ??
+              roomByChallenge.get(parsed.challengeId) ??
               undefined;
             const winnerWallet = existing.winnerWallet;
             const loserWallet =
@@ -1891,12 +1891,12 @@ export function attachMultiplayerGateway(server: HttpServer) {
               );
               if (existing?.status === "FINALIZED") {
                 const roomId =
-                  roomByChallenge.get(parsed.data.challengeId) ??
                   (
                     await valuationRoomService.findByChallengeId(
                       parsed.data.challengeId,
                     )
                   )?.suiRoomId ??
+                  roomByChallenge.get(parsed.data.challengeId) ??
                   undefined;
                 const winnerWallet = existing.winnerWallet;
                 const loserWallet =

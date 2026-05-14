@@ -130,9 +130,6 @@ export default function PvPScreen() {
   const [roomStatus, setRoomStatus] = useState<number | null>(null);
   const [roomDeadlineMs, setRoomDeadlineMs] = useState<number | null>(null);
   const [roomCreator, setRoomCreator] = useState<string | null>(null);
-  const [savedEscrowRoomId, setSavedEscrowRoomId] = useState<string | null>(
-    null,
-  );
   const [activeLobbySigner, setActiveLobbySigner] = useState<number[] | null>(
     null,
   );
@@ -143,6 +140,7 @@ export default function PvPScreen() {
   const lastActiveSyncAtRef = useRef(0);
   const autoCancelRoomRef = useRef<string | null>(null);
   const settlementWarnedDeadlineRef = useRef<number | null>(null);
+  const autoSettleKeyRef = useRef<string | null>(null);
 
   const handleBack = () => {
     void handleLeave();
@@ -209,13 +207,6 @@ export default function PvPScreen() {
     pvp.status === "playing" ||
     pvp.status === "submitting";
   const matchResolved = pvp.status === "resolved";
-  const resolvedWinnerCanSettle =
-    matchResolved &&
-    Boolean(pvp.winner) &&
-    sameAddress(pvp.winner, account?.address) &&
-    !pvp.settleTx &&
-    roomStatus === 1;
-
   const shouldWarnUnsafeLeave = useMemo(() => {
     if (matchResolved) return false;
     if (matchAlreadyStarted) return true;
@@ -398,31 +389,7 @@ export default function PvPScreen() {
 
   const handleLeave = async () => {
     if (matchResolved) {
-      if (resolvedWinnerCanSettle) {
-        const leaveConfirmed = window.confirm(
-          "Ban da thang nhung chua settle on-chain. Neu thoat, NFT van con trong escrow cho den khi ban quay lai settle. Ban van muon thoat?",
-        );
-        if (!leaveConfirmed) {
-          return;
-        }
-
-        const unresolvedRoomId =
-          pvp.settlementPayload?.roomId ||
-          pvp.roomId ||
-          createdRoomId ||
-          joinRoomId.trim();
-        if (unresolvedRoomId) {
-          window.sessionStorage.setItem(
-            ESCROW_ROOM_STORAGE_KEY,
-            unresolvedRoomId,
-          );
-          setSavedEscrowRoomId(unresolvedRoomId);
-        }
-      } else {
-        window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
-        setSavedEscrowRoomId(null);
-      }
-
+      window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
       disconnectRoomSocket();
       navigate("/dashboard");
       return;
@@ -488,12 +455,6 @@ export default function PvPScreen() {
         if (!cancelled) {
           return;
         }
-      } else if (roomStatus === 1) {
-        window.sessionStorage.setItem(ESCROW_ROOM_STORAGE_KEY, createdRoomId);
-        setSavedEscrowRoomId(createdRoomId);
-        toast.info("📌 Phòng đã lưu. Quay lại sau để kiểm tra kết quả.", {
-          duration: 8000,
-        });
       }
     }
 
@@ -514,19 +475,6 @@ export default function PvPScreen() {
   useEffect(() => {
     setSelectedLobbyNfts((prev) => prev.filter((id) => ownedNftIdSet.has(id)));
   }, [ownedNftIdSet]);
-
-  useEffect(() => {
-    if (createdRoomId) {
-      window.sessionStorage.setItem(ESCROW_ROOM_STORAGE_KEY, createdRoomId);
-      if (roomStatus === 1) {
-        setSavedEscrowRoomId(createdRoomId);
-      }
-      return;
-    }
-
-    const savedRoomId = window.sessionStorage.getItem(ESCROW_ROOM_STORAGE_KEY);
-    setSavedEscrowRoomId(savedRoomId || null);
-  }, [ESCROW_ROOM_STORAGE_KEY, createdRoomId, roomStatus]);
 
   useEffect(() => {
     setSelectedLobbyNfts([]);
@@ -1026,14 +974,12 @@ export default function PvPScreen() {
     }
 
     const requestedRoomId =
-      pvp.settlementPayload?.roomId ||
       pvp.roomId ||
       joinRoomId.trim() ||
       createdRoomId ||
+      pvp.settlementPayload?.roomId ||
       undefined;
-    let payload =
-      (await refreshSettlementPayload(requestedRoomId)) ??
-      pvp.settlementPayload;
+    let payload = await refreshSettlementPayload(requestedRoomId);
     if (!payload) {
       toast.error("Backend chưa cung cấp settlement payload.");
       return;
@@ -1060,7 +1006,6 @@ export default function PvPScreen() {
     if (roomSnapshot.status !== 1) {
       if (roomSnapshot.status === 2) {
         window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
-        setSavedEscrowRoomId(null);
         setCreatedRoomId(null);
         setJoinRoomId("");
         setEscrowLocked(false);
@@ -1098,7 +1043,6 @@ export default function PvPScreen() {
     const handleSettleSuccess = (digest: string) => {
       setSettleTx(digest);
       window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
-      setSavedEscrowRoomId(null);
       setCreatedRoomId(null);
       setJoinRoomId("");
       setEscrowLocked(false);
@@ -1112,7 +1056,7 @@ export default function PvPScreen() {
     const executeSettle = (candidateIndex: number) => {
       const currentPayload = candidatePayloads[candidateIndex];
       const tx = buildSettleValuationLobbyRoomTx({
-        roomId: settleRoomId,
+        roomId: currentPayload.roomId || settleRoomId,
         winner: currentPayload.winner,
         loser: currentPayload.loser,
         matchDigest: currentPayload.matchDigest,
@@ -1176,7 +1120,6 @@ export default function PvPScreen() {
   useEffect(() => {
     if (roomStatus === 2 || roomStatus === 3 || roomStatus === 4) {
       window.sessionStorage.removeItem(ESCROW_ROOM_STORAGE_KEY);
-      setSavedEscrowRoomId(null);
       setEscrowLocked(false);
     }
   }, [ESCROW_ROOM_STORAGE_KEY, roomStatus]);
@@ -1195,17 +1138,6 @@ export default function PvPScreen() {
       );
     }
   }, [pvp.settlementPayload?.deadlineMs, pvp.status]);
-
-  const reconnectEscrowRoomId = createdRoomId ?? savedEscrowRoomId;
-
-  const reconnectSavedRoom = () => {
-    if (!reconnectEscrowRoomId) return;
-    setCreatedRoomId(reconnectEscrowRoomId);
-    setJoinRoomId(reconnectEscrowRoomId);
-    setEscrowLocked(true);
-    notifyRoomJoined(reconnectEscrowRoomId);
-    toast.info("Đang quay lại phòng escrow đã lưu.");
-  };
 
   const renderContent = () => {
     if (pvp.status === "cancelled") {
@@ -1329,26 +1261,9 @@ export default function PvPScreen() {
           </div>
 
           <div className="p-6 md:p-8">
-            {savedEscrowRoomId && !createdRoomId && (
-              <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-black uppercase text-amber-700">
                       Phòng escrow đang chờ
                     </p>
-                    <p className="mt-1 text-sm font-bold text-amber-900">
-                      {savedEscrowRoomId.slice(0, 16)}...
-                    </p>
-                  </div>
-                  <button
-                    onClick={reconnectSavedRoom}
-                    className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-black text-white hover:bg-amber-700"
-                  >
                     Quay lại
-                  </button>
-                </div>
-              </div>
-            )}
             <div className="grid gap-3 md:grid-cols-3">
               {BETTING_LOBBIES.map((lobby) => {
                 const active = selectedBetTier === lobby.id;

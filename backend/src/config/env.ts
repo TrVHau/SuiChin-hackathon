@@ -44,4 +44,4 @@ export const env = EnvSchema.parse(process.env);
 export const corsOrigins = env.CORS_ORIGINS.split(",").map((item) =>
   item.trim(),
 );
-export const BUILD_MARKER = "pvp-realtime-finalize-v2";
+export const BUILD_MARKER = "pvp-settlement-object-id-v3";
