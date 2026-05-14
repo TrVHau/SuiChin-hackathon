@@ -7,17 +7,6 @@ export const NETWORK = (import.meta.env.VITE_SUI_NETWORK || "devnet") as
 export const PACKAGE_ID =
   import.meta.env.VITE_SUI_PACKAGE_ID ||
   "0xb40ef16e8d1dd5a885ac25436bcf14b19a956fb05c575863b5cc21bfa2230525";
-export const LOBBY_PACKAGE_ID =
-  import.meta.env.VITE_LOBBY_PACKAGE_ID || PACKAGE_ID;
-export const LOBBY_CONFIG_OBJECT_ID =
-  import.meta.env.VITE_LOBBY_CONFIG_OBJECT_ID ||
-  "0xa0fabdd9eaf6305ff9b4e58f1df6f0ce0d795b3502aa7665c7ebfb3aea917ea9";
-export const LOBBY_SIGNER_PUBKEY =
-  import.meta.env.VITE_LOBBY_SIGNER_PUBKEY ||
-  "zQrX16hwQ1RAtqp89fLkEJn/4jCSLVtij/qvCINJf9c=";
-export const LOBBY_DEFAULT_TARGET_POINTS = Number(
-  import.meta.env.VITE_LOBBY_DEFAULT_TARGET_POINTS || 1000,
-);
 export const MARKET_OBJECT_ID = import.meta.env.VITE_MARKET_OBJECT_ID || "";
 export const TREASURY_OBJECT_ID = import.meta.env.VITE_TREASURY_OBJECT_ID || "";
 export const CRAFT_CONFIG_OBJECT_ID =

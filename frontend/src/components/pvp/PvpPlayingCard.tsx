@@ -20,12 +20,6 @@ function shortWallet(wallet?: string | null) {
   return `${wallet.slice(0, 6)}...${wallet.slice(-4)}`;
 }
 
-function resolveNftImage(nft?: { imageUrl?: string; tier?: number } | null) {
-  if (nft?.imageUrl) return nft.imageUrl;
-  const tier = Math.min(3, Math.max(1, Number(nft?.tier) || 1));
-  return `/nft/tier${tier}_v1.png`;
-}
-
 function oppositeSide(side: Turn): Turn {
   return side === "player" ? "bot" : "player";
 }
@@ -49,7 +43,7 @@ export default function PvpPlayingCard({
     : undefined;
   const currentTurnLabel = pvp.myTurn
     ? "Cua ban"
-    : pvp.opponentNft?.name ?? shortWallet(pvp.currentTurnWallet);
+    : shortWallet(pvp.currentTurnWallet);
 
   const remoteShot = useMemo<PvPRemoteShot | null>(() => {
     if (!pvp.lastShot || sameWallet(pvp.lastShot.byWallet, myAddress)) {
@@ -111,9 +105,6 @@ export default function PvpPlayingCard({
           </div>
           <div className="grid gap-2 text-right text-xs font-bold text-white/80">
             <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
-              Escrow: NFT
-            </span>
-            <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
               Luot: {currentTurnLabel}
             </span>
           </div>
@@ -123,32 +114,16 @@ export default function PvpPlayingCard({
           <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
             <p className="text-xs font-black uppercase text-white/45">Ban</p>
             <div className="mt-2 flex items-center gap-3">
-              <img
-                src={resolveNftImage(pvp.myNft)}
-                alt={pvp.myNft?.name ?? "NFT cua ban"}
-                onError={(event) => {
-                  event.currentTarget.src = "/nft/tier1_v1.png";
-                }}
-                className="size-12 rounded-xl bg-white/10 object-cover"
-              />
               <p className="min-w-0 truncate font-black">
-                {pvp.myNft?.name ?? shortWallet(myAddress)}
+                {shortWallet(myAddress)}
               </p>
             </div>
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
             <p className="text-xs font-black uppercase text-white/45">Doi thu</p>
             <div className="mt-2 flex items-center gap-3">
-              <img
-                src={resolveNftImage(pvp.opponentNft)}
-                alt={pvp.opponentNft?.name ?? "NFT doi thu"}
-                onError={(event) => {
-                  event.currentTarget.src = "/nft/tier1_v1.png";
-                }}
-                className="size-12 rounded-xl bg-white/10 object-cover"
-              />
               <p className="min-w-0 truncate font-black">
-                {pvp.opponentNft?.name ?? shortWallet(pvp.opponent)}
+                {shortWallet(pvp.opponent)}
               </p>
             </div>
           </div>

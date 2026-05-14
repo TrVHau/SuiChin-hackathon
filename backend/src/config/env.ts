@@ -24,17 +24,7 @@ const EnvSchema = z.object({
   SUI_CLI_GAS_BUDGET: z.coerce.number().int().positive().default(100_000_000),
   SUI_ORACLE_SENDER: z.string().optional(),
   ADMIN_SECRET_KEY: z.string().default(""),
-  LOBBY_PACKAGE_ID: z.string().optional(),
-  LOBBY_CONFIG_OBJECT_ID: z.string().optional(),
-  LOBBY_SIGNER_SECRET_KEY: z.string().optional(),
-  LOBBY_SETTLEMENT_TTL_MS: z.coerce.number().int().positive().default(600_000),
-  LOBBY_EMERGENCY_REFUND_DELAY_MS: z.coerce
-    .number()
-    .int()
-    .positive()
-    .default(300_000),
   PVP_QUEUE_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
-  PVP_LOCK_TIMEOUT_MS: z.coerce.number().int().positive().default(45_000),
   PVP_DISCONNECT_GRACE_MS: z.coerce.number().int().positive().default(15_000),
   RAILWAY_GIT_COMMIT_SHA: z.string().optional(),
   RAILWAY_DEPLOYMENT_ID: z.string().optional(),
@@ -44,4 +34,4 @@ export const env = EnvSchema.parse(process.env);
 export const corsOrigins = env.CORS_ORIGINS.split(",").map((item) =>
   item.trim(),
 );
-export const BUILD_MARKER = "pvp-settlement-object-id-v3";
+export const BUILD_MARKER = "pvp-online-only-v1";

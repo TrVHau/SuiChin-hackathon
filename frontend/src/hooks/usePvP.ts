@@ -5,14 +5,6 @@ import { io, type Socket } from "socket.io-client";
 import { BACKEND_WS_URL } from "@/config/sui.config";
 
 type MatchResult = "WIN" | "LOSE" | "DRAW" | "FORFEIT";
-export type BettingTier = "0_5_SUI" | "1_SUI" | "2_SUI";
-
-export interface ValuationNft {
-  id: string;
-  name: string;
-  tier: number;
-  imageUrl?: string;
-}
 
 interface QueueJoinAck {
   ok: boolean;
@@ -21,8 +13,6 @@ interface QueueJoinAck {
     roomId?: string | null;
     opponentWallet?: string;
     challengeId?: string;
-    tier?: BettingTier;
-    targetPoints?: number;
   };
   error?: string;
 }
@@ -54,43 +44,12 @@ interface MatchStartEvent {
   roomId: string;
   players: string[];
   challengeId: string;
-  tier?: BettingTier;
-  targetPoints?: number;
-  nfts?: Record<string, ValuationNft>;
 }
 
 interface MatchFinalizedEvent {
   challengeId: string;
   winnerWallet: string | null;
   txDigest: string | null;
-  settlementPayload?: SettlementPayload | null;
-}
-
-export interface SettlementPayload {
-  roomId: string;
-  winner: string;
-  loser: string;
-  matchDigest: number[];
-  nonce: string;
-  deadlineMs: string;
-  chainId?: number;
-  packageId?: string;
-  signature: number[];
-  signerPubkey: number[];
-  debugMessageB64?: string;
-  debugSignatureB64?: string;
-  debugMessage?: {
-    intent_scope: number;
-    chain_id: number;
-    package_id: string;
-    room_id: string;
-    winner: string;
-    loser: string;
-    match_digest_hex: string;
-    nonce: string;
-    deadline_ms: string;
-  };
-  fallbackPayloads?: SettlementPayload[];
 }
 
 interface MatchTurnEvent {
@@ -111,43 +70,9 @@ interface MatchShotEvent {
   atMs: number;
 }
 
-interface MatchFoundEvent {
-  roomId: string;
-  challengeId: string;
-  tier?: BettingTier;
-  tierLabel?: string;
-  targetPoints?: number;
-  status?: "AWAITING_DEPOSIT";
-  creator: string;
-  joiner: string;
-  creatorNft?: ValuationNft;
-  joinerNft?: ValuationNft;
-}
-
-interface MatchRoomReadyEvent {
-  tempRoomId: string;
-  suiRoomId: string;
-  creator: string;
-}
-
 interface QueueTimeoutEvent {
-  tier?: BettingTier;
   timeoutMs: number;
   message?: string;
-}
-
-interface MatchCancelledEvent {
-  challengeId: string;
-  roomId: string;
-  tempRoomId: string;
-  suiRoomId: string | null;
-  reason: "PLAYER_LEFT" | "DISCONNECT" | "LOCK_TIMEOUT" | "CREATOR_LEFT_LOCKED";
-  message?: string;
-  leftWallet?: string;
-  creatorWallet?: string;
-  needsCreatorCancel?: boolean;
-  cancelRoomId?: string | null;
-  canCancelWallet?: string;
 }
 
 interface MatchPlayerDisconnectedEvent {
@@ -169,31 +94,10 @@ interface MatchRejoinAck {
   result?: {
     roomId: string;
     challengeId: string;
-    status: "MATCHED" | "LOCKING" | "IN_GAME" | "FINISHED" | "CANCELLED";
+    status: "IN_GAME" | "FINISHED";
     players: string[];
-    tier?: BettingTier;
-    targetPoints?: number;
-    nfts?: Record<string, ValuationNft>;
     currentTurnWallet?: string | null;
   };
-  error?: string;
-}
-
-interface SettlementRefreshAck {
-  ok: boolean;
-  result?: {
-    challengeId: string;
-    roomId: string | null;
-    winnerWallet: string | null;
-    loserWallet: string | null;
-    settlementPayload?: SettlementPayload | null;
-  };
-  error?: string;
-}
-
-interface RoomSyncAck {
-  ok: boolean;
-  started?: boolean;
   error?: string;
 }
 
@@ -202,39 +106,26 @@ export type PvPStatus =
   | "connecting"
   | "waiting"
   | "matched"
-  | "awaiting_deposit"
   | "playing"
   | "submitting"
   | "resolved"
-  | "cancelled"
   | "error";
 
 export interface PvPState {
   status: PvPStatus;
   roomId: string | null;
-  tempRoomId: string | null;
-  role: "CREATOR" | "JOINER" | null;
   challengeId: string | null;
   opponent: string | null;
-  betTier: BettingTier | null;
   round: number;
   scores: [number, number];
   resultTx: string | null;
-  settleTx: string | null;
   winner: string | null;
-  settlementPayload: SettlementPayload | null;
-  myNft: ValuationNft | null;
-  opponentNft: ValuationNft | null;
   submittedResult: MatchResult | null;
   currentTurnWallet: string | null;
   myTurn: boolean;
   paused: boolean;
   pausedReason: string | null;
   reconnectDeadlineMs: number | null;
-  cancelReason: string | null;
-  cancelRoomId: string | null;
-  needsCreatorCancel: boolean;
-  canCancelWallet: string | null;
   lastShot: {
     byWallet: string;
     seq: number;
@@ -248,31 +139,24 @@ export interface PvPState {
 const INITIAL_STATE: PvPState = {
   status: "idle",
   roomId: null,
-  tempRoomId: null,
-  role: null,
   challengeId: null,
   opponent: null,
-  betTier: null,
   round: 1,
   scores: [0, 0],
   resultTx: null,
-  settleTx: null,
   winner: null,
-  settlementPayload: null,
-  myNft: null,
-  opponentNft: null,
   submittedResult: null,
   currentTurnWallet: null,
   myTurn: false,
   paused: false,
   pausedReason: null,
   reconnectDeadlineMs: null,
-  cancelReason: null,
-  cancelRoomId: null,
-  needsCreatorCancel: false,
-  canCancelWallet: null,
   lastShot: null,
 };
+
+function sameWallet(a?: string | null, b?: string | null) {
+  return Boolean(a && b && a.toLowerCase() === b.toLowerCase());
+}
 
 export function usePvP(_profileId: string | undefined) {
   const account = useCurrentAccount();
@@ -301,7 +185,7 @@ export function usePvP(_profileId: string | undefined) {
         if (!current.challengeId) return;
         socket.emit("match.heartbeat", {
           challengeId: current.challengeId,
-          roomId: current.roomId ?? current.tempRoomId ?? undefined,
+          roomId: current.roomId ?? undefined,
         });
       }, 10_000);
     },
@@ -317,59 +201,11 @@ export function usePvP(_profileId: string | undefined) {
     socketRef.current = null;
   }, [clearHeartbeat]);
 
-  const setMatchFoundFromEvent = useCallback(
-    (event: MatchFoundEvent) => {
-      const myWallet = account?.address ?? "";
-      const isMe = (wallet?: string | null) =>
-        Boolean(
-          myWallet && wallet && wallet.toLowerCase() === myWallet.toLowerCase(),
-        );
-      const opponentWallet = isMe(event.creator) ? event.joiner : event.creator;
-
-      setPvP((prev) => ({
-        ...prev,
-        status: "awaiting_deposit",
-        tempRoomId: event.roomId,
-        roomId: null,
-        role: isMe(event.creator) ? "CREATOR" : "JOINER",
-        challengeId: event.challengeId,
-        opponent: opponentWallet,
-        betTier: event.tier ?? prev.betTier,
-        paused: false,
-        pausedReason: null,
-        reconnectDeadlineMs: null,
-        cancelReason: null,
-        cancelRoomId: null,
-        needsCreatorCancel: false,
-        canCancelWallet: null,
-        myNft: isMe(event.creator)
-          ? (event.creatorNft ?? prev.myNft)
-          : (event.joinerNft ?? prev.myNft),
-        opponentNft: isMe(event.creator)
-          ? (event.joinerNft ?? null)
-          : (event.creatorNft ?? null),
-      }));
-
-      toast.success("Da tim thay doi thu. Hay khoa NFT vao escrow.");
-    },
-    [account?.address],
-  );
-
   const setMatchedFromEvent = useCallback(
     (event: MatchStartEvent) => {
       const myWallet = account?.address ?? "";
-      const findNftByWallet = (wallet?: string | null) => {
-        if (!wallet) return undefined;
-        if (event.nfts?.[wallet]) return event.nfts[wallet];
-        const matchedEntry = Object.entries(event.nfts ?? {}).find(
-          ([address]) => address.toLowerCase() === wallet.toLowerCase(),
-        );
-        return matchedEntry?.[1];
-      };
       const opponentWallet =
-        event.players.find(
-          (wallet) => wallet.toLowerCase() !== myWallet.toLowerCase(),
-        ) ?? null;
+        event.players.find((wallet) => !sameWallet(wallet, myWallet)) ?? null;
 
       setPvP((prev) => ({
         ...prev,
@@ -377,11 +213,6 @@ export function usePvP(_profileId: string | undefined) {
         roomId: event.roomId,
         challengeId: event.challengeId,
         opponent: opponentWallet,
-        betTier: event.tier ?? prev.betTier,
-        myNft: findNftByWallet(myWallet) ?? prev.myNft,
-        opponentNft:
-          (opponentWallet ? findNftByWallet(opponentWallet) : undefined) ??
-          prev.opponentNft,
         scores: [0, 0],
         currentTurnWallet: null,
         myTurn: false,
@@ -389,19 +220,13 @@ export function usePvP(_profileId: string | undefined) {
         submittedResult: null,
         winner: null,
         resultTx: null,
-        settleTx: null,
-        settlementPayload: null,
         paused: false,
         pausedReason: null,
         reconnectDeadlineMs: null,
-        cancelReason: null,
-        cancelRoomId: null,
-        needsCreatorCancel: false,
-        canCancelWallet: null,
       }));
 
-      toast.success("Da khoa du tai san. Bat dau ban chun!");
-      setTimeout(() => {
+      toast.success("Da ghep tran. Bat dau ban chun!");
+      window.setTimeout(() => {
         setPvP((prev) =>
           prev.status === "matched" ? { ...prev, status: "playing" } : prev,
         );
@@ -410,101 +235,12 @@ export function usePvP(_profileId: string | undefined) {
     [account?.address],
   );
 
-  const requestSettlementPayload = useCallback(
-    (input?: { challengeId?: string; roomId?: string }) =>
-      new Promise<SettlementPayload | null>((resolve) => {
-        const socket = socketRef.current;
-        const current = pvpRef.current;
-        const challengeId = input?.challengeId ?? current.challengeId;
-        if (!socket || !socket.connected || !challengeId) {
-          resolve(null);
-          return;
-        }
-
-        socket.emit(
-          "match.settlement.refresh",
-          {
-            challengeId,
-            roomId:
-              input?.roomId ??
-              current.roomId ??
-              current.tempRoomId ??
-              undefined,
-          },
-          (ack: SettlementRefreshAck) => {
-            if (!ack?.ok) {
-              resolve(null);
-              return;
-            }
-            const refreshed = ack.result?.settlementPayload ?? null;
-            if (refreshed) {
-              setPvP((prev) => {
-                if (prev.challengeId !== challengeId) return prev;
-                return {
-                  ...prev,
-                  settlementPayload: refreshed,
-                  winner: ack.result?.winnerWallet ?? prev.winner,
-                };
-              });
-            }
-            resolve(refreshed);
-          },
-        );
-      }),
-    [],
-  );
-
   const attachCommonSocketListeners = useCallback(
     (socket: Socket) => {
-      socket.on("match.found", (event: MatchFoundEvent) => {
-        setMatchFoundFromEvent(event);
-      });
-
-      socket.on("match.roomReady", (event: MatchRoomReadyEvent) => {
-        setPvP((prev) => ({
-          ...prev,
-          roomId: event.suiRoomId,
-        }));
-        toast.info("Creator da tao escrow. Joiner hay khoa tai san vao phong.");
-      });
-
       socket.on("queue.timeout", (event: QueueTimeoutEvent) => {
         toast.error(event.message ?? "Khong tim thay doi thu");
         safeDisconnect();
         setPvP(INITIAL_STATE);
-      });
-
-      socket.on("match.cancelled", (event: MatchCancelledEvent) => {
-        setPvP((prev) => {
-          if (prev.challengeId && prev.challengeId !== event.challengeId) {
-            return prev;
-          }
-          return {
-            ...prev,
-            status: "cancelled",
-            roomId: event.suiRoomId ?? prev.roomId,
-            tempRoomId: event.tempRoomId ?? prev.tempRoomId,
-            cancelReason:
-              event.message ??
-              (event.reason === "LOCK_TIMEOUT"
-                ? "Doi thu khong chot tai san dung han."
-                : "Doi thu da chay tron."),
-            cancelRoomId: event.cancelRoomId ?? event.suiRoomId ?? null,
-            needsCreatorCancel: Boolean(event.needsCreatorCancel),
-            canCancelWallet:
-              event.canCancelWallet ?? event.creatorWallet ?? null,
-            paused: false,
-            pausedReason: null,
-            reconnectDeadlineMs: null,
-            myTurn: false,
-          };
-        });
-        toast.error(
-          event.message ??
-            (event.reason === "LOCK_TIMEOUT"
-              ? "Doi thu khong chot tai san dung han."
-              : "Doi thu da chay tron."),
-        );
       });
 
       socket.on("match.start", (event: MatchStartEvent) => {
@@ -525,10 +261,7 @@ export function usePvP(_profileId: string | undefined) {
               myTurn: false,
             };
           });
-          if (
-            account?.address &&
-            event.wallet.toLowerCase() !== account.address.toLowerCase()
-          ) {
+          if (account?.address && !sameWallet(event.wallet, account.address)) {
             toast.info("Doi thu mat ket noi, tran tam dung 15 giay.");
           }
         },
@@ -546,10 +279,7 @@ export function usePvP(_profileId: string | undefined) {
               reconnectDeadlineMs: null,
             };
           });
-          if (
-            account?.address &&
-            event.wallet.toLowerCase() !== account.address.toLowerCase()
-          ) {
+          if (account?.address && !sameWallet(event.wallet, account.address)) {
             toast.success("Doi thu da ket noi lai.");
           }
         },
@@ -558,13 +288,11 @@ export function usePvP(_profileId: string | undefined) {
       socket.on("match.result.finalized", (event: MatchFinalizedEvent) => {
         setPvP((prev) => {
           if (prev.challengeId !== event.challengeId) return prev;
-
           return {
             ...prev,
             status: "resolved",
             winner: event.winnerWallet,
             resultTx: event.txDigest,
-            settlementPayload: event.settlementPayload ?? null,
             paused: false,
             pausedReason: null,
             reconnectDeadlineMs: null,
@@ -572,19 +300,12 @@ export function usePvP(_profileId: string | undefined) {
         });
 
         const myAddress = account?.address;
-        if (
-          event.winnerWallet &&
-          myAddress &&
-          event.winnerWallet.toLowerCase() === myAddress.toLowerCase()
-        ) {
+        if (event.winnerWallet && sameWallet(event.winnerWallet, myAddress)) {
           toast.success("Ban thang!");
         } else if (!event.winnerWallet) {
           toast.info("Tran dau hoa");
         } else {
           toast.error("Ban thua");
-        }
-        if (!event.settlementPayload) {
-          void requestSettlementPayload({ challengeId: event.challengeId });
         }
       });
 
@@ -594,10 +315,7 @@ export function usePvP(_profileId: string | undefined) {
           return {
             ...prev,
             currentTurnWallet: event.currentTurnWallet,
-            myTurn:
-              Boolean(account?.address) &&
-              event.currentTurnWallet.toLowerCase() ===
-                account?.address?.toLowerCase(),
+            myTurn: sameWallet(event.currentTurnWallet, account?.address),
           };
         });
       });
@@ -605,7 +323,6 @@ export function usePvP(_profileId: string | undefined) {
       socket.on("match.shot.received", (event: MatchShotEvent) => {
         setPvP((prev) => {
           if (prev.challengeId !== event.challengeId) return prev;
-
           return {
             ...prev,
             lastShot: {
@@ -617,10 +334,7 @@ export function usePvP(_profileId: string | undefined) {
               atMs: event.atMs,
             },
             currentTurnWallet: event.nextTurnWallet,
-            myTurn:
-              Boolean(account?.address) &&
-              event.nextTurnWallet.toLowerCase() ===
-                account?.address?.toLowerCase(),
+            myTurn: sameWallet(event.nextTurnWallet, account?.address),
           };
         });
       });
@@ -633,11 +347,7 @@ export function usePvP(_profileId: string | undefined) {
       socket.on("disconnect", () => {
         clearHeartbeat();
         setPvP((prev) => {
-          if (
-            prev.status === "resolved" ||
-            prev.status === "idle" ||
-            prev.status === "cancelled"
-          ) {
+          if (prev.status === "resolved" || prev.status === "idle") {
             return prev;
           }
           if (
@@ -653,14 +363,6 @@ export function usePvP(_profileId: string | undefined) {
               myTurn: false,
             };
           }
-          if (prev.status === "awaiting_deposit") {
-            return {
-              ...prev,
-              paused: true,
-              pausedReason: "Dang mat ket noi trong luc chot tai san.",
-              myTurn: false,
-            };
-          }
           return { ...prev, status: "error" };
         });
       });
@@ -668,128 +370,101 @@ export function usePvP(_profileId: string | undefined) {
     [
       account?.address,
       clearHeartbeat,
-      requestSettlementPayload,
       safeDisconnect,
-      setMatchFoundFromEvent,
       setMatchedFromEvent,
     ],
   );
 
-  const joinQueue = useCallback(
-    (
-      roomId?: string,
-      options?: {
-        tier?: BettingTier;
-        nft?: ValuationNft;
-      },
-    ) => {
-      if (!account?.address) {
-        toast.error("Vui long ket noi vi");
+  const joinQueue = useCallback(() => {
+    if (!account?.address) {
+      toast.error("Vui long ket noi vi");
+      return;
+    }
+
+    if (pvp.status !== "idle" && pvp.status !== "error") {
+      return;
+    }
+
+    safeDisconnect();
+    setPvP({
+      ...INITIAL_STATE,
+      status: "connecting",
+    });
+
+    const socket = io(BACKEND_WS_URL, {
+      auth: { walletAddress: account.address },
+      transports: ["websocket"],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20_000,
+    });
+    socketRef.current = socket;
+    attachCommonSocketListeners(socket);
+
+    socket.on("connect", () => {
+      startHeartbeat(socket);
+      const current = pvpRef.current;
+      if (
+        current.challengeId &&
+        current.status !== "waiting" &&
+        current.status !== "connecting" &&
+        current.status !== "idle" &&
+        current.status !== "error"
+      ) {
+        socket.emit(
+          "match.rejoin",
+          {
+            challengeId: current.challengeId,
+            roomId: current.roomId ?? undefined,
+          },
+          (ack: MatchRejoinAck) => {
+            if (!ack.ok) {
+              toast.error(ack.error ?? "Khong the ket noi lai tran");
+              return;
+            }
+            const result = ack.result;
+            if (!result) return;
+            setPvP((prev) => ({
+              ...prev,
+              roomId: result.roomId ?? prev.roomId,
+              challengeId: result.challengeId,
+              currentTurnWallet:
+                result.currentTurnWallet ?? prev.currentTurnWallet,
+              myTurn: sameWallet(result.currentTurnWallet, account.address),
+              paused: false,
+              pausedReason: null,
+              reconnectDeadlineMs: null,
+            }));
+          },
+        );
         return;
       }
 
-      if (pvp.status !== "idle" && pvp.status !== "error") {
-        return;
-      }
-
-      safeDisconnect();
-      setPvP({
-        ...INITIAL_STATE,
-        status: "connecting",
-        betTier: options?.tier ?? null,
-        myNft: options?.nft ?? null,
-      });
-
-      const socket = io(BACKEND_WS_URL, {
-        auth: { walletAddress: account.address },
-        transports: ["websocket"],
-        reconnection: true,
-        reconnectionAttempts: Infinity,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        timeout: 20_000,
-      });
-      socketRef.current = socket;
-      attachCommonSocketListeners(socket);
-
-      socket.on("connect", () => {
-        startHeartbeat(socket);
-        const current = pvpRef.current;
-        if (
-          current.challengeId &&
-          current.status !== "waiting" &&
-          current.status !== "connecting" &&
-          current.status !== "idle" &&
-          current.status !== "error" &&
-          current.status !== "cancelled"
-        ) {
-          socket.emit(
-            "match.rejoin",
-            {
-              challengeId: current.challengeId,
-              roomId: current.roomId ?? current.tempRoomId ?? undefined,
-            },
-            (ack: MatchRejoinAck) => {
-              if (!ack.ok) {
-                toast.error(ack.error ?? "Khong the ket noi lai tran");
-                return;
-              }
-              const result = ack.result;
-              if (!result) return;
-              setPvP((prev) => ({
-                ...prev,
-                roomId: result.roomId ?? prev.roomId,
-                challengeId: result.challengeId,
-                betTier: result.tier ?? prev.betTier,
-                currentTurnWallet:
-                  result.currentTurnWallet ?? prev.currentTurnWallet,
-                myTurn:
-                  Boolean(account?.address && result.currentTurnWallet) &&
-                  result.currentTurnWallet!.toLowerCase() ===
-                    account.address.toLowerCase(),
-                paused: false,
-                pausedReason: null,
-                reconnectDeadlineMs: null,
-              }));
-            },
-          );
+      socket.emit("queue.join", {}, (ack: QueueJoinAck) => {
+        if (!ack.ok) {
+          toast.error(ack.error ?? "queue.join failed");
+          setPvP((prev) => ({ ...prev, status: "error" }));
           return;
         }
 
-        socket.emit(
-          "queue.join",
-          {
-            roomId,
-            tier: options?.tier,
-            nft: options?.nft,
-          },
-          (ack: QueueJoinAck) => {
-            if (!ack.ok) {
-              toast.error(ack.error ?? "queue.join failed");
-              setPvP((prev) => ({ ...prev, status: "error" }));
-              return;
-            }
-
-            if (!ack.result?.matched) {
-              setPvP((prev) => ({
-                ...prev,
-                status: "waiting",
-                roomId: ack.result?.roomId ?? roomId ?? prev.roomId,
-                betTier: ack.result?.tier ?? prev.betTier,
-              }));
-            }
-          },
-        );
+        if (!ack.result?.matched) {
+          setPvP((prev) => ({
+            ...prev,
+            status: "waiting",
+            roomId: ack.result?.roomId ?? prev.roomId,
+          }));
+        }
       });
-    },
-    [
-      account,
-      attachCommonSocketListeners,
-      pvp.status,
-      safeDisconnect,
-      startHeartbeat,
-    ],
-  );
+    });
+  }, [
+    account,
+    attachCommonSocketListeners,
+    pvp.status,
+    safeDisconnect,
+    startHeartbeat,
+  ]);
 
   const leaveQueue = useCallback(() => {
     const socket = socketRef.current;
@@ -800,93 +475,6 @@ export function usePvP(_profileId: string | undefined) {
     safeDisconnect();
     setPvP(INITIAL_STATE);
   }, [safeDisconnect]);
-
-  const connectRoomSocket = joinQueue;
-  const disconnectRoomSocket = leaveQueue;
-
-  const notifyRoomCreated = useCallback(
-    (suiRoomId: string) => {
-      const socket = socketRef.current;
-      if (!socket || !pvp.tempRoomId) return;
-
-      socket.emit("queue.roomCreated", {
-        tempRoomId: pvp.tempRoomId,
-        suiRoomId,
-        challengeId: pvp.challengeId ?? undefined,
-      });
-    },
-    [pvp.challengeId, pvp.tempRoomId],
-  );
-
-  const notifyRoomJoined = useCallback(
-    (suiRoomId: string) => {
-      const emitRoomJoined = (socket: Socket) => {
-        const current = pvpRef.current;
-        socket.emit(
-          "queue.roomJoined",
-          {
-            tempRoomId: current.tempRoomId ?? suiRoomId,
-            suiRoomId,
-            challengeId: current.challengeId ?? undefined,
-          },
-          (ack: RoomSyncAck) => {
-            if (!ack?.ok) {
-              toast.error(ack?.error ?? "Khong the dong bo room ACTIVE");
-            }
-          },
-        );
-      };
-
-      let socket = socketRef.current;
-      if (socket?.connected) {
-        emitRoomJoined(socket);
-        return;
-      }
-
-      if (!account?.address) {
-        toast.error("Vui long ket noi vi de dong bo room ACTIVE.");
-        return;
-      }
-
-      socket?.removeAllListeners();
-      socket?.disconnect();
-      socket = io(BACKEND_WS_URL, {
-        auth: { walletAddress: account.address },
-        transports: ["websocket"],
-        reconnection: true,
-        reconnectionAttempts: Infinity,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        timeout: 20_000,
-      });
-      socketRef.current = socket;
-      attachCommonSocketListeners(socket);
-
-      socket.on("connect", () => {
-        startHeartbeat(socket);
-        emitRoomJoined(socket);
-      });
-    },
-    [account?.address, attachCommonSocketListeners, startHeartbeat],
-  );
-
-  const notifyRoomClosed = useCallback(
-    (suiRoomId: string) => {
-      const socket = socketRef.current;
-      if (!socket) return;
-
-      socket.emit("queue.roomClosed", {
-        roomId: suiRoomId,
-        challengeId: pvp.challengeId ?? undefined,
-      });
-    },
-    [pvp.challengeId],
-  );
-
-  const refreshSettlementPayload = useCallback(
-    (roomId?: string) => requestSettlementPayload({ roomId }),
-    [requestSettlementPayload],
-  );
 
   const reportRound = useCallback(
     (winnerId: string) => {
@@ -899,10 +487,9 @@ export function usePvP(_profileId: string | undefined) {
         return;
       }
 
-      const result: MatchResult =
-        winnerId.toLowerCase() === account.address.toLowerCase()
-          ? "WIN"
-          : "LOSE";
+      const result: MatchResult = sameWallet(winnerId, account.address)
+        ? "WIN"
+        : "LOSE";
       const challengeId = pvp.challengeId;
 
       setPvP((prev) => ({
@@ -931,7 +518,6 @@ export function usePvP(_profileId: string | undefined) {
               status: "resolved",
               winner: ack.finalized?.winnerWallet ?? null,
               resultTx: ack.finalized?.txDigest ?? null,
-              settlementPayload: ack.finalized?.settlementPayload ?? null,
               paused: false,
               pausedReason: null,
               reconnectDeadlineMs: null,
@@ -1013,17 +599,8 @@ export function usePvP(_profileId: string | undefined) {
         status: "resolved",
         winner: winnerWallet,
         resultTx: null,
-        settlementPayload: null,
       };
     });
-  }, []);
-
-  const setSettleTx = useCallback((txDigest: string) => {
-    setPvP((prev) => ({
-      ...prev,
-      settleTx: txDigest,
-      settlementPayload: null,
-    }));
   }, []);
 
   useEffect(() => {
@@ -1034,18 +611,13 @@ export function usePvP(_profileId: string | undefined) {
 
   return {
     pvp,
-    connectRoomSocket,
-    disconnectRoomSocket,
+    connectRoomSocket: joinQueue,
+    disconnectRoomSocket: leaveQueue,
     joinQueue,
     leaveQueue,
-    notifyRoomCreated,
-    notifyRoomJoined,
-    notifyRoomClosed,
-    refreshSettlementPayload,
     reportRound,
     submitShot,
     forfeitMatch,
     resolveLocalMatch,
-    setSettleTx,
   };
 }

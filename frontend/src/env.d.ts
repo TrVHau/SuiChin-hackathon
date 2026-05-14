@@ -2,10 +2,6 @@
 
 interface ImportMetaEnv {
   readonly VITE_SUI_PACKAGE_ID: string;
-  readonly VITE_LOBBY_PACKAGE_ID?: string;
-  readonly VITE_LOBBY_CONFIG_OBJECT_ID?: string;
-  readonly VITE_LOBBY_SIGNER_PUBKEY?: string;
-  readonly VITE_LOBBY_DEFAULT_TARGET_POINTS?: string;
   readonly VITE_TREASURY_OBJECT_ID?: string;
   readonly VITE_MARKET_OBJECT_ID?: string;
   readonly VITE_CRAFT_CONFIG_OBJECT_ID?: string;

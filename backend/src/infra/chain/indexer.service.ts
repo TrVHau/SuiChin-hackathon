@@ -3,11 +3,10 @@ import { getPrismaClient } from "../db/prisma.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../shared/logger.js";
 import cron from "node-cron";
-import { valuationRoomEvents } from "../../gateways/socket/valuation-room-events.js";
 
 // The package ID to filter out events
 const PACKAGE_ID = env.SUI_PACKAGE_ID || "";
-const EVENT_MODULES = ["craft_actions", "nft_valuation_lobby"] as const;
+const EVENT_MODULES = ["craft_actions"] as const;
 
 function extractObjectId(value: unknown): string | undefined {
   if (!value) return undefined;
@@ -235,44 +234,6 @@ export class IndexerService {
             },
           });
           logger.info(`Indexed MatchEvent: Room ${payload.room_id} Settled`);
-          break;
-
-        case "RoomCreated":
-          valuationRoomEvents.emit("roomCreated", {
-            roomId: String(payload.room_id ?? ""),
-            creator: String(payload.creator ?? ""),
-            txDigest: event.id.txDigest,
-            eventSeq: event.id.eventSeq,
-          });
-          logger.info(
-            { roomId: payload.room_id, creator: payload.creator },
-            "Observed valuation RoomCreated event",
-          );
-          break;
-
-        case "RoomJoined":
-          valuationRoomEvents.emit("roomJoined", {
-            roomId: String(payload.room_id ?? ""),
-            joiner: String(payload.joiner ?? ""),
-            txDigest: event.id.txDigest,
-            eventSeq: event.id.eventSeq,
-          });
-          logger.info(
-            { roomId: payload.room_id, joiner: payload.joiner },
-            "Observed valuation RoomJoined event",
-          );
-          break;
-
-        case "RoomActivated":
-          valuationRoomEvents.emit("roomActivated", {
-            roomId: String(payload.room_id ?? ""),
-            txDigest: event.id.txDigest,
-            eventSeq: event.id.eventSeq,
-          });
-          logger.info(
-            { roomId: payload.room_id },
-            "Observed valuation RoomActivated event",
-          );
           break;
 
         case "RecycleRewardIssued":

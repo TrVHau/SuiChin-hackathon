@@ -2,12 +2,14 @@ import { Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface PvpSearchingCardProps {
-  roomValue: string;
   roomId?: string;
   onCancel: () => void;
 }
 
-export default function PvpSearchingCard({ roomValue, roomId, onCancel }: PvpSearchingCardProps) {
+export default function PvpSearchingCard({
+  roomId,
+  onCancel,
+}: PvpSearchingCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -20,27 +22,25 @@ export default function PvpSearchingCard({ roomValue, roomId, onCancel }: PvpSea
           <Loader2 className="size-10 animate-spin text-amber-300" />
         </div>
         <p className="text-xs font-black uppercase tracking-[0.35em] text-white/60">
-          Private room warming up
+          Hang cho PvP
         </p>
         <p className="mt-2 text-3xl font-black tracking-tight text-white">
-          Đang ghép phòng riêng
+          Dang tim doi thu
         </p>
         <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/75">
-          Phong hien tai khoa NFT <span className="font-black text-white">{roomValue}</span>. He thong dang cho them mot nguoi choi cung tier de mo phong.
+          He thong dang ghep ban voi mot nguoi choi online khac.
         </p>
 
         <div className="mt-6 grid gap-3 rounded-[28px] border border-white/10 bg-black/20 p-4 text-left text-sm text-white/80 backdrop-blur">
           <div className="flex items-center justify-between gap-3">
-            <span className="font-semibold">Trạng thái</span>
-            <span className="font-black text-amber-300">Đang mở phòng</span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="font-semibold">NFT yeu cau</span>
-            <span className="font-black text-white">{roomValue}</span>
+            <span className="font-semibold">Trang thai</span>
+            <span className="font-black text-amber-300">Dang cho</span>
           </div>
           <div className="flex items-center justify-between gap-3">
             <span className="font-semibold">Room ID</span>
-            <span className="max-w-[55%] truncate font-black text-white">{roomId ?? "-"}</span>
+            <span className="max-w-[55%] truncate font-black text-white">
+              {roomId ?? "-"}
+            </span>
           </div>
         </div>
 
@@ -50,7 +50,7 @@ export default function PvpSearchingCard({ roomValue, roomId, onCancel }: PvpSea
           whileTap={{ scale: 0.98 }}
           className="mt-6 w-full rounded-[22px] border border-white/15 bg-white/10 px-6 py-4 font-black text-white transition-colors hover:bg-white/15"
         >
-          Hủy phòng chờ
+          Huy tim tran
         </motion.button>
       </div>
     </motion.div>
